@@ -3,18 +3,16 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 export type ThemeId =
-  | "blender-dark"
-  | "kosh-terminal"
-  | "cyberpunk"
-  | "nord"
-  | "tokyo-night"
-  | "dracula"
-  | "blender-light";
+  | "phosphor-hacker"
+  | "blueprint-cyan"
+  | "amber-monolith"
+  | "blender-dark";
 
 export interface ThemeConfig {
   id: ThemeId;
   name: string;
   badge: string;
+  role: string;
   viewportBg: number;
   gridMajor: number;
   gridMinor: number;
@@ -22,67 +20,44 @@ export interface ThemeConfig {
 }
 
 export const THEMES: Record<ThemeId, ThemeConfig> = {
-  "blender-dark": {
-    id: "blender-dark",
-    name: "Blender Dark",
-    badge: "BLENDER 5.x",
-    viewportBg: 0x242424,
-    gridMajor: 0x3d3d42,
-    gridMinor: 0x2e2e33,
-    accentHex: "#e68523",
-  },
-  "kosh-terminal": {
-    id: "kosh-terminal",
-    name: "Terminal Green",
-    badge: "MONO",
-    viewportBg: 0x09090b,
+  "phosphor-hacker": {
+    id: "phosphor-hacker",
+    name: "Phosphor Hacker",
+    badge: "CRT GREEN",
+    role: "Classic CRT Terminal",
+    viewportBg: 0x050507,
     gridMajor: 0x27272a,
     gridMinor: 0x18181b,
     accentHex: "#22c55e",
   },
-  "cyberpunk": {
-    id: "cyberpunk",
-    name: "Cyberpunk Neon",
-    badge: "NEON",
-    viewportBg: 0x0c0d14,
-    gridMajor: 0x2a1b42,
-    gridMinor: 0x16182e,
-    accentHex: "#f43f5e",
+  "blueprint-cyan": {
+    id: "blueprint-cyan",
+    name: "Monochromatic Blueprint",
+    badge: "CAD BLUE",
+    role: "Clean Engineering Tool",
+    viewportBg: 0x060709,
+    gridMajor: 0x1e242c,
+    gridMinor: 0x12161c,
+    accentHex: "#06b6d4",
   },
-  "nord": {
-    id: "nord",
-    name: "Nord Arctic",
-    badge: "NORD",
-    viewportBg: 0x242933,
-    gridMajor: 0x434c5e,
-    gridMinor: 0x2e3440,
-    accentHex: "#88c0d0",
+  "amber-monolith": {
+    id: "amber-monolith",
+    name: "Amber Monolith",
+    badge: "AMBER CRT",
+    role: "Industrial CRT",
+    viewportBg: 0x070605,
+    gridMajor: 0x292524,
+    gridMinor: 0x1c1917,
+    accentHex: "#f59e0b",
   },
-  "tokyo-night": {
-    id: "tokyo-night",
-    name: "Tokyo Night",
-    badge: "TOKYO",
-    viewportBg: 0x16161e,
-    gridMajor: 0x2f3549,
-    gridMinor: 0x1f2335,
-    accentHex: "#7aa2f7",
-  },
-  "dracula": {
-    id: "dracula",
-    name: "Dracula Studio",
-    badge: "DRACULA",
-    viewportBg: 0x21222c,
-    gridMajor: 0x44475a,
-    gridMinor: 0x282a36,
-    accentHex: "#bd93f9",
-  },
-  "blender-light": {
-    id: "blender-light",
-    name: "Blender Daylight",
-    badge: "LIGHT",
-    viewportBg: 0xd8d8d8,
-    gridMajor: 0xb5b5b5,
-    gridMinor: 0xcccccc,
+  "blender-dark": {
+    id: "blender-dark",
+    name: "Blender Studio Dark",
+    badge: "BLENDER 5.x",
+    role: "Studio DCC Interface",
+    viewportBg: 0x202020,
+    gridMajor: 0x3d3d42,
+    gridMinor: 0x2e2e33,
     accentHex: "#e68523",
   },
 };
@@ -94,13 +69,13 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: "blender-dark",
-  config: THEMES["blender-dark"],
+  theme: "phosphor-hacker",
+  config: THEMES["phosphor-hacker"],
   setTheme: () => {},
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeId>("blender-dark");
+  const [theme, setThemeState] = useState<ThemeId>("phosphor-hacker");
 
   useEffect(() => {
     const saved = localStorage.getItem("kosh_theme") as ThemeId;
@@ -108,7 +83,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setThemeState(saved);
       document.documentElement.setAttribute("data-theme", saved);
     } else {
-      document.documentElement.setAttribute("data-theme", "blender-dark");
+      document.documentElement.setAttribute("data-theme", "phosphor-hacker");
     }
   }, []);
 

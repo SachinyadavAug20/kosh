@@ -116,7 +116,7 @@ export default function Home() {
         </div>
 
         {/* Right Pane (50%): Three.js Blender 3D Viewport */}
-        <div className="w-full md:w-1/2 flex flex-col min-h-0 bg-[var(--background)]">
+        <div className="viewport-container w-full md:w-1/2 flex flex-col min-h-0">
           {mounted ? (
             <Viewport3D
               assetUrl={lastResult?.assetUrl}
