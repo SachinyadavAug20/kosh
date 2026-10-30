@@ -152,7 +152,7 @@ export function CommandConsole({
           </span>
           {!hasToken && (
             <span className="text-[#f59e0b] flex items-center gap-1">
-              <AlertTriangle className="w-3 h-3" /> BYOK Key recommended (or use demo mode)
+              <AlertTriangle className="w-3 h-3" /> Google API Key or demo mode recommended
             </span>
           )}
         </div>

@@ -14,13 +14,16 @@ import java.util.Map;
 @Service
 public class McpToolRegistry {
 
+    private final GoogleGeminiClient googleGeminiClient;
     private final BharatCodeClient bharatCodeClient;
     private final BlenderExecutionService blenderExecutionService;
     private final ScriptSanitizer scriptSanitizer;
 
-    public McpToolRegistry(BharatCodeClient bharatCodeClient,
+    public McpToolRegistry(GoogleGeminiClient googleGeminiClient,
+                           BharatCodeClient bharatCodeClient,
                            BlenderExecutionService blenderExecutionService,
                            ScriptSanitizer scriptSanitizer) {
+        this.googleGeminiClient = googleGeminiClient;
         this.bharatCodeClient = bharatCodeClient;
         this.blenderExecutionService = blenderExecutionService;
         this.scriptSanitizer = scriptSanitizer;
@@ -103,8 +106,15 @@ public class McpToolRegistry {
             log.info("Executing user-provided script for tool: {}", toolName);
             finalScript = scriptSanitizer.sanitize(rawScript);
         } else if (prompt != null && !prompt.isBlank()) {
-            log.info("Generating script from prompt using BharatCode for tool: {}", toolName);
-            finalScript = bharatCodeClient.generateBlenderScript(prompt, toolName, token, format);
+            // Determine whether to use Google Gemini or BharatCode based on key signature or default
+            boolean isGoogleKey = token != null && (token.startsWith("AIzaSy") || token.contains("AIza"));
+            if (isGoogleKey) {
+                log.info("Generating script from prompt using Google Gemini for tool: {}", toolName);
+                finalScript = googleGeminiClient.generateBlenderScript(prompt, toolName, token, format);
+            } else {
+                log.info("Generating script from prompt using BharatCode/OpenAI client for tool: {}", toolName);
+                finalScript = bharatCodeClient.generateBlenderScript(prompt, toolName, token, format);
+            }
         } else {
             throw new IllegalArgumentException("Either 'prompt' or 'script' must be supplied in tool arguments.");
         }

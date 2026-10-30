@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { BackendHealth } from "@/types/mcp";
-import { Key, CheckCircle, AlertCircle, RefreshCw, Eye, EyeOff, Terminal, Shield } from "lucide-react";
+import { Key, RefreshCw, Eye, EyeOff, Terminal, Shield, ExternalLink, Zap } from "lucide-react";
 
 interface TerminalHeaderProps {
   health: BackendHealth | null;
@@ -25,7 +25,6 @@ export function TerminalHeader({
   const [inputVal, setInputVal] = useState(token);
   const [showKey, setShowKey] = useState(false);
 
-  // Sync internal state when token prop changes
   React.useEffect(() => {
     setInputVal(token);
   }, [token]);
@@ -44,6 +43,16 @@ export function TerminalHeader({
 
   const isBackendUp = !!health && health.status === "UP";
   const isBlenderReady = health?.blender?.available ?? false;
+
+  const isGoogleKey = token.startsWith("AIzaSy") || token.startsWith("AIza");
+  const isDemo = token.toLowerCase() === "demo";
+
+  const getKeyBadgeText = () => {
+    if (!token) return "BYOK: REQUIRED";
+    if (isDemo) return "KEY: DEMO (OFFLINE)";
+    if (isGoogleKey) return "KEY: GOOGLE GEMINI";
+    return "KEY: CONFIGURED";
+  };
 
   return (
     <header className="border-b border-[#27272a] bg-[#09090b] select-none sticky top-0 z-50">
@@ -108,9 +117,7 @@ export function TerminalHeader({
             }`}
           >
             <Key className="w-3.5 h-3.5" />
-            <span className="font-semibold tracking-wide">
-              {token ? (token === "demo" ? "KEY: DEMO" : "KEY: CONFIGURED") : "BYOK: REQUIRED"}
-            </span>
+            <span className="font-semibold tracking-wide">{getKeyBadgeText()}</span>
           </button>
         </div>
       </div>
@@ -119,19 +126,31 @@ export function TerminalHeader({
       {isKeyDrawerOpen && (
         <div className="border-t border-[#27272a] bg-[#121215] px-4 py-3 text-xs">
           <form onSubmit={handleSave} className="max-w-4xl mx-auto space-y-2">
-            <div className="flex items-center justify-between text-[#a1a1aa]">
+            <div className="flex flex-wrap items-center justify-between gap-1 text-[#a1a1aa]">
               <div className="flex items-center space-x-2">
                 <Shield className="w-3.5 h-3.5 text-[#22c55e]" />
                 <span className="font-bold text-[#f4f4f5]">SESSION API CREDENTIALS (BYOK)</span>
-                <span className="text-[#71717a]">— Never stored on server; passed via HTTP headers</span>
+                <span className="text-[#71717a]">— Never stored on server; passed in session headers</span>
               </div>
-              <button
-                type="button"
-                onClick={handleSetDemoKey}
-                className="text-[10px] text-[#22c55e] underline hover:text-[#4ade80]"
-              >
-                Use Offline Demo Mode
-              </button>
+              <div className="flex items-center space-x-3 text-[10px]">
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-1 text-[#06b6d4] hover:underline"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>Get Free Google Gemini Key</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={handleSetDemoKey}
+                  className="text-[#22c55e] hover:underline flex items-center space-x-1"
+                >
+                  <Zap className="w-3 h-3" />
+                  <span>Offline Demo Mode</span>
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center space-x-2">
@@ -140,7 +159,7 @@ export function TerminalHeader({
                   type={showKey ? "text" : "password"}
                   value={inputVal}
                   onChange={(e) => setInputVal(e.target.value)}
-                  placeholder="Paste BharatCode or OpenAI-compatible API key (e.g., bc-live-... or sk-...)"
+                  placeholder="Paste Google API Key (AIzaSy...) or BharatCode / OpenAI key"
                   className="w-full bg-[#09090b] border border-[#27272a] focus:border-[#22c55e] focus:outline-none px-3 py-1.5 text-xs text-[#f4f4f5] font-mono pr-8"
                 />
                 <button
@@ -180,6 +199,12 @@ export function TerminalHeader({
                 CLOSE
               </button>
             </div>
+
+            {inputVal.startsWith("AIzaSy") && (
+              <div className="text-[10px] text-[#22c55e] flex items-center space-x-1">
+                <span>✓ Detected Google Gemini API Key. Free tier enabled with gemini-2.5-flash.</span>
+              </div>
+            )}
           </form>
         </div>
       )}

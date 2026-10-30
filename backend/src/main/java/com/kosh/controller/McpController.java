@@ -29,6 +29,8 @@ public class McpController {
     @PostMapping
     public ResponseEntity<McpRpcResponse> handleRpcRequest(
             @RequestBody McpRpcRequest request,
+            @RequestHeader(value = "X-Google-Key", required = false) String googleKeyHeader,
+            @RequestHeader(value = "X-Gemini-Key", required = false) String geminiKeyHeader,
             @RequestHeader(value = "X-BharatCode-Token", required = false) String tokenHeader,
             @RequestHeader(value = "X-BharatCode-Key", required = false) String keyHeader,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
@@ -44,9 +46,13 @@ public class McpController {
             );
         }
 
-        // Determine user API token (BYOK)
+        // Determine user API token (BYOK: Google Gemini or BharatCode)
         String activeToken = null;
-        if (tokenHeader != null && !tokenHeader.isBlank()) {
+        if (googleKeyHeader != null && !googleKeyHeader.isBlank()) {
+            activeToken = googleKeyHeader.trim();
+        } else if (geminiKeyHeader != null && !geminiKeyHeader.isBlank()) {
+            activeToken = geminiKeyHeader.trim();
+        } else if (tokenHeader != null && !tokenHeader.isBlank()) {
             activeToken = tokenHeader.trim();
         } else if (keyHeader != null && !keyHeader.isBlank()) {
             activeToken = keyHeader.trim();
@@ -89,12 +95,12 @@ public class McpController {
                     // Check if token is required (when prompt is provided without raw script)
                     boolean hasRawScript = arguments.containsKey("script") && arguments.get("script") != null && !arguments.get("script").toString().isBlank();
                     if (!hasRawScript && (activeToken == null || activeToken.isBlank())) {
-                        log.warn("Unauthorized tools/call: Missing BharatCode API token");
+                        log.warn("Unauthorized tools/call: Missing API key");
                         return ResponseEntity.status(401).body(McpRpcResponse.error(
                                 id,
                                 -32001,
-                                "Unauthorized: Missing BharatCode API token. Provide header 'X-BharatCode-Token', 'X-BharatCode-Key', or 'Authorization: Bearer <token>'",
-                                Map.of("requiredHeader", "X-BharatCode-Token")
+                                "Unauthorized: Missing API key. Provide your Google Gemini API key or BharatCode token via headers ('X-Google-Key', 'X-BharatCode-Token', or 'Authorization: Bearer <key>') or the UI key drawer.",
+                                Map.of("supportedProviders", List.of("Google Gemini (Free via AI Studio)", "BharatCode", "OpenAI"))
                         ));
                     }
 

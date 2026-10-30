@@ -23,7 +23,7 @@ Kosh is an ultra-minimalist, stark terminal-aesthetic studio and Model Context P
 ## Philosophy & Constraints
 
 - **Terminal-First UX:** Stark monospace typography, high-contrast zinc palette (`#09090b`), zero bloat, brutalist developer aesthetic.
-- **BYOK (Bring Your Own Key):** Zero hardcoded credentials. Pass your BharatCode or OpenAI-compatible token dynamically via session headers or the UI key drawer.
+- **BYOK (Bring Your Own Key):** Zero hardcoded credentials. Pass your free **Google Gemini API Key** (from Google AI Studio) or BharatCode/OpenAI-compatible token dynamically via session headers or the UI key drawer.
 - **Protocol Native:** Standard MCP JSON-RPC 2.0 interface (`POST /mcp`) supporting `tools/list` and `tools/call` for tools such as `blender_mesh` and `cad_model`.
 - **Deterministic Sandboxed Execution:** Headless Blender execution wrapped with timeouts, sanity checks, script sanitization, and binary validation.
 
@@ -125,9 +125,10 @@ curl -s -X POST http://localhost:8080/mcp \
 
 ### 2. Call `blender_mesh` Tool
 ```bash
+# Using free Google Gemini API Key:
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
-  -H "X-BharatCode-Token: your-token-here" \
+  -H "X-Google-Key: AIzaSyYourGoogleApiKeyHere" \
   -d '{
     "jsonrpc": "2.0",
     "id": 2,

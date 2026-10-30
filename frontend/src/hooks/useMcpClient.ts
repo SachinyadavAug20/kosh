@@ -94,8 +94,13 @@ export function useMcpClient() {
       };
 
       if (token && token.trim()) {
-        headers["X-BharatCode-Token"] = token.trim();
-        headers["Authorization"] = `Bearer ${token.trim()}`;
+        const cleanToken = token.trim();
+        headers["Authorization"] = `Bearer ${cleanToken}`;
+        if (cleanToken.startsWith("AIzaSy") || cleanToken.startsWith("AIza")) {
+          headers["X-Google-Key"] = cleanToken;
+        } else {
+          headers["X-BharatCode-Token"] = cleanToken;
+        }
       }
 
       try {
