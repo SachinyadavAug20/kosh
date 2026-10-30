@@ -96,8 +96,74 @@ public class BlenderExecutionService {
         long startTime = System.currentTimeMillis();
 
         try {
+            String executableScript = script;
+            boolean hasExport = script.contains("export_scene.gltf") ||
+                    script.contains("wm.stl_export") ||
+                    script.contains("export_mesh.stl");
+
+            if (!hasExport) {
+                String autoExport = """
+                    
+                    # --- AUTO-APPENDED KOSH EXPORT & TELEMETRY ---
+                    import sys, os, json
+                    import bpy
+                    import mathutils
+                    from mathutils import Vector
+                    
+                    _argv = sys.argv
+                    if "--" in _argv:
+                        _out = _argv[_argv.index("--") + 1]
+                        _bdir = os.path.dirname(_out)
+                        _bname = os.path.splitext(os.path.basename(_out))[0]
+                        _snap = os.path.join(_bdir, _bname + ".png")
+                        _telem = os.path.join(_bdir, _bname + ".json")
+                        
+                        _tot_verts = 0
+                        _tot_faces = 0
+                        _tot_edges = 0
+                        _dx, _dy, _dz = 0.0, 0.0, 0.0
+                        _mats = []
+                        _objs = []
+                        
+                        for _o in bpy.data.objects:
+                            _objs.append(_o.name)
+                            if _o.type == 'MESH' and _o.data:
+                                _tot_verts += len(_o.data.vertices)
+                                _tot_faces += len(_o.data.polygons)
+                                _tot_edges += len(_o.data.edges)
+                                _dx = max(_dx, _o.dimensions.x)
+                                _dy = max(_dy, _o.dimensions.y)
+                                _dz = max(_dz, _o.dimensions.z)
+                                for _m in _o.data.materials:
+                                    if _m and _m.name not in _mats:
+                                        _mats.append(_m.name)
+                        
+                        try:
+                            with open(_telem, "w") as _tf:
+                                json.dump({
+                                    "triangles": _tot_faces,
+                                    "vertices": _tot_verts,
+                                    "edges": _tot_edges,
+                                    "dimensions": [round(_dx, 3), round(_dy, 3), round(_dz, 3)],
+                                    "materials": _mats,
+                                    "objects": _objs
+                                }, _tf)
+                        except Exception:
+                            pass
+                        
+                        if _out.lower().endswith(".stl"):
+                            try:
+                                bpy.ops.wm.stl_export(filepath=_out)
+                            except Exception:
+                                bpy.ops.export_mesh.stl(filepath=_out)
+                        else:
+                            bpy.ops.export_scene.gltf(filepath=_out, export_format='GLB')
+                    """;
+                executableScript = executableScript + "\n" + autoExport;
+            }
+
             // Write script to temporary file
-            Files.writeString(scriptFile, script, StandardCharsets.UTF_8);
+            Files.writeString(scriptFile, executableScript, StandardCharsets.UTF_8);
 
             ProcessBuilder pb = new ProcessBuilder(
                     blenderExecutable,
