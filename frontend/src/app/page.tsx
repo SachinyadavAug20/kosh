@@ -42,8 +42,8 @@ export default function Home() {
   };
 
   return (
-    <main className="flex flex-col h-screen w-screen overflow-hidden bg-[#09090b] text-[#f4f4f5] select-none font-mono">
-      {/* 1. Header with System Health & BYOK Credentials */}
+    <main className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)] select-none font-mono">
+      {/* 1. Header with System Health, BYOK Credentials & Themes */}
       <TerminalHeader
         health={health}
         isHealthChecking={isHealthChecking}
@@ -56,16 +56,16 @@ export default function Home() {
       {/* 2. Main Studio Split Layout */}
       <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
         {/* Left Pane (50%): MCP Studio, Logs & Code Inspector */}
-        <div className="w-full md:w-1/2 flex flex-col min-h-0 border-r border-[#27272a] bg-[#09090b]">
+        <div className="w-full md:w-1/2 flex flex-col min-h-0 border-r border-[var(--border)] bg-[var(--background)]">
           {/* Sub-nav switcher for Console vs Code */}
-          <div className="flex items-center justify-between border-b border-[#27272a] bg-[#121215] px-3 py-1.5 text-xs">
+          <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--bg-header)] px-3 py-1.5 text-xs">
             <div className="flex items-center space-x-1">
               <button
                 onClick={() => setLeftTab("console")}
                 className={`flex items-center space-x-1.5 px-3 py-1 border transition-colors ${
                   leftTab === "console"
-                    ? "bg-[#09090b] border-[#22c55e] text-[#22c55e] font-semibold"
-                    : "border-transparent text-[#71717a] hover:text-[#f4f4f5]"
+                    ? "bg-[var(--background)] border-[var(--accent)] text-[var(--accent)] font-semibold"
+                    : "border-transparent text-[var(--text-muted)] hover:text-[var(--foreground)]"
                 }`}
               >
                 <Terminal className="w-3.5 h-3.5" />
@@ -76,20 +76,20 @@ export default function Home() {
                 onClick={() => setLeftTab("code")}
                 className={`flex items-center space-x-1.5 px-3 py-1 border transition-colors ${
                   leftTab === "code"
-                    ? "bg-[#09090b] border-[#22c55e] text-[#22c55e] font-semibold"
-                    : "border-transparent text-[#71717a] hover:text-[#f4f4f5]"
+                    ? "bg-[var(--background)] border-[var(--accent)] text-[var(--accent)] font-semibold"
+                    : "border-transparent text-[var(--text-muted)] hover:text-[var(--foreground)]"
                 }`}
               >
                 <Code className="w-3.5 h-3.5" />
                 <span>CODE_INSPECTOR</span>
                 {lastResult?.script && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
                 )}
               </button>
             </div>
 
-            <div className="hidden sm:flex items-center space-x-2 text-[10px] text-[#71717a]">
-              <Cpu className="w-3 h-3 text-[#22c55e]" />
+            <div className="hidden sm:flex items-center space-x-2 text-[10px] text-[var(--text-muted)]">
+              <Cpu className="w-3 h-3 text-[var(--accent)]" />
               <span>PID: MCP-8080</span>
             </div>
           </div>
@@ -115,8 +115,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Right Pane (50%): Three.js Monospace 3D Viewport */}
-        <div className="w-full md:w-1/2 flex flex-col min-h-0 bg-[#09090b]">
+        {/* Right Pane (50%): Three.js Blender 3D Viewport */}
+        <div className="w-full md:w-1/2 flex flex-col min-h-0 bg-[var(--background)]">
           {mounted ? (
             <Viewport3D
               assetUrl={lastResult?.assetUrl}
@@ -125,8 +125,8 @@ export default function Home() {
               apiBase={apiBase}
             />
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center bg-[#09090b] text-[#71717a] font-mono text-xs">
-              <div className="w-6 h-6 border-2 border-[#22c55e] border-t-transparent rounded-full animate-spin mb-3" />
+            <div className="w-full h-full flex flex-col items-center justify-center bg-[var(--background)] text-[var(--text-muted)] font-mono text-xs">
+              <div className="w-6 h-6 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin mb-3" />
               <span>INITIALIZING THREE.JS WEBGL CONTEXT...</span>
             </div>
           )}

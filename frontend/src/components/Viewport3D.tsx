@@ -6,6 +6,9 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
+import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
+import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
+import { useTheme } from "@/context/ThemeContext";
 import {
   Download,
   RotateCw,
@@ -26,11 +29,16 @@ import {
   Plus,
   Minimize2,
   Check,
+  Palette,
+  UploadCloud,
+  FileCode,
+  Wand2,
+  Focus,
 } from "lucide-react";
 
 export type ShadingMode = "material" | "solid" | "wireframe" | "xray" | "normals";
-export type MatcapPreset = "clay" | "obsidian" | "redwax" | "chrome";
-export type LightingPreset = "studio" | "phosphor" | "flat" | "sunset";
+export type MatcapPreset = "studio" | "clay" | "redwax" | "chrome" | "pearl" | "obsidian";
+export type LightingPreset = "studio" | "warm" | "cool" | "sunset" | "flat";
 export type TransformMode = "select" | "translate" | "rotate" | "scale";
 export type CameraView = "iso" | "front" | "top" | "right";
 
@@ -39,6 +47,7 @@ interface Viewport3DProps {
   assetName?: string | null;
   format?: "glb" | "stl";
   apiBase?: string;
+  onSelectMesh?: (name: string) => void;
 }
 
 interface MeshNodeInfo {
@@ -57,36 +66,41 @@ export function Viewport3D({
   apiBase = "http://localhost:8080",
 }: Viewport3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const { theme, config: themeConfig } = useTheme();
 
   // Viewport Settings
   const [shadingMode, setShadingMode] = useState<ShadingMode>("material");
-  const [matcap, setMatcap] = useState<MatcapPreset>("obsidian");
+  const [matcap, setMatcap] = useState<MatcapPreset>("studio");
   const [transformMode, setTransformMode] = useState<TransformMode>("select");
-  const [lightingPreset, setLightingPreset] = useState<LightingPreset>("phosphor");
+  const [lightingPreset, setLightingPreset] = useState<LightingPreset>("studio");
   const [isOrtho, setIsOrtho] = useState<boolean>(false);
   const [autoRotate, setAutoRotate] = useState<boolean>(false);
   const [showGrid, setShowGrid] = useState<boolean>(true);
   const [showAxes, setShowAxes] = useState<boolean>(true);
   const [showBoundingBox, setShowBoundingBox] = useState<boolean>(false);
+  const [showWireframeOverlay, setShowWireframeOverlay] = useState<boolean>(false);
   const [lightIntensity, setLightIntensity] = useState<number>(1.2);
-  const [smoothShading, setSmoothShading] = useState<boolean>(true);
 
-  // UI Panels
-  const [activePanel, setActivePanel] = useState<"none" | "transform" | "lighting" | "outliner" | "add">("none");
+  // Active UI Panels
+  const [activePanel, setActivePanel] = useState<"none" | "transform" | "material" | "outliner" | "add" | "lighting">("none");
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isLoadingModel, setIsLoadingModel] = useState<boolean>(false);
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
 
   // Mesh & Scene Stats
   const [stats, setStats] = useState<{
     triangles: number;
     vertices: number;
     dimensions: string;
-    volumeMm3: number;
-    surfaceAreaMm2: number;
   } | null>(null);
 
   const [meshList, setMeshList] = useState<MeshNodeInfo[]>([]);
-  const [selectedMeshId, setSelectedMeshId] = useState<string | null>(null);
+  const [selectedMesh, setSelectedMesh] = useState<THREE.Mesh | null>(null);
+
+  // Live Material Inspector States
+  const [matColor, setMatColor] = useState<string>("#9e9e9e");
+  const [matRoughness, setMatRoughness] = useState<number>(0.35);
+  const [matMetalness, setMatMetalness] = useState<number>(0.15);
 
   // Live transform values for inspector
   const [liveTransform, setLiveTransform] = useState<{
@@ -109,14 +123,19 @@ export function Viewport3D({
 
   const rootModelGroupRef = useRef<THREE.Group | null>(null);
   const currentModelRef = useRef<THREE.Object3D | null>(null);
+  const shadowPlaneRef = useRef<THREE.Mesh | null>(null);
   const gridHelperRef = useRef<THREE.GridHelper | null>(null);
   const axesHelperRef = useRef<THREE.AxesHelper | null>(null);
   const boxHelperRef = useRef<THREE.BoxHelper | null>(null);
 
   // Lights
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
-  const dirLight1Ref = useRef<THREE.DirectionalLight | null>(null);
-  const dirLight2Ref = useRef<THREE.DirectionalLight | null>(null);
+  const keyLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const fillLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const rimLightRef = useRef<THREE.DirectionalLight | null>(null);
+
+  // Wireframe Overlays Cache
+  const wireOverlayGroupRef = useRef<THREE.Group | null>(null);
 
   // 1. Initialize Scene, Cameras, Renderer, and Controls
   useEffect(() => {
@@ -125,15 +144,15 @@ export function Viewport3D({
     const width = container.clientWidth;
     const height = container.clientHeight;
 
-    // A. Scene
+    // A. Scene with authentic Blender studio gradient background
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x09090b);
+    scene.background = new THREE.Color(themeConfig.viewportBg);
     sceneRef.current = scene;
 
     // B. Cameras
     const aspect = width / height;
     const perspCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
-    perspCamera.position.set(4, 3, 5);
+    perspCamera.position.set(4.5, 3.5, 5.5);
     cameraRef.current = perspCamera;
 
     const frustumSize = 8;
@@ -145,33 +164,37 @@ export function Viewport3D({
       0.1,
       1000
     );
-    orthoCamera.position.set(4, 3, 5);
+    orthoCamera.position.set(4.5, 3.5, 5.5);
     orthoCameraRef.current = orthoCamera;
 
-    // C. Renderer
+    // C. WebGL Renderer with High-Quality Soft Shadows & Color Management
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
-      alpha: false,
+      alpha: true,
       preserveDrawingBuffer: true,
+      powerPreference: "high-performance",
     });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
     rendererRef.current = renderer;
     container.appendChild(renderer.domElement);
 
-    // D. Orbit Controls
+    // D. Orbit Controls (Blender navigation)
     const orbit = new OrbitControls(perspCamera, renderer.domElement);
     orbit.enableDamping = true;
     orbit.dampingFactor = 0.05;
     orbit.autoRotate = autoRotate;
     orbit.autoRotateSpeed = 1.5;
+    orbit.target.set(0, 0.8, 0);
     orbitControlsRef.current = orbit;
 
     // E. Transform Controls (Blender G / R / S Gizmo)
     const transform = new TransformControls(perspCamera, renderer.domElement);
-    transform.size = 0.85;
+    transform.size = 0.8;
     transform.enabled = false;
     scene.add(transform.getHelper());
     transformControlsRef.current = transform;
@@ -203,68 +226,95 @@ export function Viewport3D({
       }
     });
 
-    // F. Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    // F. Authentic Blender 3-Point Studio Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
     scene.add(ambientLight);
     ambientLightRef.current = ambientLight;
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.8);
-    dirLight1.position.set(6, 12, 8);
-    dirLight1.castShadow = true;
-    scene.add(dirLight1);
-    dirLight1Ref.current = dirLight1;
+    // Key Light (Warm soft sunlight)
+    const keyLight = new THREE.DirectionalLight(0xfffaee, 1.8);
+    keyLight.position.set(6, 10, 7);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.bias = -0.0001;
+    scene.add(keyLight);
+    keyLightRef.current = keyLight;
 
-    const dirLight2 = new THREE.DirectionalLight(0x22c55e, 1.0); // Phosphor accent
-    dirLight2.position.set(-6, -3, -6);
-    scene.add(dirLight2);
-    dirLight2Ref.current = dirLight2;
+    // Fill Light (Cool sky bounce)
+    const fillLight = new THREE.DirectionalLight(0xdbeafe, 0.9);
+    fillLight.position.set(-6, 4, -4);
+    scene.add(fillLight);
+    fillLightRef.current = fillLight;
 
-    // G. Blender Overlays: Floor Grid & Axes
-    const grid = new THREE.GridHelper(16, 32, 0x22c55e, 0x27272a);
+    // Rim / Kick Light (Crisp edge separation)
+    const rimLight = new THREE.DirectionalLight(0xffffff, 0.7);
+    rimLight.position.set(0, -5, -6);
+    scene.add(rimLight);
+    rimLightRef.current = rimLight;
+
+    // G. Realistic Contact Shadow Plane (Blender Ground Shadow Catcher)
+    const shadowGeo = new THREE.PlaneGeometry(24, 24);
+    const shadowMat = new THREE.ShadowMaterial({ opacity: 0.22 });
+    const shadowPlane = new THREE.Mesh(shadowGeo, shadowMat);
+    shadowPlane.rotation.x = -Math.PI / 2;
+    shadowPlane.position.y = -0.001;
+    shadowPlane.receiveShadow = true;
+    scene.add(shadowPlane);
+    shadowPlaneRef.current = shadowPlane;
+
+    // H. Blender Floor Grid & Color-Coded Axes
+    const grid = new THREE.GridHelper(16, 32, themeConfig.gridMajor, themeConfig.gridMinor);
     grid.position.y = 0;
     scene.add(grid);
     gridHelperRef.current = grid;
 
     const axes = new THREE.AxesHelper(3.5);
     (axes.material as THREE.Material).depthTest = false;
-    axes.renderOrder = 1;
+    axes.renderOrder = 2;
     scene.add(axes);
     axesHelperRef.current = axes;
 
-    // Root Group for Models
+    // Root Group for User Models
     const rootGroup = new THREE.Group();
     rootGroup.name = "RootModelGroup";
     scene.add(rootGroup);
     rootModelGroupRef.current = rootGroup;
 
-    // Initial placeholder mesh
-    const placeholderGeo = new THREE.BoxGeometry(1.6, 1.6, 1.6);
-    const placeholderMat = new THREE.MeshStandardMaterial({
-      color: 0x18181b,
-      roughness: 0.25,
-      metalness: 0.85,
+    // Wireframe Overlay Group
+    const wireGroup = new THREE.Group();
+    wireGroup.name = "WireframeOverlayGroup";
+    wireGroup.visible = false;
+    scene.add(wireGroup);
+    wireOverlayGroupRef.current = wireGroup;
+
+    // I. Authentic Blender Default Object: Smooth Shaded Studio Cube
+    const cubeGeo = new THREE.BoxGeometry(1.8, 1.8, 1.8, 4, 4, 4);
+    cubeGeo.computeVertexNormals();
+    const cubeMat = new THREE.MeshStandardMaterial({
+      color: 0x9e9e9e, // Authentic Blender studio neutral grey
+      roughness: 0.38,
+      metalness: 0.12,
     });
-    const placeholder = new THREE.Mesh(placeholderGeo, placeholderMat);
-    placeholder.position.y = 0.8;
-    placeholder.name = "Kosh_Default_Cube";
+    const defaultCube = new THREE.Mesh(cubeGeo, cubeMat);
+    defaultCube.position.y = 0.9;
+    defaultCube.castShadow = true;
+    defaultCube.receiveShadow = true;
+    defaultCube.name = "Blender_Default_Cube";
 
-    // Add wireframe cage
-    const wireGeo = new THREE.WireframeGeometry(placeholderGeo);
-    const wireMat = new THREE.LineBasicMaterial({ color: 0x22c55e, linewidth: 1 });
-    const wireSegments = new THREE.LineSegments(wireGeo, wireMat);
-    placeholder.add(wireSegments);
-
-    rootGroup.add(placeholder);
-    currentModelRef.current = placeholder;
-    transform.attach(placeholder);
+    rootGroup.add(defaultCube);
+    currentModelRef.current = defaultCube;
+    setSelectedMesh(defaultCube);
 
     // Bounding Box Helper
-    const boxHelper = new THREE.BoxHelper(placeholder, 0x4ade80);
+    const boxHelper = new THREE.BoxHelper(defaultCube, 0xe68523);
     boxHelper.visible = false;
     scene.add(boxHelper);
     boxHelperRef.current = boxHelper;
 
-    // H. Animation Loop
+    updateMeshListAndStats(defaultCube);
+
+    // J. Animation Render Loop
     let animationFrameId: number;
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
@@ -279,7 +329,7 @@ export function Viewport3D({
     };
     animate();
 
-    // I. Window Resize
+    // K. Window Resize
     const handleResize = () => {
       if (!containerRef.current || !rendererRef.current) return;
       const w = containerRef.current.clientWidth;
@@ -315,7 +365,22 @@ export function Viewport3D({
     };
   }, []);
 
-  // Update OrbitControls camera target when projection toggles
+  // Update theme background and grid colors dynamically
+  useEffect(() => {
+    if (sceneRef.current) {
+      sceneRef.current.background = new THREE.Color(themeConfig.viewportBg);
+    }
+    if (gridHelperRef.current && sceneRef.current) {
+      sceneRef.current.remove(gridHelperRef.current);
+      gridHelperRef.current.dispose();
+      const newGrid = new THREE.GridHelper(16, 32, themeConfig.gridMajor, themeConfig.gridMinor);
+      newGrid.visible = showGrid;
+      sceneRef.current.add(newGrid);
+      gridHelperRef.current = newGrid;
+    }
+  }, [themeConfig, showGrid]);
+
+  // Update Camera Target when Projection toggles
   useEffect(() => {
     if (!orbitControlsRef.current || !cameraRef.current || !orthoCameraRef.current) return;
     const activeCam = isOrtho ? orthoCameraRef.current : cameraRef.current;
@@ -337,9 +402,10 @@ export function Viewport3D({
     if (gridHelperRef.current) gridHelperRef.current.visible = showGrid;
     if (axesHelperRef.current) axesHelperRef.current.visible = showAxes;
     if (boxHelperRef.current) boxHelperRef.current.visible = showBoundingBox;
-  }, [showGrid, showAxes, showBoundingBox]);
+    if (wireOverlayGroupRef.current) wireOverlayGroupRef.current.visible = showWireframeOverlay;
+  }, [showGrid, showAxes, showBoundingBox, showWireframeOverlay]);
 
-  // Update Transform Mode (G / R / S)
+  // Update Transform Mode (G / R / S Gizmo)
   useEffect(() => {
     if (!transformControlsRef.current) return;
     const tc = transformControlsRef.current;
@@ -349,61 +415,78 @@ export function Viewport3D({
     } else {
       tc.enabled = true;
       tc.setMode(transformMode);
-      const target = currentModelRef.current;
+      const target = selectedMesh || currentModelRef.current;
       if (target) {
         tc.attach(target);
       }
     }
-  }, [transformMode]);
+  }, [transformMode, selectedMesh]);
 
   // Update Lighting Presets
   useEffect(() => {
-    if (!ambientLightRef.current || !dirLight1Ref.current || !dirLight2Ref.current) return;
+    if (!ambientLightRef.current || !keyLightRef.current || !fillLightRef.current || !rimLightRef.current) return;
     const amb = ambientLightRef.current;
-    const d1 = dirLight1Ref.current;
-    const d2 = dirLight2Ref.current;
+    const key = keyLightRef.current;
+    const fill = fillLightRef.current;
+    const rim = rimLightRef.current;
 
     switch (lightingPreset) {
       case "studio":
         amb.color.setHex(0xffffff);
-        amb.intensity = 0.9 * lightIntensity;
-        d1.color.setHex(0xffffff);
-        d1.intensity = 1.8 * lightIntensity;
-        d2.color.setHex(0xe0e7ff);
-        d2.intensity = 0.6 * lightIntensity;
+        amb.intensity = 0.65 * lightIntensity;
+        key.color.setHex(0xfffaee);
+        key.intensity = 1.8 * lightIntensity;
+        fill.color.setHex(0xdbeafe);
+        fill.intensity = 0.9 * lightIntensity;
+        rim.color.setHex(0xffffff);
+        rim.intensity = 0.7 * lightIntensity;
         break;
-      case "phosphor":
-        amb.color.setHex(0xffffff);
+      case "warm":
+        amb.color.setHex(0xffedd5);
+        amb.intensity = 0.7 * lightIntensity;
+        key.color.setHex(0xfb923c);
+        key.intensity = 2.0 * lightIntensity;
+        fill.color.setHex(0xfef3c7);
+        fill.intensity = 0.8 * lightIntensity;
+        rim.color.setHex(0xffedd5);
+        rim.intensity = 0.6 * lightIntensity;
+        break;
+      case "cool":
+        amb.color.setHex(0xe0f2fe);
+        amb.intensity = 0.7 * lightIntensity;
+        key.color.setHex(0x38bdf8);
+        key.intensity = 1.9 * lightIntensity;
+        fill.color.setHex(0x818cf8);
+        fill.intensity = 1.0 * lightIntensity;
+        rim.color.setHex(0xffffff);
+        rim.intensity = 0.8 * lightIntensity;
+        break;
+      case "sunset":
+        amb.color.setHex(0x4c1d95);
         amb.intensity = 0.6 * lightIntensity;
-        d1.color.setHex(0xffffff);
-        d1.intensity = 1.5 * lightIntensity;
-        d2.color.setHex(0x22c55e); // Kosh phosphor green rim
-        d2.intensity = 1.4 * lightIntensity;
+        key.color.setHex(0xf43f5e);
+        key.intensity = 2.2 * lightIntensity;
+        fill.color.setHex(0x0284c7);
+        fill.intensity = 1.1 * lightIntensity;
+        rim.color.setHex(0xfbbf24);
+        rim.intensity = 1.0 * lightIntensity;
         break;
       case "flat":
         amb.color.setHex(0xffffff);
-        amb.intensity = 2.0 * lightIntensity;
-        d1.intensity = 0.2;
-        d2.intensity = 0.2;
-        break;
-      case "sunset":
-        amb.color.setHex(0x4a1d96);
-        amb.intensity = 0.5 * lightIntensity;
-        d1.color.setHex(0xf97316);
-        d1.intensity = 2.0 * lightIntensity;
-        d2.color.setHex(0x38bdf8);
-        d2.intensity = 1.0 * lightIntensity;
+        amb.intensity = 2.2 * lightIntensity;
+        key.intensity = 0.1;
+        fill.intensity = 0.1;
+        rim.intensity = 0.1;
         break;
     }
   }, [lightingPreset, lightIntensity]);
 
-  // Apply Shading Modes (Solid, Material, Wireframe, X-Ray, Normals)
+  // Apply Shading Modes & True Matcaps
   const applyShading = useCallback(() => {
     if (!currentModelRef.current) return;
 
     currentModelRef.current.traverse((child) => {
       if (child instanceof THREE.Mesh) {
-        // Save original material for Material Preview restoration
         if (!child.userData.originalMaterial) {
           child.userData.originalMaterial = child.material;
         }
@@ -411,18 +494,18 @@ export function Viewport3D({
         switch (shadingMode) {
           case "wireframe":
             child.material = new THREE.MeshBasicMaterial({
-              color: 0x22c55e,
+              color: 0xe0e0e0,
               wireframe: true,
             });
             break;
 
           case "xray":
             child.material = new THREE.MeshStandardMaterial({
-              color: 0x06b6d4,
+              color: 0x38bdf8,
               transparent: true,
               opacity: 0.45,
-              roughness: 0.1,
-              metalness: 0.9,
+              roughness: 0.2,
+              metalness: 0.8,
               depthWrite: false,
             });
             break;
@@ -432,27 +515,30 @@ export function Viewport3D({
             break;
 
           case "solid":
-            let solidColor = 0x27272a;
-            let roughness = 0.3;
-            let metalness = 0.5;
+            let solidColor = 0x9e9e9e;
+            let roughness = 0.35;
+            let metalness = 0.15;
 
             if (matcap === "clay") {
-              solidColor = 0xb45309; // Terracotta clay
-              roughness = 0.9;
+              solidColor = 0xb45309; // Warm Terracotta sculpt
+              roughness = 0.85;
               metalness = 0.05;
             } else if (matcap === "redwax") {
-              solidColor = 0xbe123c; // Red sculpting wax
-              roughness = 0.4;
-              metalness = 0.2;
+              solidColor = 0x9f1239; // Classic ZBrush / Blender red wax
+              roughness = 0.38;
+              metalness = 0.25;
             } else if (matcap === "chrome") {
-              solidColor = 0xe4e4e7;
-              roughness = 0.05;
+              solidColor = 0xf4f4f5; // Chrome mirror
+              roughness = 0.02;
               metalness = 0.98;
-            } else {
-              // obsidian
-              solidColor = 0x18181b;
-              roughness = 0.2;
-              metalness = 0.9;
+            } else if (matcap === "pearl") {
+              solidColor = 0xf8fafc; // Clean pearl ceramic
+              roughness = 0.15;
+              metalness = 0.4;
+            } else if (matcap === "obsidian") {
+              solidColor = 0x18181b; // Matte obsidian
+              roughness = 0.25;
+              metalness = 0.85;
             }
 
             child.material = new THREE.MeshStandardMaterial({
@@ -465,7 +551,6 @@ export function Viewport3D({
 
           case "material":
           default:
-            // Restore original loaded materials
             if (child.userData.originalMaterial) {
               child.material = child.userData.originalMaterial;
               if (Array.isArray(child.material)) {
@@ -476,24 +561,117 @@ export function Viewport3D({
             }
             break;
         }
-
-        // Apply smooth / flat normal shading
-        if (child.geometry) {
-          if (smoothShading) {
-            child.geometry.computeVertexNormals();
-          } else {
-            child.geometry.computeVertexNormals();
-          }
-        }
       }
     });
-  }, [shadingMode, matcap, smoothShading]);
+
+    // Rebuild wireframe overlays
+    buildWireframeOverlays(currentModelRef.current);
+  }, [shadingMode, matcap]);
 
   useEffect(() => {
     applyShading();
   }, [applyShading]);
 
-  // Load 3D Asset
+  // Build clean wireframe overlays without distorting original geometry
+  const buildWireframeOverlays = (model: THREE.Object3D | null) => {
+    if (!wireOverlayGroupRef.current) return;
+    const wireGroup = wireOverlayGroupRef.current;
+    while (wireGroup.children.length > 0) {
+      wireGroup.remove(wireGroup.children[0]);
+    }
+
+    if (!model) return;
+
+    model.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.geometry) {
+        const wireGeo = new THREE.WireframeGeometry(child.geometry);
+        const wireMat = new THREE.LineBasicMaterial({
+          color: 0x484848,
+          linewidth: 1,
+          transparent: true,
+          opacity: 0.6,
+        });
+        const line = new THREE.LineSegments(wireGeo, wireMat);
+        line.position.copy(child.position);
+        line.rotation.copy(child.rotation);
+        line.scale.copy(child.scale);
+        wireGroup.add(line);
+      }
+    });
+  };
+
+  const updateMeshListAndStats = (object: THREE.Object3D) => {
+    const meshes: MeshNodeInfo[] = [];
+    let totalTris = 0;
+    let totalVerts = 0;
+
+    object.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+        const geom = child.geometry;
+
+        let tris = 0;
+        let verts = 0;
+        if (geom.index) {
+          tris = geom.index.count / 3;
+        } else if (geom.attributes.position) {
+          tris = geom.attributes.position.count / 3;
+        }
+        if (geom.attributes.position) {
+          verts = geom.attributes.position.count;
+        }
+
+        totalTris += Math.round(tris);
+        totalVerts += Math.round(verts);
+
+        meshes.push({
+          id: child.uuid,
+          name: child.name || `Mesh_${meshes.length + 1}`,
+          triangles: Math.round(tris),
+          vertices: Math.round(verts),
+          visible: child.visible,
+          meshRef: child,
+        });
+      }
+    });
+
+    setMeshList(meshes);
+
+    const box = new THREE.Box3().setFromObject(object);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+
+    setStats({
+      triangles: totalTris,
+      vertices: totalVerts,
+      dimensions: `${(size.x * 10).toFixed(1)} × ${(size.y * 10).toFixed(1)} × ${(size.z * 10).toFixed(1)} mm`,
+    });
+  };
+
+  // Frame Camera on Object
+  const frameObject = (object: THREE.Object3D) => {
+    if (!cameraRef.current || !orbitControlsRef.current) return;
+    const box = new THREE.Box3().setFromObject(object);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+
+    const maxDim = Math.max(size.x, size.y, size.z, 1.5);
+    const fov = cameraRef.current.fov * (Math.PI / 180);
+    const cameraDistance = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
+
+    cameraRef.current.position.set(
+      center.x + cameraDistance * 0.7,
+      center.y + cameraDistance * 0.6,
+      center.z + cameraDistance * 0.8
+    );
+    orbitControlsRef.current.target.copy(center);
+    orbitControlsRef.current.update();
+  };
+
+  // Load 3D Asset from URL or API
   useEffect(() => {
     if (!assetUrl || !sceneRef.current || !rootModelGroupRef.current) return;
 
@@ -502,80 +680,17 @@ export function Viewport3D({
     setIsLoadingModel(true);
 
     const onModelLoaded = (object: THREE.Object3D) => {
-      // Clear previous model from rootGroup
       while (rootGroup.children.length > 0) {
         rootGroup.remove(rootGroup.children[0]);
       }
 
       rootGroup.add(object);
       currentModelRef.current = object;
+      setSelectedMesh(null);
 
-      // Extract mesh list for outliner
-      const meshes: MeshNodeInfo[] = [];
-      let totalTris = 0;
-      let totalVerts = 0;
-
-      object.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
-          const geom = child.geometry;
-
-          let tris = 0;
-          let verts = 0;
-          if (geom.index) {
-            tris = geom.index.count / 3;
-          } else if (geom.attributes.position) {
-            tris = geom.attributes.position.count / 3;
-          }
-          if (geom.attributes.position) {
-            verts = geom.attributes.position.count;
-          }
-
-          totalTris += Math.round(tris);
-          totalVerts += Math.round(verts);
-
-          meshes.push({
-            id: child.uuid,
-            name: child.name || `Mesh_${meshes.length + 1}`,
-            triangles: Math.round(tris),
-            vertices: Math.round(verts),
-            visible: child.visible,
-            meshRef: child,
-          });
-        }
-      });
-
-      setMeshList(meshes);
-
-      // Compute bounding box and dimensions
-      const box = new THREE.Box3().setFromObject(object);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      const center = new THREE.Vector3();
-      box.getCenter(center);
-
-      // Approximate volume and surface area in mm3 / mm2 (assuming 1 unit = 10mm)
-      const volume = size.x * size.y * size.z * 1000;
-      const surface = 2 * (size.x * size.y + size.y * size.z + size.z * size.x) * 100;
-
-      setStats({
-        triangles: totalTris,
-        vertices: totalVerts,
-        dimensions: `${(size.x * 10).toFixed(1)} × ${(size.y * 10).toFixed(1)} × ${(size.z * 10).toFixed(1)} mm`,
-        volumeMm3: Math.round(volume),
-        surfaceAreaMm2: Math.round(surface),
-      });
-
-      // Fit Camera to View
+      updateMeshListAndStats(object);
       frameObject(object);
 
-      // Attach TransformControls to root model
-      if (transformControlsRef.current) {
-        transformControlsRef.current.attach(object);
-      }
-
-      // Update Bounding Box helper
       if (boxHelperRef.current) {
         boxHelperRef.current.setFromObject(object);
       }
@@ -590,10 +705,11 @@ export function Viewport3D({
         fullUrl,
         (geom) => {
           geom.computeVertexNormals();
+          // Studio Brushed Titanium Material for CAD
           const mat = new THREE.MeshStandardMaterial({
-            color: 0x22c55e,
-            metalness: 0.85,
-            roughness: 0.25,
+            color: 0xb0b5ba,
+            metalness: 0.75,
+            roughness: 0.28,
           });
           const mesh = new THREE.Mesh(geom, mat);
           mesh.name = assetName || "CAD_STL_Model";
@@ -601,7 +717,7 @@ export function Viewport3D({
         },
         undefined,
         (err) => {
-          console.error("Failed to load STL:", err);
+          console.error("Failed to load STL model:", err);
           setIsLoadingModel(false);
         }
       );
@@ -610,388 +726,338 @@ export function Viewport3D({
       loader.load(
         fullUrl,
         (gltf) => {
-          onModelLoaded(gltf.scene);
+          const model = gltf.scene;
+          model.name = assetName || "Blender_GLTF_Model";
+          onModelLoaded(model);
         },
         undefined,
         (err) => {
-          console.error("Failed to load GLTF:", err);
+          console.error("Failed to load GLTF model:", err);
           setIsLoadingModel(false);
         }
       );
     }
-  }, [assetUrl, format, apiBase, applyShading]);
+  }, [assetUrl, format, apiBase]);
 
-  // Frame / Focus on object
-  const frameObject = (object: THREE.Object3D) => {
-    const camera = cameraRef.current;
-    const controls = orbitControlsRef.current;
-    if (!camera || !controls) return;
+  // Drag and Drop Local File Handler (.glb, .gltf, .stl)
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
 
-    const box = new THREE.Box3().setFromObject(object);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
+    const file = e.dataTransfer.files[0];
+    const fileName = file.name.toLowerCase();
+    const reader = new FileReader();
 
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const fov = camera.fov * (Math.PI / 180);
-    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.8;
-    cameraZ = Math.max(cameraZ, 3);
+    setIsLoadingModel(true);
 
-    camera.position.set(center.x + cameraZ * 0.8, center.y + cameraZ * 0.6, center.z + cameraZ * 0.8);
-    camera.lookAt(center);
-    controls.target.copy(center);
-    controls.update();
-  };
+    reader.onload = (event) => {
+      const contents = event.target?.result;
+      if (!contents || !rootModelGroupRef.current) return;
+      const rootGroup = rootModelGroupRef.current;
 
-  // Blender Camera Views (Numpad 1, 3, 7, Iso)
-  const setCameraView = (view: CameraView) => {
-    const camera = cameraRef.current;
-    const controls = orbitControlsRef.current;
-    const target = currentModelRef.current;
-    if (!camera || !controls) return;
+      const finishLoad = (object: THREE.Object3D) => {
+        while (rootGroup.children.length > 0) {
+          rootGroup.remove(rootGroup.children[0]);
+        }
+        rootGroup.add(object);
+        currentModelRef.current = object;
+        setSelectedMesh(null);
+        updateMeshListAndStats(object);
+        frameObject(object);
+        applyShading();
+        setIsLoadingModel(false);
+      };
 
-    const center = new THREE.Vector3(0, 0, 0);
-    let dist = 6;
-
-    if (target) {
-      const box = new THREE.Box3().setFromObject(target);
-      box.getCenter(center);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      dist = Math.max(size.x, size.y, size.z) * 2.5;
-    }
-
-    switch (view) {
-      case "front": // Numpad 1
-        camera.position.set(center.x, center.y, center.z + dist);
-        break;
-      case "right": // Numpad 3
-        camera.position.set(center.x + dist, center.y, center.z);
-        break;
-      case "top": // Numpad 7
-        camera.position.set(center.x, center.y + dist, center.z + 0.001);
-        break;
-      case "iso":
-      default:
-        camera.position.set(center.x + dist * 0.7, center.y + dist * 0.5, center.z + dist * 0.7);
-        break;
-    }
-
-    camera.lookAt(center);
-    controls.target.copy(center);
-    controls.update();
-  };
-
-  // Keyboard Shortcuts (Blender Standard G, R, S, 1, 3, 7, 5, ., Space)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input or textarea
-      if (["INPUT", "TEXTAREA"].includes((e.target as HTMLElement).tagName)) return;
-
-      switch (e.key.toLowerCase()) {
-        case "g":
-          setTransformMode("translate");
-          break;
-        case "r":
-          setTransformMode("rotate");
-          break;
-        case "s":
-          setTransformMode("scale");
-          break;
-        case "escape":
-          setTransformMode("select");
-          break;
-        case "1":
-          setCameraView("front");
-          break;
-        case "3":
-          setCameraView("right");
-          break;
-        case "7":
-          setCameraView("top");
-          break;
-        case "5":
-          setIsOrtho((prev) => !prev);
-          break;
-        case ".":
-          if (currentModelRef.current) frameObject(currentModelRef.current);
-          break;
-        case " ":
-          e.preventDefault();
-          setAutoRotate((prev) => !prev);
-          break;
-        case "z":
-          // Cycle shading modes
-          setShadingMode((prev) => {
-            if (prev === "material") return "solid";
-            if (prev === "solid") return "wireframe";
-            if (prev === "wireframe") return "xray";
-            return "material";
-          });
-          break;
+      if (fileName.endsWith(".stl")) {
+        const loader = new STLLoader();
+        const geom = loader.parse(contents as ArrayBuffer);
+        geom.computeVertexNormals();
+        const mat = new THREE.MeshStandardMaterial({
+          color: 0x9e9e9e,
+          metalness: 0.5,
+          roughness: 0.35,
+        });
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.name = file.name;
+        finishLoad(mesh);
+      } else if (fileName.endsWith(".glb") || fileName.endsWith(".gltf")) {
+        const loader = new GLTFLoader();
+        loader.parse(
+          contents as ArrayBuffer,
+          "",
+          (gltf) => {
+            finishLoad(gltf.scene);
+          },
+          (err) => {
+            console.error("Error parsing dropped GLTF:", err);
+            setIsLoadingModel(false);
+          }
+        );
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  // Mesh Operations (Blender actions)
-  const handleCenterOrigin = () => {
-    if (!currentModelRef.current) return;
-    const box = new THREE.Box3().setFromObject(currentModelRef.current);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-    currentModelRef.current.position.sub(center);
+    reader.readAsArrayBuffer(file);
   };
 
-  const handleSnapToFloor = () => {
-    if (!currentModelRef.current) return;
-    const box = new THREE.Box3().setFromObject(currentModelRef.current);
-    currentModelRef.current.position.y -= box.min.y;
-  };
-
-  const handleResetTransforms = () => {
-    if (!currentModelRef.current) return;
-    currentModelRef.current.position.set(0, 0, 0);
-    currentModelRef.current.rotation.set(0, 0, 0);
-    currentModelRef.current.scale.set(1, 1, 1);
-    setLiveTransform({ pos: [0, 0, 0], rot: [0, 0, 0], scale: [1, 1, 1] });
-  };
-
-  // Add Geometric Primitives (Blender Shift+A)
-  const handleAddPrimitive = (type: "cube" | "cylinder" | "sphere" | "torus" | "cone") => {
+  // Primitive Spawner (Shift+A / Add menu)
+  const spawnPrimitive = (type: "cube" | "sphere" | "cylinder" | "cone" | "torus" | "pyramid" | "plane") => {
     if (!rootModelGroupRef.current) return;
-    let geom: THREE.BufferGeometry;
+    const rootGroup = rootModelGroupRef.current;
+
+    let geo: THREE.BufferGeometry;
+    let name = type.toUpperCase();
+    let initialY = 0.9;
 
     switch (type) {
-      case "cylinder":
-        geom = new THREE.CylinderGeometry(0.8, 0.8, 2, 24);
-        break;
       case "sphere":
-        geom = new THREE.SphereGeometry(1, 32, 24);
+        geo = new THREE.SphereGeometry(1.2, 32, 24);
+        initialY = 1.2;
         break;
-      case "torus":
-        geom = new THREE.TorusGeometry(1, 0.35, 16, 48);
+      case "cylinder":
+        geo = new THREE.CylinderGeometry(1.0, 1.0, 2.0, 32);
+        initialY = 1.0;
         break;
       case "cone":
-        geom = new THREE.ConeGeometry(1, 2, 24);
+        geo = new THREE.ConeGeometry(1.2, 2.2, 32);
+        initialY = 1.1;
+        break;
+      case "torus":
+        geo = new THREE.TorusGeometry(1.0, 0.35, 24, 48);
+        initialY = 1.0;
+        break;
+      case "pyramid":
+        geo = new THREE.ConeGeometry(1.5, 2.2, 4);
+        initialY = 1.1;
+        break;
+      case "plane":
+        geo = new THREE.PlaneGeometry(3, 3);
+        initialY = 0.01;
         break;
       case "cube":
       default:
-        geom = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+        geo = new THREE.BoxGeometry(1.8, 1.8, 1.8, 4, 4, 4);
+        initialY = 0.9;
         break;
     }
 
+    geo.computeVertexNormals();
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x22c55e,
-      roughness: 0.3,
-      metalness: 0.8,
+      color: 0x9e9e9e,
+      roughness: 0.35,
+      metalness: 0.15,
     });
-    const mesh = new THREE.Mesh(geom, mat);
-    mesh.name = `Primitive_${type}_${Date.now().toString().slice(-4)}`;
-    mesh.position.set(0, 1, 0);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = `${name}_${Date.now().toString().slice(-4)}`;
+    mesh.position.set(0, initialY, 0);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
 
-    // Replace scene or append
-    while (rootModelGroupRef.current.children.length > 0) {
-      rootModelGroupRef.current.remove(rootModelGroupRef.current.children[0]);
+    while (rootGroup.children.length > 0) {
+      rootGroup.remove(rootGroup.children[0]);
     }
-    rootModelGroupRef.current.add(mesh);
+    rootGroup.add(mesh);
     currentModelRef.current = mesh;
+    setSelectedMesh(mesh);
 
-    if (transformControlsRef.current) {
-      transformControlsRef.current.attach(mesh);
-    }
-
+    updateMeshListAndStats(mesh);
+    frameObject(mesh);
     applyShading();
     setActivePanel("none");
   };
 
-  // High-Res Viewport Snapshot Capture
-  const handleTakeSnapshot = () => {
-    if (!rendererRef.current) return;
-    const dataUrl = rendererRef.current.domElement.toDataURL("image/png");
-    const a = document.createElement("a");
-    a.href = dataUrl;
-    a.download = `kosh_viewport_${assetName || "render"}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  // Quick Mesh Transforms (Snap to Floor, Center, Reset)
+  const snapToFloor = () => {
+    if (!currentModelRef.current) return;
+    const box = new THREE.Box3().setFromObject(currentModelRef.current);
+    currentModelRef.current.position.y -= box.min.y;
+    currentModelRef.current.updateMatrixWorld();
   };
 
-  // Download Asset
-  const handleDownloadAsset = () => {
-    if (!assetUrl) return;
-    const fullUrl = assetUrl.startsWith("http") ? assetUrl : `${apiBase}${assetUrl}`;
-    const a = document.createElement("a");
-    a.href = fullUrl;
-    a.download = assetName || `kosh_model.${format}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const centerToOrigin = () => {
+    if (!currentModelRef.current) return;
+    const box = new THREE.Box3().setFromObject(currentModelRef.current);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    currentModelRef.current.position.x -= center.x;
+    currentModelRef.current.position.z -= center.z;
+    currentModelRef.current.updateMatrixWorld();
+  };
+
+  const clearTransforms = () => {
+    if (!currentModelRef.current) return;
+    currentModelRef.current.position.set(0, 0, 0);
+    currentModelRef.current.rotation.set(0, 0, 0);
+    currentModelRef.current.scale.set(1, 1, 1);
+    snapToFloor();
+    currentModelRef.current.updateMatrixWorld();
+  };
+
+  // Live Material Color Tweaker
+  const handleUpdateMaterial = (color: string, roughness: number, metalness: number) => {
+    setMatColor(color);
+    setMatRoughness(roughness);
+    setMatMetalness(metalness);
+
+    const target = selectedMesh || currentModelRef.current;
+    if (!target) return;
+
+    target.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        if (child.material instanceof THREE.MeshStandardMaterial) {
+          child.material.color.set(color);
+          child.material.roughness = roughness;
+          child.material.metalness = metalness;
+          child.material.needsUpdate = true;
+        }
+      }
+    });
+  };
+
+  // Set Camera View Presets (Front, Top, Right, Iso)
+  const setCameraPreset = (view: CameraView) => {
+    if (!cameraRef.current || !orbitControlsRef.current) return;
+    const cam = cameraRef.current;
+    const target = orbitControlsRef.current.target;
+    const dist = 7.0;
+
+    switch (view) {
+      case "front":
+        cam.position.set(target.x, target.y, target.z + dist);
+        break;
+      case "right":
+        cam.position.set(target.x + dist, target.y, target.z);
+        break;
+      case "top":
+        cam.position.set(target.x, target.y + dist, target.z + 0.001);
+        break;
+      case "iso":
+      default:
+        cam.position.set(target.x + dist * 0.6, target.y + dist * 0.5, target.z + dist * 0.6);
+        break;
+    }
+    orbitControlsRef.current.update();
+  };
+
+  // Export Active Scene as GLB
+  const handleExportGLB = () => {
+    if (!currentModelRef.current) return;
+    const exporter = new GLTFExporter();
+    exporter.parse(
+      currentModelRef.current,
+      (gltf) => {
+        const blob = new Blob([gltf as ArrayBuffer], { type: "application/octet-stream" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `${assetName || "kosh_model"}.glb`;
+        link.click();
+      },
+      (error) => console.error("Export error:", error),
+      { binary: true }
+    );
+  };
+
+  // Render PNG Snapshot
+  const handleRenderSnapshot = () => {
+    if (!rendererRef.current) return;
+    const dataUrl = rendererRef.current.domElement.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = `${assetName || "kosh_render"}_snapshot.png`;
+    link.click();
   };
 
   return (
     <div
-      className={`relative w-full h-full bg-[#09090b] flex flex-col select-none overflow-hidden font-mono ${
+      className={`relative flex flex-col h-full w-full bg-[var(--background)] text-[var(--foreground)] overflow-hidden font-mono text-xs ${
         isFullscreen ? "fixed inset-0 z-50" : ""
       }`}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setIsDragOver(true);
+      }}
+      onDragLeave={() => setIsDragOver(false)}
+      onDrop={handleDrop}
     >
-      {/* 1. BLENDER WORKSPACE TOP TOOLBAR */}
-      <div className="absolute top-0 left-0 right-0 z-20 flex flex-wrap items-center justify-between p-2 bg-[#09090b]/90 border-b border-[#27272a] backdrop-blur-sm text-xs">
-        {/* Left: Model Name & Format */}
+      {/* 1. Viewport Top Header Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 border-b border-[var(--border)] bg-[var(--bg-header)] select-none">
         <div className="flex items-center space-x-2">
-          <div className="flex items-center space-x-1.5 px-2 py-0.5 bg-[#121215] border border-[#27272a]">
-            <Box className="w-3.5 h-3.5 text-[#22c55e]" />
-            <span className="font-semibold text-[#f4f4f5] max-w-[140px] truncate">
-              {assetName || "Blender_Viewport"}
-            </span>
-            <span className="text-[10px] text-[#71717a] uppercase">({format})</span>
+          <div className="flex items-center space-x-1.5">
+            <Box className="w-4 h-4 text-[var(--accent)]" />
+            <span className="font-bold tracking-wide">Blender_Viewport</span>
+            <span className="text-[10px] text-[var(--text-muted)]">({format.toUpperCase()})</span>
           </div>
 
-          {/* Shading Mode Selector (Blender Z Menu) */}
-          <div className="flex items-center bg-[#121215] border border-[#27272a] p-0.5">
-            <button
-              onClick={() => setShadingMode("material")}
-              title="Material Preview (PBR)"
-              className={`px-2 py-0.5 text-[10px] ${
-                shadingMode === "material"
-                  ? "bg-[#27272a] text-[#22c55e] font-bold"
-                  : "text-[#71717a] hover:text-[#f4f4f5]"
-              }`}
-            >
-              MATERIAL
-            </button>
-            <button
-              onClick={() => setShadingMode("solid")}
-              title="Solid Shading / Matcap"
-              className={`px-2 py-0.5 text-[10px] ${
-                shadingMode === "solid"
-                  ? "bg-[#27272a] text-[#22c55e] font-bold"
-                  : "text-[#71717a] hover:text-[#f4f4f5]"
-              }`}
-            >
-              SOLID
-            </button>
-            <button
-              onClick={() => setShadingMode("wireframe")}
-              title="Wireframe View"
-              className={`px-2 py-0.5 text-[10px] ${
-                shadingMode === "wireframe"
-                  ? "bg-[#27272a] text-[#22c55e] font-bold"
-                  : "text-[#71717a] hover:text-[#f4f4f5]"
-              }`}
-            >
-              WIREFRAME
-            </button>
-            <button
-              onClick={() => setShadingMode("xray")}
-              title="X-Ray Ghost Mode"
-              className={`px-2 py-0.5 text-[10px] ${
-                shadingMode === "xray"
-                  ? "bg-[#27272a] text-[#06b6d4] font-bold"
-                  : "text-[#71717a] hover:text-[#f4f4f5]"
-              }`}
-            >
-              X-RAY
-            </button>
-            <button
-              onClick={() => setShadingMode("normals")}
-              title="Inspect Surface Normals"
-              className={`px-2 py-0.5 text-[10px] ${
-                shadingMode === "normals"
-                  ? "bg-[#27272a] text-[#f59e0b] font-bold"
-                  : "text-[#71717a] hover:text-[#f4f4f5]"
-              }`}
-            >
-              NORMALS
-            </button>
-          </div>
+          {isLoadingModel && (
+            <div className="flex items-center space-x-1 text-[11px] text-[var(--accent)] animate-pulse">
+              <Sparkles className="w-3 h-3" />
+              <span>LOADING MESH...</span>
+            </div>
+          )}
         </div>
 
-        {/* Right: Transform Gizmos (G / R / S) & Action Drawers */}
+        {/* Shading Mode Selector (Material / Solid / Wireframe / X-Ray / Normals) */}
         <div className="flex items-center space-x-1">
-          {/* Gizmo Tools */}
-          <div className="flex items-center bg-[#121215] border border-[#27272a] p-0.5">
-            <button
-              onClick={() => setTransformMode("select")}
-              title="Orbit / Select Mode (Esc)"
-              className={`p-1 border ${
-                transformMode === "select"
-                  ? "bg-[#27272a] border-[#22c55e] text-[#22c55e]"
-                  : "border-transparent text-[#71717a] hover:text-[#f4f4f5]"
-              }`}
-            >
-              <Compass className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setTransformMode("translate")}
-              title="Move / Grab Gizmo (G)"
-              className={`p-1 border ${
-                transformMode === "translate"
-                  ? "bg-[#27272a] border-[#22c55e] text-[#22c55e]"
-                  : "border-transparent text-[#71717a] hover:text-[#f4f4f5]"
-              }`}
-            >
-              <Move className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setTransformMode("rotate")}
-              title="Rotate Gizmo (R)"
-              className={`p-1 border ${
-                transformMode === "rotate"
-                  ? "bg-[#27272a] border-[#22c55e] text-[#22c55e]"
-                  : "border-transparent text-[#71717a] hover:text-[#f4f4f5]"
-              }`}
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setTransformMode("scale")}
-              title="Scale Gizmo (S)"
-              className={`p-1 border ${
-                transformMode === "scale"
-                  ? "bg-[#27272a] border-[#22c55e] text-[#22c55e]"
-                  : "border-transparent text-[#71717a] hover:text-[#f4f4f5]"
-              }`}
-            >
-              <Scale className="w-3.5 h-3.5" />
-            </button>
+          <div className="flex items-center bg-[var(--bg-subpanel)] border border-[var(--border)] p-0.5 text-[11px]">
+            {(["material", "solid", "wireframe", "xray", "normals"] as ShadingMode[]).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setShadingMode(mode)}
+                className={`px-2 py-0.5 uppercase transition-colors ${
+                  shadingMode === mode
+                    ? "bg-[var(--accent)] text-[var(--background)] font-bold shadow-sm"
+                    : "text-[var(--text-muted)] hover:text-[var(--foreground)]"
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
           </div>
 
-          {/* Drawer toggles */}
+          {/* Quick Panels Toggles */}
           <button
             onClick={() => setActivePanel(activePanel === "transform" ? "none" : "transform")}
-            title="Transform Coordinates Inspector (N)"
-            className={`px-2 py-1 text-[11px] border ${
+            title="Transform Inspector (G/R/S)"
+            className={`p-1.5 border transition-colors ${
               activePanel === "transform"
-                ? "bg-[#22c55e] text-[#09090b] font-bold border-[#22c55e]"
-                : "bg-[#121215] border-[#27272a] text-[#71717a] hover:text-[#f4f4f5]"
+                ? "bg-[var(--accent)] text-[var(--background)] border-[var(--accent)]"
+                : "bg-[var(--bg-panel)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--foreground)]"
             }`}
           >
-            TRANSFORM
+            <Sliders className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={() => setActivePanel(activePanel === "material" ? "none" : "material")}
+            title="Material Tweaker"
+            className={`p-1.5 border transition-colors ${
+              activePanel === "material"
+                ? "bg-[var(--accent)] text-[var(--background)] border-[var(--accent)]"
+                : "bg-[var(--bg-panel)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--foreground)]"
+            }`}
+          >
+            <Palette className="w-3.5 h-3.5" />
           </button>
 
           <button
             onClick={() => setActivePanel(activePanel === "outliner" ? "none" : "outliner")}
-            title="Scene Outliner / Meshes Hierarchy"
-            className={`px-2 py-1 text-[11px] border ${
+            title="Scene Outliner Hierarchy"
+            className={`p-1.5 border transition-colors ${
               activePanel === "outliner"
-                ? "bg-[#22c55e] text-[#09090b] font-bold border-[#22c55e]"
-                : "bg-[#121215] border-[#27272a] text-[#71717a] hover:text-[#f4f4f5]"
+                ? "bg-[var(--accent)] text-[var(--background)] border-[var(--accent)]"
+                : "bg-[var(--bg-panel)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--foreground)]"
             }`}
           >
-            OUTLINER
+            <Layers className="w-3.5 h-3.5" />
           </button>
 
           <button
             onClick={() => setActivePanel(activePanel === "add" ? "none" : "add")}
-            title="Add Mesh Primitive (Shift+A)"
-            className={`p-1 border ${
+            title="Add Primitives (Shift+A)"
+            className={`p-1.5 border transition-colors ${
               activePanel === "add"
-                ? "bg-[#22c55e] text-[#09090b] border-[#22c55e]"
-                : "bg-[#121215] border-[#27272a] text-[#71717a] hover:text-[#f4f4f5]"
+                ? "bg-[var(--accent)] text-[var(--background)] border-[var(--accent)]"
+                : "bg-[var(--bg-panel)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--foreground)]"
             }`}
           >
             <Plus className="w-3.5 h-3.5" />
@@ -999,11 +1065,11 @@ export function Viewport3D({
 
           <button
             onClick={() => setActivePanel(activePanel === "lighting" ? "none" : "lighting")}
-            title="Lighting & Environment Settings"
-            className={`p-1 border ${
+            title="Studio Lighting Presets"
+            className={`p-1.5 border transition-colors ${
               activePanel === "lighting"
-                ? "bg-[#22c55e] text-[#09090b] border-[#22c55e]"
-                : "bg-[#121215] border-[#27272a] text-[#71717a] hover:text-[#f4f4f5]"
+                ? "bg-[var(--accent)] text-[var(--background)] border-[var(--accent)]"
+                : "bg-[var(--bg-panel)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--foreground)]"
             }`}
           >
             <Sun className="w-3.5 h-3.5" />
@@ -1011,431 +1077,471 @@ export function Viewport3D({
         </div>
       </div>
 
-      {/* 2. LEFT FLOATING BLENDER VIEWPORT TOOLS */}
-      <div className="absolute left-3 top-16 z-20 flex flex-col space-y-1 bg-[#09090b]/80 border border-[#27272a] p-1 text-xs">
-        {/* Camera Views */}
-        <button
-          onClick={() => setCameraView("front")}
-          title="Front View (Numpad 1)"
-          className="px-2 py-1 text-[10px] text-[#71717a] hover:text-[#22c55e] hover:bg-[#121215] text-left"
-        >
-          FRONT
-        </button>
-        <button
-          onClick={() => setCameraView("right")}
-          title="Right Side View (Numpad 3)"
-          className="px-2 py-1 text-[10px] text-[#71717a] hover:text-[#22c55e] hover:bg-[#121215] text-left"
-        >
-          RIGHT
-        </button>
-        <button
-          onClick={() => setCameraView("top")}
-          title="Top View (Numpad 7)"
-          className="px-2 py-1 text-[10px] text-[#71717a] hover:text-[#22c55e] hover:bg-[#121215] text-left"
-        >
-          TOP
-        </button>
-        <button
-          onClick={() => setCameraView("iso")}
-          title="Isometric View"
-          className="px-2 py-1 text-[10px] text-[#71717a] hover:text-[#22c55e] hover:bg-[#121215] text-left"
-        >
-          ISO
-        </button>
-
-        <div className="h-[1px] bg-[#27272a] my-1" />
-
-        {/* Ortho / Persp Toggle */}
-        <button
-          onClick={() => setIsOrtho(!isOrtho)}
-          title="Toggle Perspective / Orthographic (Numpad 5)"
-          className={`px-2 py-1 text-[10px] font-bold ${
-            isOrtho ? "text-[#22c55e]" : "text-[#71717a] hover:text-[#f4f4f5]"
-          }`}
-        >
-          {isOrtho ? "ORTHO" : "PERSP"}
-        </button>
-
-        {/* Frame / Focus */}
-        <button
-          onClick={() => currentModelRef.current && frameObject(currentModelRef.current)}
-          title="Frame Selected (Numpad .)"
-          className="p-1 text-[#71717a] hover:text-[#22c55e] hover:bg-[#121215] flex justify-center"
-        >
-          <Camera className="w-3.5 h-3.5" />
-        </button>
-
-        <div className="h-[1px] bg-[#27272a] my-1" />
-
-        {/* Overlays */}
-        <button
-          onClick={() => setShowGrid(!showGrid)}
-          title="Toggle Floor Grid"
-          className={`p-1 flex justify-center ${
-            showGrid ? "text-[#22c55e]" : "text-[#71717a] hover:text-[#f4f4f5]"
-          }`}
-        >
-          <Grid className="w-3.5 h-3.5" />
-        </button>
-
-        <button
-          onClick={() => setShowBoundingBox(!showBoundingBox)}
-          title="Toggle Bounding Box Cage"
-          className={`p-1 flex justify-center ${
-            showBoundingBox ? "text-[#22c55e]" : "text-[#71717a] hover:text-[#f4f4f5]"
-          }`}
-        >
-          <Box className="w-3.5 h-3.5" />
-        </button>
-
-        <button
-          onClick={() => setAutoRotate(!autoRotate)}
-          title="Toggle Auto Turntable (Space)"
-          className={`p-1 flex justify-center ${
-            autoRotate ? "text-[#22c55e]" : "text-[#71717a] hover:text-[#f4f4f5]"
-          }`}
-        >
-          <RotateCw className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      {/* 3. RIGHT FLOATING ACTION DRAWER */}
-      {activePanel !== "none" && (
-        <div className="absolute right-3 top-16 z-20 w-64 bg-[#09090b]/95 border border-[#27272a] p-3 text-xs shadow-2xl backdrop-blur-md">
-          {/* Panel Header */}
-          <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#27272a]">
-            <span className="font-bold text-[#f4f4f5] tracking-wider uppercase text-[11px]">
-              {activePanel} PANEL
-            </span>
-            <button
-              onClick={() => setActivePanel("none")}
-              className="text-[#71717a] hover:text-[#f4f4f5]"
-            >
-              ✕
-            </button>
+      {/* 2. Main 3D Canvas Container */}
+      <div className="relative flex-1 min-h-0 w-full overflow-hidden" ref={containerRef}>
+        {/* Drag & Drop Visual Overlay */}
+        {isDragOver && (
+          <div className="absolute inset-0 z-40 bg-[var(--background)]/85 border-2 border-dashed border-[var(--accent)] flex flex-col items-center justify-center pointer-events-none">
+            <UploadCloud className="w-12 h-12 text-[var(--accent)] animate-bounce mb-2" />
+            <span className="text-sm font-bold text-[var(--foreground)]">DROP .GLB / .STL MODEL HERE</span>
+            <span className="text-xs text-[var(--text-muted)]">Immediate client-side viewport inspection</span>
           </div>
+        )}
 
-          {/* TRANSFORM INSPECTOR PANEL */}
-          {activePanel === "transform" && (
-            <div className="space-y-3">
-              <div>
-                <span className="text-[10px] text-[#71717a] font-bold block mb-1">
-                  LOCATION (X, Y, Z)
-                </span>
-                <div className="grid grid-cols-3 gap-1">
-                  <div className="bg-[#121215] border border-[#27272a] px-1.5 py-0.5 text-center">
-                    <span className="text-[#ef4444] text-[10px] mr-1">X:</span>
-                    <span>{liveTransform.pos[0]}</span>
-                  </div>
-                  <div className="bg-[#121215] border border-[#27272a] px-1.5 py-0.5 text-center">
-                    <span className="text-[#22c55e] text-[10px] mr-1">Y:</span>
-                    <span>{liveTransform.pos[1]}</span>
-                  </div>
-                  <div className="bg-[#121215] border border-[#27272a] px-1.5 py-0.5 text-center">
-                    <span className="text-[#3b82f6] text-[10px] mr-1">Z:</span>
-                    <span>{liveTransform.pos[2]}</span>
-                  </div>
-                </div>
-              </div>
+        {/* Floating Blender Left Navigation Toolbar (Camera Views & Tools) */}
+        <div className="absolute top-3 left-3 z-10 flex flex-col space-y-1 bg-[var(--bg-panel)]/90 backdrop-blur border border-[var(--border)] p-1 shadow-xl">
+          {/* Transform Gizmo Selector */}
+          <button
+            onClick={() => setTransformMode("translate")}
+            title="Move / Translate (G)"
+            className={`p-1.5 transition-colors ${
+              transformMode === "translate"
+                ? "bg-[var(--accent)] text-[var(--background)]"
+                : "text-[var(--text-muted)] hover:text-[var(--foreground)]"
+            }`}
+          >
+            <Move className="w-3.5 h-3.5" />
+          </button>
 
-              <div>
-                <span className="text-[10px] text-[#71717a] font-bold block mb-1">
-                  ROTATION (DEG)
-                </span>
-                <div className="grid grid-cols-3 gap-1">
-                  <div className="bg-[#121215] border border-[#27272a] px-1.5 py-0.5 text-center">
-                    <span className="text-[#ef4444] text-[10px] mr-1">X:</span>
-                    <span>{liveTransform.rot[0]}°</span>
-                  </div>
-                  <div className="bg-[#121215] border border-[#27272a] px-1.5 py-0.5 text-center">
-                    <span className="text-[#22c55e] text-[10px] mr-1">Y:</span>
-                    <span>{liveTransform.rot[1]}°</span>
-                  </div>
-                  <div className="bg-[#121215] border border-[#27272a] px-1.5 py-0.5 text-center">
-                    <span className="text-[#3b82f6] text-[10px] mr-1">Z:</span>
-                    <span>{liveTransform.rot[2]}°</span>
-                  </div>
-                </div>
-              </div>
+          <button
+            onClick={() => setTransformMode("rotate")}
+            title="Rotate (R)"
+            className={`p-1.5 transition-colors ${
+              transformMode === "rotate"
+                ? "bg-[var(--accent)] text-[var(--background)]"
+                : "text-[var(--text-muted)] hover:text-[var(--foreground)]"
+            }`}
+          >
+            <RotateCw className="w-3.5 h-3.5" />
+          </button>
 
-              <div>
-                <span className="text-[10px] text-[#71717a] font-bold block mb-1">SCALE</span>
-                <div className="grid grid-cols-3 gap-1">
-                  <div className="bg-[#121215] border border-[#27272a] px-1.5 py-0.5 text-center">
-                    <span>{liveTransform.scale[0]}</span>
-                  </div>
-                  <div className="bg-[#121215] border border-[#27272a] px-1.5 py-0.5 text-center">
-                    <span>{liveTransform.scale[1]}</span>
-                  </div>
-                  <div className="bg-[#121215] border border-[#27272a] px-1.5 py-0.5 text-center">
-                    <span>{liveTransform.scale[2]}</span>
-                  </div>
-                </div>
-              </div>
+          <button
+            onClick={() => setTransformMode("scale")}
+            title="Scale (S)"
+            className={`p-1.5 transition-colors ${
+              transformMode === "scale"
+                ? "bg-[var(--accent)] text-[var(--background)]"
+                : "text-[var(--text-muted)] hover:text-[var(--foreground)]"
+            }`}
+          >
+            <Scale className="w-3.5 h-3.5" />
+          </button>
 
-              <div className="pt-2 border-t border-[#27272a] space-y-1.5">
-                <button
-                  onClick={handleCenterOrigin}
-                  className="w-full py-1 bg-[#121215] border border-[#27272a] hover:border-[#22c55e] text-[#a1a1aa] hover:text-[#f4f4f5] text-[11px]"
-                >
-                  Origin to Geometry Center
-                </button>
-                <button
-                  onClick={handleSnapToFloor}
-                  className="w-full py-1 bg-[#121215] border border-[#27272a] hover:border-[#22c55e] text-[#a1a1aa] hover:text-[#f4f4f5] text-[11px]"
-                >
-                  Snap Geometry to Floor (Y=0)
-                </button>
-                <button
-                  onClick={handleResetTransforms}
-                  className="w-full py-1 bg-[#18181b] border border-[#27272a] hover:border-[#ef4444] text-[#ef4444] text-[11px]"
-                >
-                  Clear Transforms (Alt+G/R/S)
-                </button>
+          <div className="w-full h-px bg-[var(--border)] my-1" />
+
+          {/* Camera Angles */}
+          <button
+            onClick={() => setCameraPreset("front")}
+            title="Front View (NumPad 1)"
+            className="px-1.5 py-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--foreground)]"
+          >
+            FRONT
+          </button>
+
+          <button
+            onClick={() => setCameraPreset("right")}
+            title="Right View (NumPad 3)"
+            className="px-1.5 py-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--foreground)]"
+          >
+            RIGHT
+          </button>
+
+          <button
+            onClick={() => setCameraPreset("top")}
+            title="Top View (NumPad 7)"
+            className="px-1.5 py-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--foreground)]"
+          >
+            TOP
+          </button>
+
+          <button
+            onClick={() => setCameraPreset("iso")}
+            title="Isometric Perspective"
+            className="px-1.5 py-1 text-[10px] text-[var(--text-muted)] hover:text-[var(--foreground)]"
+          >
+            ISO
+          </button>
+
+          <div className="w-full h-px bg-[var(--border)] my-1" />
+
+          {/* Perspective / Orthographic Toggle */}
+          <button
+            onClick={() => setIsOrtho(!isOrtho)}
+            title="Toggle Ortho / Perspective (NumPad 5)"
+            className={`px-1.5 py-1 text-[10px] font-bold ${
+              isOrtho ? "text-[var(--accent)]" : "text-[var(--text-muted)] hover:text-[var(--foreground)]"
+            }`}
+          >
+            {isOrtho ? "ORTHO" : "PERSP"}
+          </button>
+
+          {/* Frame Selected */}
+          <button
+            onClick={() => currentModelRef.current && frameObject(currentModelRef.current)}
+            title="Frame Selected Object (Period .)"
+            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--foreground)]"
+          >
+            <Focus className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Floor Grid Toggle */}
+          <button
+            onClick={() => setShowGrid(!showGrid)}
+            title="Toggle Floor Grid"
+            className={`p-1.5 ${
+              showGrid ? "text-[var(--accent)]" : "text-[var(--text-muted)] hover:text-[var(--foreground)]"
+            }`}
+          >
+            <Grid className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Turntable Auto-Rotate */}
+          <button
+            onClick={() => setAutoRotate(!autoRotate)}
+            title="Toggle Turntable 360° (Space)"
+            className={`p-1.5 ${
+              autoRotate ? "text-[var(--accent)]" : "text-[var(--text-muted)] hover:text-[var(--foreground)]"
+            }`}
+          >
+            <RotateCcw className={`w-3.5 h-3.5 ${autoRotate ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+
+        {/* Solid Matcap Drawer (Appears when Solid shading is active) */}
+        {shadingMode === "solid" && (
+          <div className="absolute top-3 right-3 z-10 flex items-center space-x-1 bg-[var(--bg-panel)]/90 backdrop-blur border border-[var(--border)] p-1 text-[10px]">
+            <span className="text-[var(--text-muted)] px-1">MATCAP:</span>
+            {(["studio", "clay", "redwax", "chrome", "pearl", "obsidian"] as MatcapPreset[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMatcap(m)}
+                className={`px-2 py-0.5 uppercase transition-colors ${
+                  matcap === m
+                    ? "bg-[var(--accent)] text-[var(--background)] font-bold"
+                    : "text-[var(--text-muted)] hover:text-[var(--foreground)]"
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Transform Inspector Drawer */}
+        {activePanel === "transform" && (
+          <div className="absolute top-12 right-3 z-20 w-64 bg-[var(--bg-panel)]/95 backdrop-blur border border-[var(--border)] p-3 shadow-2xl space-y-3">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-1.5">
+              <span className="font-bold flex items-center gap-1.5">
+                <Sliders className="w-3.5 h-3.5 text-[var(--accent)]" />
+                TRANSFORM INSPECTOR
+              </span>
+              <button onClick={() => setActivePanel("none")} className="text-[var(--text-muted)] hover:text-[var(--foreground)]">
+                ✕
+              </button>
+            </div>
+
+            {/* Position */}
+            <div>
+              <div className="text-[10px] text-[var(--text-muted)] mb-1">POSITION (X, Y, Z)</div>
+              <div className="grid grid-cols-3 gap-1 text-[11px]">
+                <div className="bg-[var(--bg-subpanel)] border border-[var(--border)] px-1.5 py-0.5">X: {liveTransform.pos[0]}</div>
+                <div className="bg-[var(--bg-subpanel)] border border-[var(--border)] px-1.5 py-0.5">Y: {liveTransform.pos[1]}</div>
+                <div className="bg-[var(--bg-subpanel)] border border-[var(--border)] px-1.5 py-0.5">Z: {liveTransform.pos[2]}</div>
               </div>
             </div>
-          )}
 
-          {/* LIGHTING & SHADING PANEL */}
-          {activePanel === "lighting" && (
-            <div className="space-y-3">
-              <div>
-                <span className="text-[10px] text-[#71717a] font-bold block mb-1">
-                  STUDIO LIGHT PRESET
-                </span>
-                <div className="grid grid-cols-2 gap-1 text-[10px]">
-                  {(["phosphor", "studio", "flat", "sunset"] as LightingPreset[]).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setLightingPreset(p)}
-                      className={`py-1 border uppercase ${
-                        lightingPreset === p
-                          ? "bg-[#27272a] border-[#22c55e] text-[#22c55e] font-bold"
-                          : "border-[#27272a] text-[#71717a] hover:text-[#f4f4f5]"
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
+            {/* Rotation */}
+            <div>
+              <div className="text-[10px] text-[var(--text-muted)] mb-1">ROTATION (DEG)</div>
+              <div className="grid grid-cols-3 gap-1 text-[11px]">
+                <div className="bg-[var(--bg-subpanel)] border border-[var(--border)] px-1.5 py-0.5">X: {liveTransform.rot[0]}°</div>
+                <div className="bg-[var(--bg-subpanel)] border border-[var(--border)] px-1.5 py-0.5">Y: {liveTransform.rot[1]}°</div>
+                <div className="bg-[var(--bg-subpanel)] border border-[var(--border)] px-1.5 py-0.5">Z: {liveTransform.rot[2]}°</div>
               </div>
+            </div>
 
-              <div>
-                <div className="flex justify-between text-[10px] text-[#71717a] mb-1">
-                  <span>EXPOSURE INTENSITY</span>
-                  <span>{lightIntensity.toFixed(1)}x</span>
-                </div>
+            {/* Scale */}
+            <div>
+              <div className="text-[10px] text-[var(--text-muted)] mb-1">SCALE</div>
+              <div className="grid grid-cols-3 gap-1 text-[11px]">
+                <div className="bg-[var(--bg-subpanel)] border border-[var(--border)] px-1.5 py-0.5">X: {liveTransform.scale[0]}</div>
+                <div className="bg-[var(--bg-subpanel)] border border-[var(--border)] px-1.5 py-0.5">Y: {liveTransform.scale[1]}</div>
+                <div className="bg-[var(--bg-subpanel)] border border-[var(--border)] px-1.5 py-0.5">Z: {liveTransform.scale[2]}</div>
+              </div>
+            </div>
+
+            {/* Quick Mesh Operations */}
+            <div className="pt-2 border-t border-[var(--border)] space-y-1.5">
+              <button
+                onClick={snapToFloor}
+                className="w-full py-1 bg-[var(--bg-subpanel)] border border-[var(--border)] hover:border-[var(--accent)] text-[var(--foreground)] transition-colors"
+              >
+                Snap to Floor (Z = 0)
+              </button>
+              <button
+                onClick={centerToOrigin}
+                className="w-full py-1 bg-[var(--bg-subpanel)] border border-[var(--border)] hover:border-[var(--accent)] text-[var(--foreground)] transition-colors"
+              >
+                Center to Origin
+              </button>
+              <button
+                onClick={clearTransforms}
+                className="w-full py-1 bg-[var(--bg-subpanel)] border border-[var(--border)] hover:border-[var(--accent)] text-[var(--foreground)] transition-colors"
+              >
+                Clear All Transforms
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Live Material Tweaker Drawer */}
+        {activePanel === "material" && (
+          <div className="absolute top-12 right-3 z-20 w-64 bg-[var(--bg-panel)]/95 backdrop-blur border border-[var(--border)] p-3 shadow-2xl space-y-3">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-1.5">
+              <span className="font-bold flex items-center gap-1.5">
+                <Palette className="w-3.5 h-3.5 text-[var(--accent)]" />
+                MATERIAL TWEAKER
+              </span>
+              <button onClick={() => setActivePanel("none")} className="text-[var(--text-muted)] hover:text-[var(--foreground)]">
+                ✕
+              </button>
+            </div>
+
+            {/* Base Color Picker */}
+            <div>
+              <div className="text-[10px] text-[var(--text-muted)] mb-1">BASE COLOR</div>
+              <div className="flex items-center space-x-2">
                 <input
-                  type="range"
-                  min="0.4"
-                  max="3.0"
-                  step="0.1"
-                  value={lightIntensity}
-                  onChange={(e) => setLightIntensity(parseFloat(e.target.value))}
-                  className="w-full accent-[#22c55e] cursor-pointer"
+                  type="color"
+                  value={matColor}
+                  onChange={(e) => handleUpdateMaterial(e.target.value, matRoughness, matMetalness)}
+                  className="w-8 h-8 border border-[var(--border)] cursor-pointer bg-transparent"
+                />
+                <input
+                  type="text"
+                  value={matColor}
+                  onChange={(e) => handleUpdateMaterial(e.target.value, matRoughness, matMetalness)}
+                  className="flex-1 bg-[var(--bg-subpanel)] border border-[var(--border)] px-2 py-1 text-xs font-mono"
                 />
               </div>
-
-              <div>
-                <span className="text-[10px] text-[#71717a] font-bold block mb-1">
-                  MATCAP COLOR PALETTE
-                </span>
-                <div className="grid grid-cols-2 gap-1 text-[10px]">
-                  {(["obsidian", "clay", "redwax", "chrome"] as MatcapPreset[]).map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => {
-                        setMatcap(m);
-                        setShadingMode("solid");
-                      }}
-                      className={`py-1 border uppercase ${
-                        matcap === m && shadingMode === "solid"
-                          ? "bg-[#27272a] border-[#22c55e] text-[#22c55e] font-bold"
-                          : "border-[#27272a] text-[#71717a] hover:text-[#f4f4f5]"
-                      }`}
-                    >
-                      {m}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-[#27272a]">
-                <button
-                  onClick={() => setSmoothShading(!smoothShading)}
-                  className={`w-full py-1 text-[11px] border ${
-                    smoothShading
-                      ? "bg-[#27272a] border-[#22c55e] text-[#22c55e]"
-                      : "border-[#27272a] text-[#71717a]"
-                  }`}
-                >
-                  {smoothShading ? "Shade Smooth [Active]" : "Shade Flat [Active]"}
-                </button>
-              </div>
             </div>
-          )}
 
-          {/* SCENE OUTLINER PANEL */}
-          {activePanel === "outliner" && (
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              <span className="text-[10px] text-[#71717a] font-bold block">
-                MESHES IN SCENE ({meshList.length})
+            {/* Roughness Slider */}
+            <div>
+              <div className="flex justify-between text-[10px] text-[var(--text-muted)] mb-1">
+                <span>ROUGHNESS</span>
+                <span>{matRoughness.toFixed(2)}</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={matRoughness}
+                onChange={(e) => handleUpdateMaterial(matColor, parseFloat(e.target.value), matMetalness)}
+                className="w-full accent-[var(--accent)] cursor-pointer"
+              />
+            </div>
+
+            {/* Metalness Slider */}
+            <div>
+              <div className="flex justify-between text-[10px] text-[var(--text-muted)] mb-1">
+                <span>METALLIC</span>
+                <span>{matMetalness.toFixed(2)}</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={matMetalness}
+                onChange={(e) => handleUpdateMaterial(matColor, matRoughness, parseFloat(e.target.value))}
+                className="w-full accent-[var(--accent)] cursor-pointer"
+              />
+            </div>
+
+            {/* Wireframe Overlay Checkbox */}
+            <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between">
+              <span className="text-[11px] text-[var(--text-muted)]">Wireframe Overlay</span>
+              <button
+                onClick={() => setShowWireframeOverlay(!showWireframeOverlay)}
+                className={`px-2 py-0.5 border text-[10px] ${
+                  showWireframeOverlay
+                    ? "bg-[var(--accent)] text-[var(--background)] font-bold border-[var(--accent)]"
+                    : "border-[var(--border)] text-[var(--text-muted)]"
+                }`}
+              >
+                {showWireframeOverlay ? "ON" : "OFF"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Add Primitives Drawer (Shift+A) */}
+        {activePanel === "add" && (
+          <div className="absolute top-12 right-3 z-20 w-56 bg-[var(--bg-panel)]/95 backdrop-blur border border-[var(--border)] p-2 shadow-2xl space-y-1">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-1 px-1">
+              <span className="font-bold flex items-center gap-1.5">
+                <Plus className="w-3.5 h-3.5 text-[var(--accent)]" />
+                ADD PRIMITIVE
               </span>
+              <button onClick={() => setActivePanel("none")} className="text-[var(--text-muted)] hover:text-[var(--foreground)]">
+                ✕
+              </button>
+            </div>
+            {(["cube", "sphere", "cylinder", "cone", "torus", "pyramid", "plane"] as const).map((prim) => (
+              <button
+                key={prim}
+                onClick={() => spawnPrimitive(prim)}
+                className="w-full text-left px-2.5 py-1.5 hover:bg-[var(--accent)] hover:text-[var(--background)] capitalize text-[11px] transition-colors"
+              >
+                + {prim}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Scene Outliner Drawer */}
+        {activePanel === "outliner" && (
+          <div className="absolute top-12 right-3 z-20 w-64 max-h-80 overflow-y-auto bg-[var(--bg-panel)]/95 backdrop-blur border border-[var(--border)] p-3 shadow-2xl space-y-2">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-1.5">
+              <span className="font-bold flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-[var(--accent)]" />
+                SCENE OUTLINER
+              </span>
+              <button onClick={() => setActivePanel("none")} className="text-[var(--text-muted)] hover:text-[var(--foreground)]">
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-1">
               {meshList.length === 0 ? (
-                <div className="text-[#3f3f46] italic text-[11px]">No child meshes detected.</div>
+                <div className="text-[var(--text-muted)] py-2 text-center">No meshes in scene</div>
               ) : (
                 meshList.map((m) => (
                   <div
                     key={m.id}
                     onClick={() => {
-                      setSelectedMeshId(m.id);
+                      setSelectedMesh(m.meshRef);
                       if (transformControlsRef.current) {
                         transformControlsRef.current.attach(m.meshRef);
                       }
                     }}
                     className={`flex items-center justify-between p-1.5 border cursor-pointer transition-colors ${
-                      selectedMeshId === m.id
-                        ? "bg-[#18181b] border-[#22c55e] text-[#22c55e]"
-                        : "bg-[#121215] border-[#27272a] text-[#a1a1aa] hover:border-[#3f3f46]"
+                      selectedMesh === m.meshRef
+                        ? "bg-[var(--accent)] text-[var(--background)] font-bold border-[var(--accent)]"
+                        : "bg-[var(--bg-subpanel)] border-[var(--border)] text-[var(--foreground)] hover:border-[var(--accent)]"
                     }`}
                   >
-                    <div className="truncate max-w-[130px]">
-                      <span className="font-semibold">{m.name}</span>
-                      <div className="text-[9px] text-[#71717a]">{m.triangles.toLocaleString()} tris</div>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        m.meshRef.visible = !m.meshRef.visible;
-                        setMeshList([...meshList]);
-                      }}
-                      className="p-1 text-[#71717a] hover:text-[#f4f4f5]"
-                    >
-                      {m.meshRef.visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                    </button>
+                    <span className="truncate flex-1">{m.name}</span>
+                    <span className="text-[10px] opacity-75">{m.triangles.toLocaleString()} tris</span>
                   </div>
                 ))
               )}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* ADD MESH PRIMITIVES (Shift+A) */}
-          {activePanel === "add" && (
-            <div className="space-y-1.5 text-[11px]">
-              <span className="text-[10px] text-[#71717a] font-bold block mb-1">
-                SPAWN PRIMITIVE MESH
+        {/* Lighting Presets Drawer */}
+        {activePanel === "lighting" && (
+          <div className="absolute top-12 right-3 z-20 w-56 bg-[var(--bg-panel)]/95 backdrop-blur border border-[var(--border)] p-3 shadow-2xl space-y-3">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-1.5">
+              <span className="font-bold flex items-center gap-1.5">
+                <Sun className="w-3.5 h-3.5 text-[var(--accent)]" />
+                LIGHTING PRESETS
               </span>
-              <button
-                onClick={() => handleAddPrimitive("cube")}
-                className="w-full py-1.5 px-2 bg-[#121215] border border-[#27272a] hover:border-[#22c55e] text-left hover:text-[#22c55e]"
-              >
-                + Cube (1.5 × 1.5 × 1.5)
-              </button>
-              <button
-                onClick={() => handleAddPrimitive("cylinder")}
-                className="w-full py-1.5 px-2 bg-[#121215] border border-[#27272a] hover:border-[#22c55e] text-left hover:text-[#22c55e]"
-              >
-                + Cylinder (Radius: 0.8, Depth: 2)
-              </button>
-              <button
-                onClick={() => handleAddPrimitive("sphere")}
-                className="w-full py-1.5 px-2 bg-[#121215] border border-[#27272a] hover:border-[#22c55e] text-left hover:text-[#22c55e]"
-              >
-                + UV Sphere (Radius: 1)
-              </button>
-              <button
-                onClick={() => handleAddPrimitive("torus")}
-                className="w-full py-1.5 px-2 bg-[#121215] border border-[#27272a] hover:border-[#22c55e] text-left hover:text-[#22c55e]"
-              >
-                + Torus (Major: 1, Tube: 0.35)
-              </button>
-              <button
-                onClick={() => handleAddPrimitive("cone")}
-                className="w-full py-1.5 px-2 bg-[#121215] border border-[#27272a] hover:border-[#22c55e] text-left hover:text-[#22c55e]"
-              >
-                + Cone (Radius: 1, Depth: 2)
+              <button onClick={() => setActivePanel("none")} className="text-[var(--text-muted)] hover:text-[var(--foreground)]">
+                ✕
               </button>
             </div>
-          )}
-        </div>
-      )}
 
-      {/* 4. LOADING INDICATOR */}
-      {isLoadingModel && (
-        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#09090b]/80 backdrop-blur-sm pointer-events-none">
-          <div className="w-8 h-8 border-2 border-[#22c55e] border-t-transparent rounded-full animate-spin mb-2" />
-          <span className="text-xs text-[#22c55e] font-mono tracking-wider">
-            STREAMING 3D MESH GEOMETRY...
-          </span>
-        </div>
-      )}
+            <div className="grid grid-cols-2 gap-1.5">
+              {(["studio", "warm", "cool", "sunset", "flat"] as LightingPreset[]).map((lp) => (
+                <button
+                  key={lp}
+                  onClick={() => setLightingPreset(lp)}
+                  className={`py-1 text-center uppercase border text-[10px] transition-colors ${
+                    lightingPreset === lp
+                      ? "bg-[var(--accent)] text-[var(--background)] font-bold border-[var(--accent)]"
+                      : "bg-[var(--bg-subpanel)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--foreground)]"
+                  }`}
+                >
+                  {lp}
+                </button>
+              ))}
+            </div>
 
-      {/* 5. THREE.JS CANVAS CONTAINER */}
-      <div
-        ref={containerRef}
-        className="w-full h-full cursor-grab active:cursor-grabbing outline-none"
-        tabIndex={0}
-      />
+            <div>
+              <div className="flex justify-between text-[10px] text-[var(--text-muted)] mb-1">
+                <span>INTENSITY</span>
+                <span>{lightIntensity.toFixed(1)}x</span>
+              </div>
+              <input
+                type="range"
+                min="0.4"
+                max="3.0"
+                step="0.2"
+                value={lightIntensity}
+                onChange={(e) => setLightIntensity(parseFloat(e.target.value))}
+                className="w-full accent-[var(--accent)] cursor-pointer"
+              />
+            </div>
+          </div>
+        )}
+      </div>
 
-      {/* 6. BOTTOM STATUS BAR & SHORTCUTS HELP */}
-      <div className="absolute bottom-2 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none text-[10px] text-[#71717a]">
-        {/* Model Metrics */}
-        <div className="pointer-events-auto flex items-center space-x-3 bg-[#09090b]/90 border border-[#27272a] px-2.5 py-1 backdrop-blur-sm">
+      {/* 3. Viewport Bottom Status Bar & Action Shortcuts */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 border-t border-[var(--border)] bg-[var(--bg-panel)] select-none text-[11px]">
+        {/* Mesh Statistics */}
+        <div className="flex items-center space-x-3 text-[var(--text-muted)]">
           {stats ? (
             <>
-              <div>
-                TRIS: <span className="text-[#f4f4f5] font-semibold">{stats.triangles.toLocaleString()}</span>
-              </div>
-              <div>
-                VERTS: <span className="text-[#f4f4f5] font-semibold">{stats.vertices.toLocaleString()}</span>
-              </div>
-              <div>
-                BOUNDS: <span className="text-[#22c55e]">{stats.dimensions}</span>
-              </div>
-              <div className="hidden sm:inline-block">
-                VOL: <span className="text-[#f4f4f5]">{stats.volumeMm3.toLocaleString()} mm³</span>
-              </div>
+              <span>
+                TRIS: <strong className="text-[var(--foreground)]">{stats.triangles.toLocaleString()}</strong>
+              </span>
+              <span>
+                VERTS: <strong className="text-[var(--foreground)]">{stats.vertices.toLocaleString()}</strong>
+              </span>
+              <span>
+                SIZE: <strong className="text-[var(--foreground)]">{stats.dimensions}</strong>
+              </span>
             </>
           ) : (
-            <div>
-              SHORTCUTS: <span className="text-[#f4f4f5]">G</span> Move |{" "}
-              <span className="text-[#f4f4f5]">R</span> Rotate |{" "}
-              <span className="text-[#f4f4f5]">S</span> Scale |{" "}
-              <span className="text-[#f4f4f5]">Z</span> Shading |{" "}
-              <span className="text-[#f4f4f5]">1/3/7</span> Views
-            </div>
+            <span>READY</span>
           )}
         </div>
 
-        {/* Viewport Action Buttons */}
-        <div className="pointer-events-auto flex items-center space-x-1.5 bg-[#09090b]/90 border border-[#27272a] p-1 backdrop-blur-sm">
-          {/* Snapshot Button */}
+        {/* Action Shortcuts & Export Suite */}
+        <div className="flex items-center space-x-2">
+          <div className="hidden lg:flex items-center space-x-2 text-[10px] text-[var(--text-muted)] border-r border-[var(--border)] pr-2">
+            <span>G: Move</span>
+            <span>R: Rotate</span>
+            <span>S: Scale</span>
+            <span>1/3/7: Views</span>
+          </div>
+
           <button
-            onClick={handleTakeSnapshot}
-            title="Render & Save High-Res PNG Snapshot"
-            className="flex items-center space-x-1 px-2 py-0.5 border border-[#27272a] text-[#71717a] hover:text-[#f4f4f5] hover:border-[#3f3f46]"
+            onClick={handleRenderSnapshot}
+            title="Export High-Res PNG Viewport Snapshot"
+            className="flex items-center space-x-1 px-2.5 py-1 bg-[var(--bg-subpanel)] border border-[var(--border)] hover:border-[var(--accent)] text-[var(--foreground)] transition-colors"
           >
-            <Camera className="w-3 h-3 text-[#22c55e]" />
+            <Camera className="w-3.5 h-3.5 text-[var(--accent)]" />
             <span>RENDER PNG</span>
           </button>
 
-          {/* Download Model Button */}
-          {assetUrl && (
-            <button
-              onClick={handleDownloadAsset}
-              title={`Download 3D Asset (${format.toUpperCase()})`}
-              className="flex items-center space-x-1 px-2.5 py-0.5 bg-[#22c55e] text-[#09090b] font-bold hover:bg-[#4ade80] transition-colors"
-            >
-              <Download className="w-3 h-3" />
-              <span>EXPORT {format.toUpperCase()}</span>
-            </button>
-          )}
+          <button
+            onClick={handleExportGLB}
+            title="Download Active Model as GLB"
+            className="flex items-center space-x-1 px-2.5 py-1 bg-[var(--accent)] text-[var(--background)] font-bold hover:opacity-90 transition-opacity"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>EXPORT GLB</span>
+          </button>
 
-          {/* Fullscreen Toggle */}
           <button
             onClick={() => setIsFullscreen(!isFullscreen)}
             title="Toggle Viewport Fullscreen"
-            className="p-1 border border-[#27272a] text-[#71717a] hover:text-[#f4f4f5] hover:border-[#3f3f46]"
+            className="p-1 border border-[var(--border)] bg-[var(--bg-subpanel)] text-[var(--text-muted)] hover:text-[var(--foreground)]"
           >
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>

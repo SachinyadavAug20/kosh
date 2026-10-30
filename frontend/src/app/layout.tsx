@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ThemeProvider } from "@/context/ThemeContext";
 
 export const metadata: Metadata = {
   title: "KOSH // Minimalist Creative MCP Hub",
@@ -15,9 +16,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark bg-[#09090b] text-[#f4f4f5]">
-      <body className="min-h-screen bg-[#09090b] text-[#f4f4f5] font-mono antialiased selection:bg-[#22c55e] selection:text-[#09090b]">
-        {children}
+    <html lang="en">
+      <body className="min-h-screen bg-[var(--background)] text-[var(--foreground)] font-mono antialiased selection:bg-[var(--accent)] selection:text-[var(--background)]">
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

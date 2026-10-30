@@ -2,10 +2,102 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #09090b;
-  --foreground: #f4f4f5;
+:root, [data-theme="blender-dark"] {
+  --background: #202020;
+  --bg-panel: #282828;
+  --bg-subpanel: #1c1c1c;
+  --bg-header: #303030;
+  --border: #383838;
+  --border-light: #484848;
+  --accent: #e68523;
+  --accent-hover: #ff9f43;
+  --foreground: #ebebeb;
+  --text-muted: #888888;
   color-scheme: dark;
+}
+
+[data-theme="kosh-terminal"] {
+  --background: #09090b;
+  --bg-panel: #121215;
+  --bg-subpanel: #0d0d10;
+  --bg-header: #18181b;
+  --border: #27272a;
+  --border-light: #3f3f46;
+  --accent: #22c55e;
+  --accent-hover: #4ade80;
+  --foreground: #f4f4f5;
+  --text-muted: #71717a;
+  color-scheme: dark;
+}
+
+[data-theme="cyberpunk"] {
+  --background: #0c0d14;
+  --bg-panel: #131728;
+  --bg-subpanel: #0e111f;
+  --bg-header: #191e36;
+  --border: #242b4d;
+  --border-light: #3a4577;
+  --accent: #f43f5e;
+  --accent-hover: #fb7185;
+  --foreground: #f8fafc;
+  --text-muted: #64748b;
+  color-scheme: dark;
+}
+
+[data-theme="nord"] {
+  --background: #242933;
+  --bg-panel: #2e3440;
+  --bg-subpanel: #20242d;
+  --bg-header: #3b4252;
+  --border: #434c5e;
+  --border-light: #4c566a;
+  --accent: #88c0d0;
+  --accent-hover: #8fbcbb;
+  --foreground: #eceff4;
+  --text-muted: #d8dee9;
+  color-scheme: dark;
+}
+
+[data-theme="tokyo-night"] {
+  --background: #16161e;
+  --bg-panel: #1a1b26;
+  --bg-subpanel: #13131a;
+  --bg-header: #24283b;
+  --border: #2f3549;
+  --border-light: #3e4766;
+  --accent: #7aa2f7;
+  --accent-hover: #89ddff;
+  --foreground: #c0caf5;
+  --text-muted: #565f89;
+  color-scheme: dark;
+}
+
+[data-theme="dracula"] {
+  --background: #21222c;
+  --bg-panel: #282a36;
+  --bg-subpanel: #191a21;
+  --bg-header: #343746;
+  --border: #44475a;
+  --border-light: #6272a4;
+  --accent: #bd93f9;
+  --accent-hover: #ff79c6;
+  --foreground: #f8f8f2;
+  --text-muted: #6272a4;
+  color-scheme: dark;
+}
+
+[data-theme="blender-light"] {
+  --background: #e2e2e2;
+  --bg-panel: #ebebeb;
+  --bg-subpanel: #d6d6d6;
+  --bg-header: #dedede;
+  --border: #c4c4c4;
+  --border-light: #b0b0b0;
+  --accent: #e68523;
+  --accent-hover: #d27415;
+  --foreground: #222222;
+  --text-muted: #666666;
+  color-scheme: light;
 }
 
 body {
@@ -16,51 +108,36 @@ body {
   overflow-x: hidden;
 }
 
-/* Custom Minimalist Terminal Scrollbar */
+/* Custom Minimalist Studio Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #09090b;
-  border-left: 1px solid #18181b;
+  background: var(--background);
+  border-left: 1px solid var(--border);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: var(--border);
   border-radius: 0px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: var(--border-light);
 }
 
 /* Monospace Selection */
 ::selection {
-  background: #22c55e;
-  color: #09090b;
+  background: var(--accent);
+  color: var(--background);
 }
 
-/* Terminal Scanline Texture */
-.terminal-grid {
+/* Subtle Studio Grid */
+.studio-grid {
   background-size: 32px 32px;
   background-image: 
-    linear-gradient(to right, rgba(39, 39, 42, 0.25) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(39, 39, 42, 0.25) 1px, transparent 1px);
-}
-
-/* Blinking terminal cursor */
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-
-.terminal-cursor {
-  display: inline-block;
-  width: 0.55em;
-  height: 1.1em;
-  vertical-align: middle;
-  background-color: #22c55e;
-  animation: blink 1s infinite;
+    linear-gradient(to right, rgba(120, 120, 130, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(120, 120, 130, 0.12) 1px, transparent 1px);
 }
