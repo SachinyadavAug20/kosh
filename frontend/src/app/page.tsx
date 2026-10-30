@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { TerminalHeader } from "@/components/TerminalHeader";
 import { CommandConsole } from "@/components/CommandConsole";
 import { CodeInspector } from "@/components/CodeInspector";
-import { Viewport3D } from "@/components/Viewport3D";
+import { Viewport3D, MeshNodeInfo } from "@/components/Viewport3D";
 import { useLocalStorageToken } from "@/hooks/useLocalStorageToken";
 import { useMcpClient } from "@/hooks/useMcpClient";
 
@@ -27,13 +27,31 @@ export default function Home() {
   const [isLeftOpen, setIsLeftOpen] = useState(true);
   const [isRightOpen, setIsRightOpen] = useState(false);
 
+  // Sub-Mesh Selection & Scene Hierarchy Synchronization
+  const [selectedMeshName, setSelectedMeshName] = useState<string | null>(null);
+  const [meshList, setMeshList] = useState<MeshNodeInfo[]>([]);
+
+  // Real-Time In-Viewport Material & Animation Controls
+  const [liveMaterialUpdate, setLiveMaterialUpdate] = useState<{
+    color: string;
+    roughness: number;
+    metalness: number;
+    transmission?: number;
+    clearcoat?: number;
+    emissive?: string;
+    timestamp: number;
+  } | null>(null);
+  const [liveExplodedFactor, setLiveExplodedFactor] = useState<number>(0.0);
+  const [liveTurntable, setLiveTurntable] = useState<boolean>(false);
+  const [liveHover, setLiveHover] = useState<boolean>(false);
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
   const handleExecute = (
     toolName: string,
-    args: { prompt?: string; script?: string; format: "glb" | "stl" }
+    args: { prompt?: string; script?: string; format: "glb" | "stl"; previousScript?: string }
   ) => {
     executeTool(toolName, args, token);
   };
@@ -70,6 +88,13 @@ export default function Home() {
               lastResult={lastResult}
               error={error}
               hasToken={!!token}
+              selectedMeshName={selectedMeshName}
+              meshList={meshList}
+              onSelectMesh={setSelectedMeshName}
+              onLiveMaterialUpdate={setLiveMaterialUpdate}
+              onLiveExplodedViewChange={setLiveExplodedFactor}
+              onLiveTurntableChange={setLiveTurntable}
+              onLiveHoverChange={setLiveHover}
             />
           </aside>
         )}
@@ -84,6 +109,13 @@ export default function Home() {
               telemetry={lastResult?.telemetry}
               format={lastResult?.format || "glb"}
               apiBase={apiBase}
+              onMeshSelect={setSelectedMeshName}
+              onMeshListUpdate={setMeshList}
+              externalSelectedMeshName={selectedMeshName}
+              liveMaterialUpdate={liveMaterialUpdate}
+              liveExplodedFactor={liveExplodedFactor}
+              liveTurntable={liveTurntable}
+              liveHover={liveHover}
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center bg-[#141416] text-[#71717a] font-mono text-xs">
@@ -102,6 +134,9 @@ export default function Home() {
               isLoading={isLoading}
               stdout={lastResult?.stdout || null}
               stderr={lastResult?.stderr || null}
+              meshList={meshList}
+              selectedMeshName={selectedMeshName}
+              onSelectMesh={setSelectedMeshName}
             />
           </aside>
         )}

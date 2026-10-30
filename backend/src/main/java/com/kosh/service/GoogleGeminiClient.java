@@ -53,6 +53,10 @@ public class GoogleGeminiClient {
     }
 
     public String generateBlenderScript(String prompt, String toolType, String apiKey, String exportFormat) {
+        return generateBlenderScript(prompt, null, toolType, apiKey, exportFormat);
+    }
+
+    public String generateBlenderScript(String prompt, String previousScript, String toolType, String apiKey, String exportFormat) {
         String activeKey = (apiKey != null && !apiKey.isBlank()) ? apiKey.trim() : defaultApiKey;
         if (activeKey == null || activeKey.isBlank()) {
             activeKey = System.getenv("GEMINI_API_KEY");
@@ -73,6 +77,22 @@ public class GoogleGeminiClient {
 
         String systemPrompt = buildSystemPrompt(toolType, exportFormat);
 
+        String effectivePrompt = prompt;
+        if (previousScript != null && !previousScript.isBlank()) {
+            effectivePrompt = """
+                EXISTING SCENE SCRIPT:
+                ```python
+                %s
+                ```
+                
+                USER REFINEMENT / DETAIL INSTRUCTION:
+                "%s"
+                
+                TASK:
+                Update and expand the existing script to incorporate the requested details while keeping existing components, materials, and geometry intact. Return ONLY the complete updated executable Python script.
+                """.formatted(previousScript.trim(), prompt.trim());
+        }
+
         List<String> modelsToTry = new ArrayList<>();
         if (primaryModel != null && !primaryModel.isBlank()) {
             modelsToTry.add(primaryModel.trim());
@@ -88,7 +108,7 @@ public class GoogleGeminiClient {
             int maxRetries = 2;
             for (int attempt = 1; attempt <= maxRetries; attempt++) {
                 try {
-                    return callGeminiGenerateContent(prompt, systemPrompt, model, trimmedKey);
+                    return callGeminiGenerateContent(effectivePrompt, systemPrompt, model, trimmedKey);
                 } catch (WebClientResponseException e) {
                     int statusCode = e.getStatusCode().value();
 
@@ -225,7 +245,12 @@ public class GoogleGeminiClient {
                  * Curves & Extrusions: Bezier curves with bevel depth, 3D text.
                - Apply smooth shading (bpy.ops.object.shade_smooth) and compute vertex normals.
             
-            5. Realistic Principled BSDF 2.0 Materials:
+            5. Realistic Principled BSDF 2.0 Materials & Sub-Mesh Separation:
+               - MULTI-MATERIAL SEPARATION (MANDATORY FOR WORKSTATION DCC):
+                 * Distinct architectural, mechanical, or functional components (e.g., Roof, Walls, Windows, Chimney, Door, Flange, Shaft) MUST be created as separate Blender objects (e.g., `roof = ...`, `walls = ...`) and assigned distinct named materials:
+                   mat_roof = bpy.data.materials.new(name="Roof_Material")
+                   mat_walls = bpy.data.materials.new(name="Wall_Material")
+                 * Do NOT boolean-union or join all components into a single merged mesh unless explicitly requested. Preserving separate sub-meshes allows individual part selection, live PBR painting, and exploded view assembly inspection in the Three.js viewport.
                - Setup real node trees: mat.use_nodes = True; bsdf = mat.node_tree.nodes.get("Principled BSDF")
                - Set realistic physical parameters:
                  * Metals (Steel, Aluminium, Titanium, Chrome): Metallic=0.85-0.95, Roughness=0.18-0.35, Base Color=(0.75, 0.78, 0.82, 1.0)

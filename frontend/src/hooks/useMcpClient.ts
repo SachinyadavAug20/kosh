@@ -75,7 +75,7 @@ export function useMcpClient() {
   const executeTool = useCallback(
     async (
       toolName: string,
-      args: { prompt?: string; script?: string; format?: "glb" | "stl" },
+      args: { prompt?: string; script?: string; previousScript?: string; format?: "glb" | "stl" },
       token?: string
     ): Promise<ToolExecutionResult | null> => {
       setIsLoading(true);

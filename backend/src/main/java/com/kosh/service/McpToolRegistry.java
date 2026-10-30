@@ -95,6 +95,7 @@ public class McpToolRegistry {
 
         String prompt = arguments != null && arguments.get("prompt") != null ? arguments.get("prompt").toString() : null;
         String rawScript = arguments != null && arguments.get("script") != null ? arguments.get("script").toString() : null;
+        String previousScript = arguments != null && arguments.get("previousScript") != null ? arguments.get("previousScript").toString() : null;
         String format = arguments != null && arguments.get("format") != null ? arguments.get("format").toString() : "glb";
 
         String finalScript;
@@ -103,8 +104,8 @@ public class McpToolRegistry {
             log.info("Executing user-provided script for tool: {}", toolName);
             finalScript = scriptSanitizer.sanitize(rawScript);
         } else if (prompt != null && !prompt.isBlank()) {
-            log.info("Generating script from prompt using Google Gemini for tool: {}", toolName);
-            finalScript = googleGeminiClient.generateBlenderScript(prompt, toolName, token, format);
+            log.info("Generating script from prompt (iterative={}) using Google Gemini for tool: {}", previousScript != null, toolName);
+            finalScript = googleGeminiClient.generateBlenderScript(prompt, previousScript, toolName, token, format);
         } else {
             throw new IllegalArgumentException("Either 'prompt' or 'script' must be supplied in tool arguments.");
         }

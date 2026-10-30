@@ -12,6 +12,7 @@ import {
   FileCode,
   Eye,
   Info,
+  MousePointer,
 } from "lucide-react";
 
 interface CodeInspectorProps {
@@ -21,6 +22,8 @@ interface CodeInspectorProps {
   stdout?: string | null;
   stderr?: string | null;
   meshList?: Array<{ id: string; name: string; triangles: number; vertices: number }>;
+  selectedMeshName?: string | null;
+  onSelectMesh?: (meshName: string) => void;
 }
 
 export function CodeInspector({
@@ -30,6 +33,8 @@ export function CodeInspector({
   stdout,
   stderr,
   meshList = [],
+  selectedMeshName,
+  onSelectMesh,
 }: CodeInspectorProps) {
   const [activeTab, setActiveTab] = useState<"script" | "outliner" | "logs">("script");
   const [copied, setCopied] = useState(false);
@@ -184,20 +189,35 @@ export function CodeInspector({
             {meshList.length === 0 ? (
               <div className="text-[#71717a] py-4 text-center font-mono text-xs">No objects in scene</div>
             ) : (
-              meshList.map((m, i) => (
-                <div
-                  key={m.id || i}
-                  className="flex items-center justify-between p-1.5 bg-[#1f1f23] border border-[#3f3f46] hover:bg-[#27272a] rounded-sm text-xs transition-colors"
-                >
-                  <div className="flex items-center space-x-2 truncate">
-                    <Layers className="w-3.5 h-3.5 text-[#a1a1aa] shrink-0" />
-                    <span className="font-mono text-[#f4f4f5] truncate">{m.name}</span>
+              meshList.map((m, i) => {
+                const isSelected = selectedMeshName === m.name;
+                return (
+                  <div
+                    key={m.id || i}
+                    onClick={() => onSelectMesh?.(m.name)}
+                    className={`flex items-center justify-between p-1.5 border rounded-sm text-xs cursor-pointer transition-colors ${
+                      isSelected
+                        ? "bg-[#27272a] border-[#ea580c] text-[#f4f4f5]"
+                        : "bg-[#1f1f23] border-[#3f3f46] hover:bg-[#27272a] text-[#a1a1aa]"
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2 truncate">
+                      <Layers className={`w-3.5 h-3.5 shrink-0 ${isSelected ? "text-[#ea580c]" : "text-[#a1a1aa]"}`} />
+                      <span className={`font-mono truncate ${isSelected ? "font-bold text-[#f4f4f5]" : ""}`}>
+                        {m.name}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <span className="text-[10px] font-mono text-[#71717a]">
+                        {m.triangles.toLocaleString()} tris
+                      </span>
+                      {isSelected && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#ea580c]" />
+                      )}
+                    </div>
                   </div>
-                  <div className="text-[10px] font-mono text-[#a1a1aa] shrink-0">
-                    {m.triangles.toLocaleString()} tris
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         ) : (

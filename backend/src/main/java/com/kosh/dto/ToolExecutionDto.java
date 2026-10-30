@@ -19,6 +19,7 @@ public class ToolExecutionDto {
         private String toolName;
         private String prompt;
         private String script;
+        private String previousScript;
         private String exportFormat; // glb, stl
         private Map<String, Object> parameters;
     }

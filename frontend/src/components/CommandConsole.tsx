@@ -22,6 +22,7 @@ import {
   Maximize2,
   RotateCw,
   Sparkles,
+  MousePointer,
 } from "lucide-react";
 
 interface CommandConsoleProps {
@@ -29,11 +30,26 @@ interface CommandConsoleProps {
   isLoading: boolean;
   onExecute: (
     toolName: string,
-    args: { prompt?: string; script?: string; format: "glb" | "stl" }
+    args: { prompt?: string; script?: string; format: "glb" | "stl"; previousScript?: string }
   ) => void;
   lastResult: ToolExecutionResult | null;
   error: string | null;
   hasToken: boolean;
+  selectedMeshName?: string | null;
+  meshList?: Array<{ id: string; name: string; triangles: number; vertices: number }>;
+  onSelectMesh?: (meshName: string | null) => void;
+  onLiveMaterialUpdate?: (mat: {
+    color: string;
+    roughness: number;
+    metalness: number;
+    transmission?: number;
+    clearcoat?: number;
+    emissive?: string;
+    timestamp: number;
+  }) => void;
+  onLiveExplodedViewChange?: (factor: number) => void;
+  onLiveTurntableChange?: (active: boolean) => void;
+  onLiveHoverChange?: (active: boolean) => void;
 }
 
 const PRESETS = [
@@ -100,6 +116,13 @@ export function CommandConsole({
   lastResult,
   error,
   hasToken,
+  selectedMeshName,
+  meshList = [],
+  onSelectMesh,
+  onLiveMaterialUpdate,
+  onLiveExplodedViewChange,
+  onLiveTurntableChange,
+  onLiveHoverChange,
 }: CommandConsoleProps) {
   // Active Drawer Tab
   const [activeTab, setActiveTab] = useState<"ai" | "modifiers" | "shader" | "anim">("ai");
@@ -110,6 +133,7 @@ export function CommandConsole({
   const [prompt, setPrompt] = useState<string>(
     "Procedural mechanical turbine housing with beveled flanges, central bore, and 8 bolt clearance holes"
   );
+  const [refineMode, setRefineMode] = useState<boolean>(false);
 
   // Tab 2: Modifiers Stack
   const [bevelWidth, setBevelWidth] = useState<number>(0.04);
@@ -119,15 +143,14 @@ export function CommandConsole({
   const [solidifyThickness, setSolidifyThickness] = useState<number>(0.0);
   const [arrayCount, setArrayCount] = useState<number>(1);
   const [mirrorX, setMirrorX] = useState<boolean>(false);
-  const [decimateRatio, setDecimateRatio] = useState<number>(1.0);
 
   // Tab 3: Shader & World
   const [matPreset, setMatPreset] = useState<string>("Brushed Aluminium");
+  const [matColor, setMatColor] = useState<string>("#cbd5e1");
   const [metallic, setMetallic] = useState<number>(0.92);
   const [roughness, setRoughness] = useState<number>(0.22);
   const [transmission, setTransmission] = useState<number>(0.0);
   const [clearcoat, setClearcoat] = useState<number>(0.0);
-  const [emission, setEmission] = useState<number>(0.0);
   const [lightingRig, setLightingRig] = useState<"studio" | "noir" | "softbox" | "sky">("studio");
 
   // Tab 4: Animation & Timeline
@@ -135,13 +158,39 @@ export function CommandConsole({
   const [hoverAnim, setHoverAnim] = useState<boolean>(false);
   const [explodedView, setExplodedView] = useState<number>(0.0);
   const [frameCount, setFrameCount] = useState<number>(60);
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+
+  // Trigger live in-viewport material update
+  const triggerLiveMatUpdate = (partial?: {
+    color?: string;
+    roughness?: number;
+    metalness?: number;
+    transmission?: number;
+    clearcoat?: number;
+  }) => {
+    onLiveMaterialUpdate?.({
+      color: partial?.color ?? matColor,
+      roughness: partial?.roughness ?? roughness,
+      metalness: partial?.metalness ?? metallic,
+      transmission: partial?.transmission ?? transmission,
+      clearcoat: partial?.clearcoat ?? clearcoat,
+      timestamp: Date.now(),
+    });
+  };
 
   const handleApplyPreset = (preset: typeof MATERIAL_PRESETS[0]) => {
     setMatPreset(preset.name);
     setMetallic(preset.metal);
     setRoughness(preset.rough);
     setTransmission(preset.trans);
+    setMatColor(preset.color);
+    onLiveMaterialUpdate?.({
+      color: preset.color,
+      roughness: preset.rough,
+      metalness: preset.metal,
+      transmission: preset.trans,
+      clearcoat: 0,
+      timestamp: Date.now(),
+    });
   };
 
   const handleSubmit = (e?: React.FormEvent) => {
@@ -194,7 +243,11 @@ export function CommandConsole({
       enrichedPrompt += `, exploded view separation ${explodedView}m`;
     }
 
-    onExecute(selectedTool, { prompt: enrichedPrompt, format });
+    onExecute(selectedTool, {
+      prompt: enrichedPrompt,
+      format,
+      previousScript: refineMode && lastResult?.script ? lastResult.script : undefined,
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -312,6 +365,56 @@ export function CommandConsole({
                 </button>
               </div>
             </div>
+
+            {/* Iterative Detail Generator / Refinement Mode */}
+            {lastResult?.script && (
+              <div className="p-2 bg-[#1f1f23] border border-[#ea580c]/50 rounded-sm space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-[#f4f4f5] flex items-center">
+                    <Sparkles className="w-3.5 h-3.5 text-[#ea580c] mr-1" />
+                    Iterative Refinement
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setRefineMode(!refineMode)}
+                    className={`px-1.5 py-0.5 text-[9px] font-mono border rounded-sm transition-colors ${
+                      refineMode
+                        ? "bg-[#ea580c] text-white border-[#ea580c] font-bold"
+                        : "border-[#3f3f46] text-[#a1a1aa] hover:text-[#f4f4f5]"
+                    }`}
+                  >
+                    {refineMode ? "ACTIVE (PREV SCRIPT)" : "ENABLE"}
+                  </button>
+                </div>
+                <p className="text-[10px] text-[#a1a1aa] leading-tight">
+                  Refines the existing Blender code with new geometric detail without wiping prior work.
+                </p>
+                {refineMode && (
+                  <div>
+                    <div className="text-[9px] text-[#71717a] uppercase mb-1">Quick Add Detail Chips:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        "+ Door & 2 Windows",
+                        "+ Roof Tiles & Chimney",
+                        "+ 8 Bolt Clearance Holes",
+                        "+ Chamfer Edge Bevels",
+                        "+ Cooling Fin Array",
+                        "+ Drive Shaft & Keyway",
+                      ].map((chip) => (
+                        <button
+                          key={chip}
+                          type="button"
+                          onClick={() => setPrompt((prev) => (prev ? `${prev}, ${chip}` : chip))}
+                          className="px-1.5 py-0.5 bg-[#27272a] hover:bg-[#3f3f46] text-[#f4f4f5] text-[9px] rounded-sm border border-[#3f3f46]"
+                        >
+                          {chip}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Prompt Form */}
             <div>
@@ -476,6 +579,71 @@ export function CommandConsole({
         {/* ================= TAB 3: SHADER & WORLD ================= */}
         {activeTab === "shader" && (
           <div className="space-y-3">
+            {/* Sub-Mesh Target Selector */}
+            <div className="p-2 bg-[#1f1f23] border border-[#3f3f46] rounded-sm space-y-1.5">
+              <div className="flex justify-between items-center text-[11px]">
+                <span className="font-semibold text-[#f4f4f5] flex items-center">
+                  <MousePointer className="w-3 h-3 mr-1 text-[#ea580c]" />
+                  Active Sub-Mesh
+                </span>
+                <span className="font-mono text-[10px] text-[#ea580c] truncate max-w-[130px]">
+                  {selectedMeshName || "Entire Model (All)"}
+                </span>
+              </div>
+              <p className="text-[9px] text-[#71717a]">
+                Click any part in the 3D viewport or pick below to isolate material painting:
+              </p>
+              {meshList.length > 0 && (
+                <div className="flex flex-wrap gap-1 pt-1 max-h-24 overflow-y-auto">
+                  <button
+                    type="button"
+                    onClick={() => onSelectMesh?.(null)}
+                    className={`px-1.5 py-0.5 text-[9px] rounded-sm border font-mono transition-colors ${
+                      !selectedMeshName
+                        ? "bg-[#3f3f46] text-white border-[#52525b]"
+                        : "bg-[#18181b] text-[#71717a] border-[#27272a] hover:text-[#f4f4f5]"
+                    }`}
+                  >
+                    [All Meshes]
+                  </button>
+                  {meshList.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => onSelectMesh?.(m.name)}
+                      className={`px-1.5 py-0.5 text-[9px] rounded-sm border font-mono truncate max-w-[120px] transition-colors ${
+                        selectedMeshName === m.name
+                          ? "bg-[#ea580c] text-white border-[#ea580c] font-bold"
+                          : "bg-[#18181b] text-[#a1a1aa] border-[#27272a] hover:text-[#f4f4f5]"
+                      }`}
+                      title={`${m.name} (${m.triangles} tris)`}
+                    >
+                      {m.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Live Base Color Picker */}
+            <div className="p-2 bg-[#1f1f23] border border-[#3f3f46] rounded-sm space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold text-[#a1a1aa] uppercase">Live Base Color</span>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="color"
+                    value={matColor}
+                    onChange={(e) => {
+                      setMatColor(e.target.value);
+                      triggerLiveMatUpdate({ color: e.target.value });
+                    }}
+                    className="w-5 h-5 rounded cursor-pointer border border-[#3f3f46] bg-transparent p-0"
+                  />
+                  <span className="font-mono text-[10px] text-[#f4f4f5]">{matColor}</span>
+                </div>
+              </div>
+            </div>
+
             <div className="text-[10px] text-[#71717a] uppercase tracking-wider">Instant Material Library</div>
             <div className="grid grid-cols-3 gap-1">
               {MATERIAL_PRESETS.map((p, idx) => (
@@ -497,7 +665,7 @@ export function CommandConsole({
               ))}
             </div>
 
-            <div className="text-[10px] text-[#71717a] uppercase tracking-wider pt-1">Principled BSDF 2.0</div>
+            <div className="text-[10px] text-[#71717a] uppercase tracking-wider pt-1">Principled BSDF 2.0 (Live)</div>
             <div className="p-2 bg-[#1f1f23] border border-[#3f3f46] rounded-sm space-y-2">
               <div>
                 <div className="flex justify-between text-[10px] text-[#a1a1aa] mb-0.5">
@@ -510,7 +678,11 @@ export function CommandConsole({
                   max="1"
                   step="0.02"
                   value={metallic}
-                  onChange={(e) => setMetallic(parseFloat(e.target.value))}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setMetallic(val);
+                    triggerLiveMatUpdate({ metalness: val });
+                  }}
                   className="w-full accent-[#71717a] cursor-pointer"
                 />
               </div>
@@ -526,7 +698,11 @@ export function CommandConsole({
                   max="1"
                   step="0.02"
                   value={roughness}
-                  onChange={(e) => setRoughness(parseFloat(e.target.value))}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setRoughness(val);
+                    triggerLiveMatUpdate({ roughness: val });
+                  }}
                   className="w-full accent-[#71717a] cursor-pointer"
                 />
               </div>
@@ -542,7 +718,31 @@ export function CommandConsole({
                   max="1"
                   step="0.05"
                   value={transmission}
-                  onChange={(e) => setTransmission(parseFloat(e.target.value))}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setTransmission(val);
+                    triggerLiveMatUpdate({ transmission: val });
+                  }}
+                  className="w-full accent-[#71717a] cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-[10px] text-[#a1a1aa] mb-0.5">
+                  <span>CLEARCOAT</span>
+                  <span className="font-mono text-[#f4f4f5]">{clearcoat.toFixed(2)}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={clearcoat}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setClearcoat(val);
+                    triggerLiveMatUpdate({ clearcoat: val });
+                  }}
                   className="w-full accent-[#71717a] cursor-pointer"
                 />
               </div>
@@ -576,7 +776,7 @@ export function CommandConsole({
         {/* ================= TAB 4: ANIMATION & RIGGING ================= */}
         {activeTab === "anim" && (
           <div className="space-y-3">
-            <div className="text-[10px] text-[#71717a] uppercase tracking-wider">Animation Rigging Suite</div>
+            <div className="text-[10px] text-[#71717a] uppercase tracking-wider">Interactive Animation Suite</div>
 
             {/* Turntable */}
             <div className="p-2 bg-[#1f1f23] border border-[#3f3f46] rounded-sm space-y-1.5">
@@ -584,15 +784,19 @@ export function CommandConsole({
                 <span className="font-semibold text-[#f4f4f5]">Turntable 360 Spin</span>
                 <button
                   type="button"
-                  onClick={() => setTurntableAnim(!turntableAnim)}
-                  className={`px-2 py-0.5 text-[10px] font-mono border rounded-sm ${
-                    turntableAnim ? "bg-[#3f3f46] text-[#f4f4f5] border-[#52525b]" : "border-[#3f3f46] text-[#71717a]"
+                  onClick={() => {
+                    const next = !turntableAnim;
+                    setTurntableAnim(next);
+                    onLiveTurntableChange?.(next);
+                  }}
+                  className={`px-2 py-0.5 text-[10px] font-mono border rounded-sm transition-colors ${
+                    turntableAnim ? "bg-[#3f3f46] text-[#f4f4f5] border-[#52525b] font-bold" : "border-[#3f3f46] text-[#71717a]"
                   }`}
                 >
-                  {turntableAnim ? "ON" : "OFF"}
+                  {turntableAnim ? "ACTIVE" : "OFF"}
                 </button>
               </div>
-              <p className="text-[10px] text-[#71717a]">Embeds 360-degree rotation animation track into exported GLB.</p>
+              <p className="text-[10px] text-[#71717a]">Spins the 3D model continuously in the viewport.</p>
             </div>
 
             {/* Hover Oscillation */}
@@ -601,18 +805,22 @@ export function CommandConsole({
                 <span className="font-semibold text-[#f4f4f5]">Floating Hover Oscillation</span>
                 <button
                   type="button"
-                  onClick={() => setHoverAnim(!hoverAnim)}
-                  className={`px-2 py-0.5 text-[10px] font-mono border rounded-sm ${
-                    hoverAnim ? "bg-[#3f3f46] text-[#f4f4f5] border-[#52525b]" : "border-[#3f3f46] text-[#71717a]"
+                  onClick={() => {
+                    const next = !hoverAnim;
+                    setHoverAnim(next);
+                    onLiveHoverChange?.(next);
+                  }}
+                  className={`px-2 py-0.5 text-[10px] font-mono border rounded-sm transition-colors ${
+                    hoverAnim ? "bg-[#3f3f46] text-[#f4f4f5] border-[#52525b] font-bold" : "border-[#3f3f46] text-[#71717a]"
                   }`}
                 >
-                  {hoverAnim ? "ON" : "OFF"}
+                  {hoverAnim ? "ACTIVE" : "OFF"}
                 </button>
               </div>
               <p className="text-[10px] text-[#71717a]">Sine-wave vertical levitation keyframes.</p>
             </div>
 
-            {/* Exploded View */}
+            {/* Exploded View Live Slider */}
             <div className="p-2 bg-[#1f1f23] border border-[#3f3f46] rounded-sm space-y-1.5">
               <div className="flex justify-between items-center text-[11px]">
                 <span className="font-semibold text-[#f4f4f5]">Exploded View Separation</span>
@@ -622,12 +830,16 @@ export function CommandConsole({
                 type="range"
                 min="0"
                 max="2"
-                step="0.1"
+                step="0.05"
                 value={explodedView}
-                onChange={(e) => setExplodedView(parseFloat(e.target.value))}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setExplodedView(val);
+                  onLiveExplodedViewChange?.(val);
+                }}
                 className="w-full accent-[#71717a] cursor-pointer"
               />
-              <p className="text-[10px] text-[#71717a]">Displaces multi-part assembly components along their normals.</p>
+              <p className="text-[10px] text-[#71717a]">Live radial disassembly of sub-mesh components in Three.js.</p>
             </div>
 
             {/* Timeline length */}
@@ -671,7 +883,7 @@ export function CommandConsole({
           ) : (
             <>
               <Play className="w-3.5 h-3.5 fill-current" />
-              <span>COMPILE & EXECUTE (Ctrl+Enter)</span>
+              <span>{refineMode ? "REFINE MODEL (Ctrl+Enter)" : "COMPILE & EXECUTE (Ctrl+Enter)"}</span>
             </>
           )}
         </button>
