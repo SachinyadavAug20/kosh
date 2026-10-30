@@ -101,6 +101,22 @@ public class ScriptSanitizer {
                     "bpy.ops.object.modifier_apply");
         }
 
+        // Fix primitive_cone_add: replace illegal 'radius=' with 'radius1='
+        if (patched.contains("primitive_cone_add")) {
+            Pattern conePattern = Pattern.compile("bpy\\.ops\\.mesh\\.primitive_cone_add\\(([\\s\\S]*?)\\)");
+            Matcher matcher = conePattern.matcher(patched);
+            StringBuilder sb = new StringBuilder();
+            while (matcher.find()) {
+                String args = matcher.group(1);
+                if (!args.contains("radius1=") && args.contains("radius=")) {
+                    args = args.replaceAll("\\bradius\\s*=", "radius1=");
+                }
+                matcher.appendReplacement(sb, Matcher.quoteReplacement("bpy.ops.mesh.primitive_cone_add(" + args + ")"));
+            }
+            matcher.appendTail(sb);
+            patched = sb.toString();
+        }
+
         return patched;
     }
 

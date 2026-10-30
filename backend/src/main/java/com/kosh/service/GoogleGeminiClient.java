@@ -204,6 +204,11 @@ public class GoogleGeminiClient {
                - Context Override: Ensure active object exists before applying modifiers or ops:
                  if bpy.context.view_layer.objects.active is None and bpy.context.selected_objects:
                      bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
+               - Operator Argument Rules:
+                 * `bpy.ops.mesh.primitive_cone_add` takes `radius1=...` and `radius2=0.0` (tip). NEVER use `radius=...` (throws TypeError: keyword 'radius' unrecognized).
+                 * `bpy.ops.mesh.primitive_cylinder_add` takes `radius=...` and `depth=...`.
+                 * `bpy.ops.mesh.primitive_torus_add` takes `major_radius=...` and `minor_radius=...`.
+                 * `bpy.ops.mesh.primitive_cube_add` takes `size=...`.
             
             3. CLI Output Parsing:
                argv = sys.argv
@@ -356,7 +361,7 @@ public class GoogleGeminiClient {
 
                 mesh = pyramid.data
                 for i, poly in enumerate(mesh.polygons):
-                    poly.material_index = i % len(color_palette)
+                    poly.material_index = i %% len(color_palette)
 
                 bevel = pyramid.modifiers.new(name="Bevel", type='BEVEL')
                 bevel.width = 0.05

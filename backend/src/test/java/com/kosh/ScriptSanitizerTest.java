@@ -59,6 +59,14 @@ class ScriptSanitizerTest {
     }
 
     @Test
+    void testPatchPrimitiveConeAddRadius() {
+        String input = "bpy.ops.mesh.primitive_cone_add(vertices=4, radius=1.0, depth=2.0, enter_editmode=False, align='WORLD', location=(0, 0, 1))";
+        String patched = sanitizer.patchBlenderHallucinations(input);
+        assertTrue(patched.contains("radius1=1.0"));
+        assertFalse(patched.contains("radius=1.0"));
+    }
+
+    @Test
     void testTelemetryInjectionOnExport() {
         String input = "import bpy\nbpy.ops.export_scene.gltf(filepath=output_path, export_format='GLB')";
         String result = sanitizer.ensureTelemetryAndSnapshot(input);
