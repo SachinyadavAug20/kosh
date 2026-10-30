@@ -17,7 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-[var(--background)] text-[var(--foreground)] font-mono antialiased selection:bg-[var(--accent)] selection:text-[var(--background)]">
+      <body className="min-h-screen bg-[#18181b] text-[#f4f4f5] font-sans antialiased selection:bg-[#ea580c] selection:text-white">
         <ThemeProvider>
           {children}
         </ThemeProvider>

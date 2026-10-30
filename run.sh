@@ -55,7 +55,7 @@ else
     echo -e "    ${ZINC}Install Blender LTS or ensure 'blender' executable is exported in PATH.${RESET}"
 fi
 
-# 2. Cleanup traps
+# 2. Cleanup traps and stale port clearance
 cleanup() {
     echo -e "\n${YELLOW}[SHUTDOWN] Terminating Kosh processes...${RESET}"
     if [ -n "$BACKEND_PID" ]; then
@@ -64,10 +64,17 @@ cleanup() {
     if [ -n "$FRONTEND_PID" ]; then
         kill "$FRONTEND_PID" 2>/dev/null || true
     fi
+    fuser -k 8080/tcp 2>/dev/null || true
+    fuser -k 3000/tcp 2>/dev/null || true
     exit 0
 }
 
 trap cleanup SIGINT SIGTERM EXIT
+
+# Ensure ports 8080 and 3000 are clean before starting
+fuser -k 8080/tcp 2>/dev/null || true
+fuser -k 3000/tcp 2>/dev/null || true
+sleep 1
 
 # 3. Boot Backend
 echo -e "\n${BOLD}[2/4] Starting Spring Boot MCP Server on :8080...${RESET}"
@@ -79,7 +86,7 @@ echo -e "  ${GREEN}✓${RESET} Backend spawned (PID: ${BACKEND_PID}). Streaming 
 
 # Wait for backend health endpoint
 echo -e "  ${ZINC}Waiting for backend health check at http://localhost:8080/api/health...${RESET}"
-MAX_RETRIES=30
+MAX_RETRIES=35
 RETRY_COUNT=0
 HEALTHY=false
 
@@ -105,10 +112,28 @@ if [ ! -d "node_modules" ]; then
     echo -e "  ${ZINC}node_modules missing. Running npm install...${RESET}"
     npm install
 fi
-npm run dev > ../frontend.log 2>&1 &
+npm run dev -- -p 3000 > ../frontend.log 2>&1 &
 FRONTEND_PID=$!
 cd ..
 echo -e "  ${GREEN}✓${RESET} Frontend spawned (PID: ${FRONTEND_PID}). Streaming to frontend.log"
+
+# Wait for frontend readiness at http://localhost:3000
+echo -e "  ${ZINC}Waiting for Next.js Studio at http://localhost:3000...${RESET}"
+FRONTEND_READY=false
+F_RETRIES=30
+F_COUNT=0
+while [ $F_COUNT -lt $F_RETRIES ]; do
+    if curl -s -I http://localhost:3000 >/dev/null 2>&1; then
+        FRONTEND_READY=true
+        break
+    fi
+    sleep 1
+    F_COUNT=$((F_COUNT + 1))
+done
+
+if [ "$FRONTEND_READY" = true ]; then
+    echo -e "  ${GREEN}✓${RESET} Next.js Studio is UP and listening on http://localhost:3000"
+fi
 
 echo -e "\n${BOLD}[4/4] Kosh Studio Initialized Successfully${RESET}"
 echo -e "  ${GREEN}●${RESET} Web Studio:  ${BOLD}http://localhost:3000${RESET}"

@@ -8,6 +8,9 @@
    ========================================================================== */
 
 :root {
+  --background: #18181b;
+  --foreground: #f4f4f5;
+  --accent: #ea580c;
   --bg-canvas: #18181b;       /* Zinc 900 base canvas */
   --bg-panel: #27272a;        /* Zinc 800 panel fill */
   --bg-elevated: #1f1f23;     /* Darker elevated inputs/toolbars */
