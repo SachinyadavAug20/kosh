@@ -26,10 +26,10 @@ public class GoogleGeminiClient {
     @Value("${google.gemini.api.base-url:https://generativelanguage.googleapis.com/v1beta}")
     private String geminiBaseUrl;
 
-    @Value("${google.gemini.model:gemini-2.5-flash}")
+    @Value("${google.gemini.model:gemini-1.5-flash}")
     private String primaryModel;
 
-    @Value("${google.gemini.fallback-model:gemini-1.5-flash}")
+    @Value("${google.gemini.fallback-model:gemini-2.0-flash}")
     private String fallbackModel;
 
     @Value("${kosh.gemini.api-key:}")

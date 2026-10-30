@@ -167,7 +167,7 @@ export function CommandConsole({
 
         <div className="flex items-center justify-between">
           <div className="text-[11px] text-[#71717a]">
-            AI: <span className="text-[#22c55e]">Gemini 2.5 Flash</span> / Engine:{" "}
+            AI: <span className="text-[#22c55e]">Gemini 1.5 Flash</span> / Engine:{" "}
             <span className="text-[#f4f4f5]">Blender 5.2 LTS</span>
           </div>
 

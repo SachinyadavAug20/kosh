@@ -72,7 +72,7 @@ trap cleanup SIGINT SIGTERM EXIT
 # 3. Boot Backend
 echo -e "\n${BOLD}[2/4] Starting Spring Boot MCP Server on :8080...${RESET}"
 cd backend
-mvn spring-boot:run > ../backend.log 2>&1 &
+mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Djava.net.preferIPv4Stack=true" > ../backend.log 2>&1 &
 BACKEND_PID=$!
 cd ..
 echo -e "  ${GREEN}✓${RESET} Backend spawned (PID: ${BACKEND_PID}). Streaming to backend.log"
