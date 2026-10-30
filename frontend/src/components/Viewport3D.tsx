@@ -219,6 +219,109 @@ export function Viewport3D({
     scale: THREE.Vector3;
   } | null>(null);
 
+  // Persistent Undo / Redo Stack Engine (Task 10)
+  interface UndoTransformAction {
+    type: "transform";
+    targetName: string;
+    prev: { position: THREE.Vector3; rotation: THREE.Euler; scale: THREE.Vector3 };
+    next: { position: THREE.Vector3; rotation: THREE.Euler; scale: THREE.Vector3 };
+  }
+  interface UndoMaterialAction {
+    type: "material";
+    targetName: string;
+    prevMaterial: THREE.Material;
+    nextMaterial: THREE.Material;
+  }
+  type UndoAction = UndoTransformAction | UndoMaterialAction;
+
+  const undoStackRef = useRef<UndoAction[]>([]);
+  const redoStackRef = useRef<UndoAction[]>([]);
+  const [undoToast, setUndoToast] = useState<string | null>(null);
+
+  const showUndoToast = useCallback((msg: string) => {
+    setUndoToast(msg);
+    setTimeout(() => {
+      setUndoToast((current) => (current === msg ? null : current));
+    }, 2000);
+  }, []);
+
+  const pushUndo = useCallback((action: UndoAction) => {
+    undoStackRef.current.push(action);
+    redoStackRef.current = [];
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    const action = undoStackRef.current.pop();
+    if (!action) {
+      showUndoToast("Nothing to undo");
+      return;
+    }
+
+    if (action.type === "transform") {
+      let target: THREE.Object3D | undefined;
+      currentModelRef.current?.traverse((child) => {
+        if (child.name === action.targetName) target = child;
+      });
+      if (!target && currentModelRef.current?.name === action.targetName) {
+        target = currentModelRef.current;
+      }
+      if (target) {
+        target.position.copy(action.prev.position);
+        target.rotation.copy(action.prev.rotation);
+        target.scale.copy(action.prev.scale);
+        target.updateMatrixWorld();
+        redoStackRef.current.push(action);
+        showUndoToast(`Undo: Transform ${action.targetName}`);
+      }
+    } else if (action.type === "material") {
+      let target: THREE.Mesh | undefined;
+      currentModelRef.current?.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.name === action.targetName) target = child;
+      });
+      if (target) {
+        target.material = action.prevMaterial;
+        redoStackRef.current.push(action);
+        showUndoToast(`Undo: Material on ${action.targetName}`);
+      }
+    }
+  }, [showUndoToast]);
+
+  const handleRedo = useCallback(() => {
+    const action = redoStackRef.current.pop();
+    if (!action) {
+      showUndoToast("Nothing to redo");
+      return;
+    }
+
+    if (action.type === "transform") {
+      let target: THREE.Object3D | undefined;
+      currentModelRef.current?.traverse((child) => {
+        if (child.name === action.targetName) target = child;
+      });
+      if (!target && currentModelRef.current?.name === action.targetName) {
+        target = currentModelRef.current;
+      }
+      if (target) {
+        target.position.copy(action.next.position);
+        target.rotation.copy(action.next.rotation);
+        target.scale.copy(action.next.scale);
+        target.updateMatrixWorld();
+        undoStackRef.current.push(action);
+        showUndoToast(`Redo: Transform ${action.targetName}`);
+      }
+    } else if (action.type === "material") {
+      let target: THREE.Mesh | undefined;
+      currentModelRef.current?.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.name === action.targetName) target = child;
+      });
+      if (target) {
+        target.material = action.nextMaterial;
+        undoStackRef.current.push(action);
+        showUndoToast(`Redo: Material on ${action.targetName}`);
+      }
+    }
+  }, [showUndoToast]);
+
   // Double tap R tracking
   const lastRPressTimeRef = useRef<number>(0);
   // Double tap A tracking
@@ -337,7 +440,7 @@ export function Viewport3D({
     transform.addEventListener("dragging-changed", (event) => {
       orbit.enabled = !event.value;
       if (event.value) {
-        // Transform drag started: snapshot initial pose for cancel
+        // Transform drag started: snapshot initial pose for cancel and undo
         const obj = transform.object;
         if (obj) {
           preTransformSnapshotRef.current = {
@@ -345,6 +448,32 @@ export function Viewport3D({
             rotation: obj.rotation.clone(),
             scale: obj.scale.clone(),
           };
+        }
+      } else {
+        // Transform drag finished: record undo
+        const obj = transform.object;
+        if (obj && preTransformSnapshotRef.current) {
+          const prev = preTransformSnapshotRef.current;
+          if (
+            !prev.position.equals(obj.position) ||
+            !prev.rotation.equals(obj.rotation) ||
+            !prev.scale.equals(obj.scale)
+          ) {
+            pushUndo({
+              type: "transform",
+              targetName: obj.name,
+              prev: {
+                position: prev.position.clone(),
+                rotation: prev.rotation.clone(),
+                scale: prev.scale.clone(),
+              },
+              next: {
+                position: obj.position.clone(),
+                rotation: obj.rotation.clone(),
+                scale: obj.scale.clone(),
+              },
+            });
+          }
         }
       }
     });
@@ -1900,6 +2029,22 @@ export function Viewport3D({
       // Don't intercept when user is typing in inputs or textareas
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
+      // Persistent Undo / Redo (Ctrl + Z, Ctrl + Shift + Z, Ctrl + Y)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        handleRedo();
+        return;
+      }
+
       // Track Ctrl & Shift hold
       if (e.key === "Control" || e.key === "Meta") {
         setIsCtrlHeld(true);
@@ -3045,6 +3190,14 @@ export function Viewport3D({
           </button>
         </div>
       </div>
+
+      {/* Persistent Undo / Redo Floating Toast */}
+      {undoToast && (
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-40 px-3 py-1.5 bg-[#202024]/95 backdrop-blur border border-[#ea580c]/50 text-[#f4f4f5] rounded text-xs font-mono shadow-2xl flex items-center space-x-2 animate-fade-in pointer-events-none">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#ea580c] animate-pulse" />
+          <span>{undoToast}</span>
+        </div>
+      )}
 
       {/* Main 3D Canvas Viewport */}
       <div

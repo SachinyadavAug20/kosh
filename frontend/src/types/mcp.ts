@@ -39,7 +39,7 @@ export type ExportFormat = "glb" | "stl" | "obj" | "fbx" | "usdz";
 export interface ToolExecutionResult {
   success: boolean;
   toolName: string;
-  assetId: string;
+  assetId?: string;
   assetName: string;
   assetUrl?: string;
   snapshotUrl?: string;
@@ -52,12 +52,12 @@ export interface ToolExecutionResult {
     objects: string[];
   };
   format: ExportFormat;
-  sizeBytes: number;
+  sizeBytes?: number;
   script?: string;
   stdout?: string;
   stderr?: string;
-  exitCode: number;
-  executionTimeMs: number;
+  exitCode?: number;
+  executionTimeMs?: number;
   errorMessage?: string;
 }
 

@@ -347,6 +347,43 @@ public class GoogleGeminiClient {
                   * Architectural colonnades, canopy roofs, and central hero focus.
                   * Multi-material slotting: Maintain separate named objects with distinct PBR materials.
                 """;
+        } else if ("kosh_svg_to_3d".equals(normalizedTool)) {
+            specializedDirective = """
+                
+                SPECIALIZED DIRECTIVE FOR 2D VECTOR TO 3D BEVELED EMBLEMS (kosh_svg_to_3d):
+                - Transform 2D vectors, curves, or emblem contours into watertight 3D models:
+                  * Curve or mesh extrusion with customizable depth and bevel radius.
+                  * Multi-material layering (brushed gold/chrome face with accent rims).
+                  * Clean normals and manifold geometry.
+                """;
+        } else if ("kosh_audio_reactive".equals(normalizedTool)) {
+            specializedDirective = """
+                
+                SPECIALIZED DIRECTIVE FOR AUDIO-REACTIVE MOTION ENGINE (kosh_audio_reactive):
+                - Procedural acoustic kinetic visualization across 120 keyframed frames:
+                  * Concentric spectrum rings, equalizer frequency bars, or oscillating ripples.
+                  * Sinusoidal frequency modulation on Z-translation and scale.
+                  * Glowing emissive shader accents.
+                  * Export with export_animations=True.
+                """;
+        } else if ("kosh_ascii_to_voxel".equals(normalizedTool)) {
+            specializedDirective = """
+                
+                SPECIALIZED DIRECTIVE FOR ASCII & PIXEL TO 3D VOXELS (kosh_ascii_to_voxel):
+                - Convert ASCII matrix patterns or pixel grids into 3D voxel monuments:
+                  * Instanced or merged bmesh cubes spaced by voxel_size.
+                  * Multi-color palette mapping per ASCII symbol (steel, gold, gems, stone).
+                  * Chamfered or beveled voxel edges for high-end digital look.
+                """;
+        } else if ("kosh_cad_export_step".equals(normalizedTool)) {
+            specializedDirective = """
+                
+                SPECIALIZED DIRECTIVE FOR PRECISION MECHANICAL CAD (kosh_cad_export_step):
+                - Watertight mechanical engineering parts:
+                  * Metric dimensions, center bores, bolt patterns, keyways, and turbine impellers.
+                  * Manifold geometry suitable for CNC milling or 3D printing export (STL and GLB).
+                  * Chamfered bevels for industrial metallic reflections.
+                """;
         }
 
         return """
@@ -1707,6 +1744,355 @@ public class GoogleGeminiClient {
                 %s
                 """.formatted(format, exportCmd);
         }
+
+        // 17. Tool: kosh_svg_to_3d
+        if ("kosh_svg_to_3d".equals(normalizedTool) || lowerPrompt.contains("svg") || lowerPrompt.contains("logo") || lowerPrompt.contains("emblem") || lowerPrompt.contains("badge")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+                from mathutils import Vector, Euler, Matrix, Quaternion
+                import bmesh
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                # Extruded Vector Shield Emblem / Badge
+                curve_data = bpy.data.curves.new(name="SVG_Emblem_Curve", type='CURVE')
+                curve_data.dimensions = '2D'
+                curve_data.extrude = 0.12
+                curve_data.bevel_depth = 0.02
+                curve_data.bevel_resolution = 4
+
+                spline = curve_data.splines.new('POLY')
+                crest_pts = [
+                    (0.0, 1.8, 0.0), (1.2, 1.4, 0.0), (1.4, 0.2, 0.0), 
+                    (0.8, -1.0, 0.0), (0.0, -1.8, 0.0),
+                    (-0.8, -1.0, 0.0), (-1.4, 0.2, 0.0), (-1.2, 1.4, 0.0)
+                ]
+                spline.points.add(len(crest_pts) - 1)
+                for i, pt in enumerate(crest_pts):
+                    spline.points[i].co = (pt[0], pt[1], pt[2], 1.0)
+                spline.use_cyclic_u = True
+
+                crest_obj = bpy.data.objects.new("01_Vector_Crest", curve_data)
+                bpy.context.collection.objects.link(crest_obj)
+
+                # Inner Chevron Star / Insignia
+                bpy.ops.mesh.primitive_cylinder_add(vertices=5, radius=0.7, depth=0.28, location=(0, 0, 0.08))
+                star = bpy.context.active_object
+                star.name = "02_Emblem_Insignia"
+                star.rotation_euler[2] = math.radians(18)
+
+                # Rim Accent Ring
+                bpy.ops.mesh.primitive_torus_add(major_radius=1.5, minor_radius=0.06, location=(0, 0, 0.0))
+                ring = bpy.context.active_object
+                ring.name = "03_Bezel_Trim"
+
+                # Gold Brushed Material
+                mat_gold = bpy.data.materials.new("Mat_Brushed_Gold")
+                mat_gold.use_nodes = True
+                bsdf_g = mat_gold.node_tree.nodes.get("Principled BSDF")
+                if bsdf_g:
+                    bsdf_g.inputs["Base Color"].default_value = (0.92, 0.75, 0.25, 1.0)
+                    bsdf_g.inputs["Metallic"].default_value = 0.95
+                    bsdf_g.inputs["Roughness"].default_value = 0.22
+                crest_obj.data.materials.append(mat_gold)
+
+                # Cyber Orange Accent Material
+                mat_accent = bpy.data.materials.new("Mat_Orange_Accent")
+                mat_accent.use_nodes = True
+                bsdf_a = mat_accent.node_tree.nodes.get("Principled BSDF")
+                if bsdf_a:
+                    bsdf_a.inputs["Base Color"].default_value = (0.95, 0.38, 0.08, 1.0)
+                    bsdf_a.inputs["Metallic"].default_value = 0.8
+                    bsdf_a.inputs["Roughness"].default_value = 0.3
+                star.data.materials.append(mat_accent)
+                ring.data.materials.append(mat_gold)
+
+                # Studio Lighting
+                klight = bpy.data.lights.new("SvgKey", type='AREA')
+                klight.energy = 950
+                kobj = bpy.data.objects.new("SvgKey", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (3, 4, 5)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
+        // 18. Tool: kosh_audio_reactive
+        if ("kosh_audio_reactive".equals(normalizedTool) || lowerPrompt.contains("audio") || lowerPrompt.contains("waveform") || lowerPrompt.contains("sound") || lowerPrompt.contains("frequency") || lowerPrompt.contains("reactive") || lowerPrompt.contains("equalizer")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+                from mathutils import Vector, Euler, Matrix, Quaternion
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+                scene.frame_start = 1
+                scene.frame_end = 120
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def create_emissive_mat(name, color, emission_strength=2.0):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    b = mat.node_tree.nodes.get("Principled BSDF")
+                    if b:
+                        b.inputs["Base Color"].default_value = color
+                        b.inputs["Metallic"].default_value = 0.8
+                        b.inputs["Roughness"].default_value = 0.25
+                        try:
+                            b.inputs["Emission Color"].default_value = color
+                            b.inputs["Emission Strength"].default_value = emission_strength
+                        except KeyError:
+                            pass
+                    return mat
+
+                mat_core = create_emissive_mat("Mat_AudioPulse_Core", (0.95, 0.38, 0.08, 1.0), 3.0)
+                mat_mid = create_emissive_mat("Mat_AudioPulse_Mid", (0.15, 0.65, 0.95, 1.0), 2.2)
+                mat_outer = create_emissive_mat("Mat_AudioPulse_Outer", (0.6, 0.2, 0.9, 1.0), 1.8)
+
+                # Central pulsating orb
+                bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=3, radius=0.7, location=(0, 0, 0))
+                core = bpy.context.active_object
+                core.name = "00_Audio_Core_Pulsar"
+                core.data.materials.append(mat_core)
+                for f in [1, 30, 60, 90, 120]:
+                    s = 1.0 + 0.35 * math.sin(f * math.pi / 30.0)
+                    core.scale = (s, s, s)
+                    core.keyframe_insert(data_path="scale", frame=f)
+
+                # Concentric audio equalizer ring ripples (12 rings)
+                num_rings = 12
+                for i in range(num_rings):
+                    rad = 1.1 + i * 0.28
+                    bpy.ops.mesh.primitive_torus_add(
+                        major_radius=rad,
+                        minor_radius=0.035,
+                        major_segments=36,
+                        minor_segments=8,
+                        location=(0, 0, 0)
+                    )
+                    ring = bpy.context.active_object
+                    ring.name = f"Ring_Band_{i+1:02d}"
+                    if i < 4:
+                        ring.data.materials.append(mat_core)
+                    elif i < 8:
+                        ring.data.materials.append(mat_mid)
+                    else:
+                        ring.data.materials.append(mat_outer)
+
+                    for f in [1, 30, 60, 90, 120]:
+                        phase = (f / 120.0) * 4.0 * math.pi - i * 0.5
+                        z_disp = math.sin(phase) * (0.35 + (i / num_rings) * 0.45)
+                        scale_factor = 1.0 + 0.12 * math.cos(phase * 1.5)
+                        ring.location = (0, 0, z_disp)
+                        ring.scale = (scale_factor, scale_factor, 1.0 + abs(z_disp) * 1.5)
+                        ring.keyframe_insert(data_path="location", frame=f)
+                        ring.keyframe_insert(data_path="scale", frame=f)
+
+                klight = bpy.data.lights.new("AudioKey", type='AREA')
+                klight.energy = 900
+                kobj = bpy.data.objects.new("AudioKey", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (4, 4, 5)
+
+                bpy.ops.export_scene.gltf(filepath=output_path, export_format='GLB', export_animations=True)
+                """.formatted(format);
+        }
+
+        // 19. Tool: kosh_ascii_to_voxel
+        if ("kosh_ascii_to_voxel".equals(normalizedTool) || lowerPrompt.contains("ascii") || lowerPrompt.contains("voxel") || lowerPrompt.contains("pixel") || lowerPrompt.contains("monument")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+                from mathutils import Vector, Euler, Matrix, Quaternion
+                import bmesh
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, col, met=0.2, rough=0.4):
+                    m = bpy.data.materials.new(name)
+                    m.use_nodes = True
+                    b = m.node_tree.nodes.get("Principled BSDF")
+                    if b:
+                        b.inputs["Base Color"].default_value = col
+                        b.inputs["Metallic"].default_value = met
+                        b.inputs["Roughness"].default_value = rough
+                    return m
+
+                mat_steel = make_mat("Voxel_Blade_Steel", (0.85, 0.90, 0.95, 1.0), 0.9, 0.15)
+                mat_gold  = make_mat("Voxel_Hilt_Gold", (0.95, 0.75, 0.20, 1.0), 0.95, 0.2)
+                mat_ruby  = make_mat("Voxel_Gem_Ruby", (0.90, 0.15, 0.25, 1.0), 0.3, 0.25)
+                mat_stone = make_mat("Voxel_Pedestal_Stone", (0.28, 0.30, 0.34, 1.0), 0.1, 0.8)
+
+                grid = [
+                    "    ..S..    ",
+                    "    .SSS.    ",
+                    "    .SSS.    ",
+                    "    .SSS.    ",
+                    "    .SSS.    ",
+                    "    .SSS.    ",
+                    "    .SSS.    ",
+                    "    .SSS.    ",
+                    "   GGGGGGG   ",
+                    "     GGG     ",
+                    "     GRG     ",
+                    "     GGG     ",
+                    "      G      ",
+                    "  PPPPPPPPP  ",
+                    " PPPPPPPPPPP ",
+                    "PPPPPPPPPPPPP"
+                ]
+
+                voxel_size = 0.2
+                rows = len(grid)
+                cols = len(grid[0])
+
+                voxels_by_mat = {'S': [], 'G': [], 'R': [], 'P': []}
+
+                for r_idx, row in enumerate(grid):
+                    z = (rows - 1 - r_idx) * voxel_size
+                    for c_idx, ch in enumerate(row):
+                        x = (c_idx - (cols / 2.0)) * voxel_size
+                        if ch in voxels_by_mat:
+                            voxels_by_mat[ch].append((x, 0.0, z))
+
+                for key, coords in voxels_by_mat.items():
+                    if not coords:
+                        continue
+                    mat = mat_steel if key == 'S' else (mat_gold if key == 'G' else (mat_ruby if key == 'R' else mat_stone))
+                    bm = bmesh.new()
+                    for pt in coords:
+                        mat_trans = Matrix.Translation(Vector(pt))
+                        mat_scale = Matrix.Scale(voxel_size * 0.92, 4)
+                        bmesh.ops.create_cube(bm, size=1.0, matrix=mat_trans @ mat_scale)
+                    mesh = bpy.data.meshes.new(f"Voxel_Layer_{key}")
+                    bm.to_mesh(mesh)
+                    bm.free()
+                    obj = bpy.data.objects.new(f"Voxel_Mesh_{key}", mesh)
+                    bpy.context.collection.objects.link(obj)
+                    obj.data.materials.append(mat)
+
+                klight = bpy.data.lights.new("VoxelKey", type='AREA')
+                klight.energy = 950
+                kobj = bpy.data.objects.new("VoxelKey", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (3, 4, 4)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
+        // 20. Tool: kosh_cad_export_step
+        if ("kosh_cad_export_step".equals(normalizedTool) || lowerPrompt.contains("cad_export") || lowerPrompt.contains("turbine") || lowerPrompt.contains("flange") || lowerPrompt.contains("bearing") || lowerPrompt.contains("step")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+                from mathutils import Vector, Euler, Matrix, Quaternion
+                import bmesh
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                # Precision Engineering Flange Turbine with Keyed Bore & Bolt Circle
+                # 1. Main Flange Disk
+                bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=2.0, depth=0.4, location=(0, 0, 0.2))
+                flange = bpy.context.active_object
+                flange.name = "01_Flange_Disk"
+
+                # 2. Central Hub
+                bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=0.9, depth=0.8, location=(0, 0, 0.6))
+                hub = bpy.context.active_object
+                hub.name = "02_Central_Hub"
+
+                m_u = flange.modifiers.new("UnionHub", type='BOOLEAN')
+                m_u.operation = 'UNION'
+                m_u.solver = 'EXACT'
+                m_u.object = hub
+                bpy.context.view_layer.objects.active = flange
+                bpy.ops.object.modifier_apply(modifier="UnionHub")
+                bpy.data.objects.remove(hub, do_unlink=True)
+
+                # 3. Center Shaft Bore Hole (Diameter 0.8)
+                bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=0.4, depth=2.0, location=(0, 0, 0.5))
+                bore = bpy.context.active_object
+
+                m_b = flange.modifiers.new("BoreHole", type='BOOLEAN')
+                m_b.operation = 'DIFFERENCE'
+                m_b.solver = 'EXACT'
+                m_b.object = bore
+                bpy.context.view_layer.objects.active = flange
+                bpy.ops.object.modifier_apply(modifier="BoreHole")
+                bpy.data.objects.remove(bore, do_unlink=True)
+
+                # 4. Perimeter Bolt Circle (6 precision M10 clearance holes)
+                for i in range(6):
+                    ang = (i * 2.0 * math.pi) / 6.0
+                    bx = 1.5 * math.cos(ang)
+                    by = 1.5 * math.sin(ang)
+                    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.15, depth=1.5, location=(bx, by, 0.2))
+                    b_cyl = bpy.context.active_object
+                    mod = flange.modifiers.new(f"BoltHole_{i}", type='BOOLEAN')
+                    mod.operation = 'DIFFERENCE'
+                    mod.solver = 'EXACT'
+                    mod.object = b_cyl
+                    bpy.context.view_layer.objects.active = flange
+                    bpy.ops.object.modifier_apply(modifier=f"BoltHole_{i}")
+                    bpy.data.objects.remove(b_cyl, do_unlink=True)
+
+                # 5. Radial Turbine Impeller Blades (12 blades)
+                for b_idx in range(12):
+                    b_ang = (b_idx * 2.0 * math.pi) / 12.0
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(1.35 * math.cos(b_ang), 1.35 * math.sin(b_ang), 0.7))
+                    blade = bpy.context.active_object
+                    blade.name = f"Blade_{b_idx+1:02d}"
+                    blade.scale = (0.5, 0.06, 0.35)
+                    blade.rotation_euler = (0, math.radians(-25), b_ang)
+
+                bev = flange.modifiers.new("MachinedBevel", type='BEVEL')
+                bev.width = 0.03
+                bev.segments = 3
+
+                mat = bpy.data.materials.new("Mat_6061_Aluminum")
+                mat.use_nodes = True
+                bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                if bsdf:
+                    bsdf.inputs["Base Color"].default_value = (0.88, 0.89, 0.92, 1.0)
+                    bsdf.inputs["Metallic"].default_value = 0.96
+                    bsdf.inputs["Roughness"].default_value = 0.18
+                flange.data.materials.append(mat)
+
+                klight = bpy.data.lights.new("CadKey", type='AREA')
+                klight.energy = 1100
+                kobj = bpy.data.objects.new("CadKey", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (4, 4, 6)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
 
         // Default: Precision Chamfered Workstation Crate
         return """

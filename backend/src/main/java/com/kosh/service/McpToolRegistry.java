@@ -33,7 +33,12 @@ public class McpToolRegistry {
             "physics_simulation",
             "rigging_armature",
             "camera_compositor",
-            "scene_assembler"
+            "scene_assembler",
+            // Creative Multi-Domain Tools (Task 10)
+            "kosh_svg_to_3d",
+            "kosh_audio_reactive",
+            "kosh_ascii_to_voxel",
+            "kosh_cad_export_step"
     );
 
     private final GoogleGeminiClient googleGeminiClient;
@@ -218,6 +223,48 @@ public class McpToolRegistry {
                 null
         ));
 
+        // 17. kosh_svg_to_3d
+        tools.add(createToolSchema(
+                "kosh_svg_to_3d",
+                "2D Vector Path to Precision 3D Beveled Sign & Emblem: Extrudes 2D SVG paths, bezier contours, or typography into watertight 3D models with customizable bevel depth and brushed materials.",
+                Map.of(
+                        "svg_data", Map.of("type", "string", "description", "Raw SVG XML path markup or coordinates to extrude"),
+                        "extrude_depth", Map.of("type", "number", "description", "Extrusion depth in meters (default 0.15m)"),
+                        "bevel_radius", Map.of("type", "number", "description", "Edge bevel roundness radius (default 0.02m)")
+                )
+        ));
+
+        // 18. kosh_audio_reactive
+        tools.add(createToolSchema(
+                "kosh_audio_reactive",
+                "Procedural Audio-Reactive Visualizer Engine: Synthesizes kinetic 3D waveform rings, frequency spectrum bars, or pulsing audio matrices with keyframed oscillations across 120 frames.",
+                Map.of(
+                        "waveform_type", Map.of("type", "string", "enum", List.of("circular_spectrum", "frequency_bars", "pulsing_ring", "surface_ripple")),
+                        "ring_count", Map.of("type", "integer", "description", "Number of concentric spectrum rings or bars (default 12)"),
+                        "amplitude", Map.of("type", "number", "description", "Peak amplitude oscillation scale (default 1.5)")
+                )
+        ));
+
+        // 19. kosh_ascii_to_voxel
+        tools.add(createToolSchema(
+                "kosh_ascii_to_voxel",
+                "ASCII & Pixel Art to 3D Voxel Monument: Transforms text-based ASCII matrix art or 2D pixel grids into multi-colored 3D voxel monuments with palette mapping.",
+                Map.of(
+                        "ascii_grid", Map.of("type", "string", "description", "Multi-line ASCII character grid defining the voxel cross-section"),
+                        "palette_map", Map.of("type", "string", "description", "JSON or color map for ASCII symbols")
+                )
+        ));
+
+        // 20. kosh_cad_export_step
+        tools.add(createToolSchema(
+                "kosh_cad_export_step",
+                "Universal Mechanical CAD Generator: Designs watertight engineering parts (gears, bearings, flanges, threaded couplings) with metric bores and bolt circles, exporting to .stl or .glb.",
+                Map.of(
+                        "part_type", Map.of("type", "string", "enum", List.of("spur_gear", "flange_bearing", "stepper_mount", "heatsink_extrusion")),
+                        "dimensions", Map.of("type", "string", "description", "JSON-encoded dimensional constraints in millimeters")
+                )
+        ));
+
         return tools;
     }
 
@@ -253,6 +300,20 @@ public class McpToolRegistry {
             } else if ("blender_uv_paint".equals(normalizedName)) {
                 String unwrap = arguments != null && arguments.get("unwrap_method") != null ? arguments.get("unwrap_method").toString() : "smart_project";
                 prompt = String.format("Smart UV unwrap using %s and generate vertex color attribute layer", unwrap);
+            } else if ("kosh_svg_to_3d".equals(normalizedName)) {
+                Object depth = arguments != null && arguments.get("extrude_depth") != null ? arguments.get("extrude_depth") : "0.15";
+                Object bevel = arguments != null && arguments.get("bevel_radius") != null ? arguments.get("bevel_radius") : "0.02";
+                prompt = String.format("Extrude 2D vector emblem with depth %sm, bevel radius %sm, and metallic brushed gold/chrome shader", depth, bevel);
+            } else if ("kosh_audio_reactive".equals(normalizedName)) {
+                String wf = arguments != null && arguments.get("waveform_type") != null ? arguments.get("waveform_type").toString() : "circular_spectrum";
+                Object rings = arguments != null && arguments.get("ring_count") != null ? arguments.get("ring_count") : "12";
+                Object amp = arguments != null && arguments.get("amplitude") != null ? arguments.get("amplitude") : "1.5";
+                prompt = String.format("Generate procedural audio-reactive %s visualizer with %s concentric rings, amplitude %s, across 120 keyframed frames", wf, rings, amp);
+            } else if ("kosh_ascii_to_voxel".equals(normalizedName)) {
+                prompt = "Construct 3D voxel monument from ASCII grid with multi-colored palette layers and bevelled voxel edges";
+            } else if ("kosh_cad_export_step".equals(normalizedName)) {
+                String part = arguments != null && arguments.get("part_type") != null ? arguments.get("part_type").toString() : "flange_bearing";
+                prompt = String.format("Model precision watertight mechanical CAD %s with metric bores, bolt holes, chamfered bevels", part);
             }
         }
 

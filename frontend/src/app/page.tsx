@@ -6,9 +6,12 @@ import { CommandConsole } from "@/components/CommandConsole";
 import { CodeInspector } from "@/components/CodeInspector";
 import { Viewport3D, MeshNodeInfo } from "@/components/Viewport3D";
 import { ShortcutsModal } from "@/components/ShortcutsModal";
+import { PasteBpyModal } from "@/components/PasteBpyModal";
+import { ShareModal } from "@/components/ShareModal";
+import { CommunityShowcaseDrawer, CommunityModelItem } from "@/components/CommunityShowcaseDrawer";
 import { useLocalStorageToken } from "@/hooks/useLocalStorageToken";
 import { useMcpClient } from "@/hooks/useMcpClient";
-import { ExportFormat } from "@/types/mcp";
+import { ExportFormat, ToolExecutionResult } from "@/types/mcp";
 
 export default function Home() {
   const [mounted, setMounted] = useState(false);
@@ -25,12 +28,18 @@ export default function Home() {
     apiBase,
   } = useMcpClient();
 
+  // Custom loaded scene (from Fork, Showcase, or Community Share)
+  const [customLoadedResult, setCustomLoadedResult] = useState<ToolExecutionResult | null>(null);
+
   // Workstation Panel State (Left generator open 300px, Right inspector collapsible)
   const [isLeftOpen, setIsLeftOpen] = useState(true);
   const [isRightOpen, setIsRightOpen] = useState(false);
 
-  // Shortcuts Cheat Sheet Modal State
+  // Modals & Drawers
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isPasteBpyOpen, setIsPasteBpyOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isShowcaseOpen, setIsShowcaseOpen] = useState(false);
 
   // Sub-Mesh Selection & Scene Hierarchy Synchronization
   const [selectedMeshName, setSelectedMeshName] = useState<string | null>(null);
@@ -85,6 +94,30 @@ export default function Home() {
 
   useEffect(() => {
     setMounted(true);
+    // Check if user came from Fork in Kosh Studio (/share/[id])
+    try {
+      const forked = localStorage.getItem("kosh_forked_scene");
+      if (forked) {
+        const parsed = JSON.parse(forked);
+        localStorage.removeItem("kosh_forked_scene");
+        if (parsed.assetUrl) {
+          setCustomLoadedResult({
+            toolName: "forked_scene",
+            assetId: "forked",
+            assetUrl: parsed.assetUrl,
+            assetName: parsed.assetName || "forked_model.glb",
+            script: parsed.script || undefined,
+            format: (parsed.format || "glb") as ExportFormat,
+            sizeBytes: 0,
+            exitCode: 0,
+            executionTimeMs: 0,
+            success: true,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to restore forked scene:", e);
+    }
   }, []);
 
   // Global Editor Panes & Shortcuts Hotkeys (T, N, F1, ?)
@@ -122,12 +155,36 @@ export default function Home() {
     toolName: string,
     args: { prompt?: string; script?: string; format: ExportFormat; previousScript?: string }
   ) => {
+    setCustomLoadedResult(null);
     executeTool(toolName, args, token);
   };
 
   const handleExecuteRawScript = (rawScript: string) => {
+    setCustomLoadedResult(null);
     executeTool("blender_mesh", { script: rawScript, format: "glb" }, token);
   };
+
+  const handleLoadCommunityModel = (item: CommunityModelItem) => {
+    if (item.assetUrl) {
+      setCustomLoadedResult({
+        toolName: "community_showcase",
+        assetId: item.id || "showcase",
+        assetUrl: item.assetUrl,
+        assetName: item.assetName || `${item.title.toLowerCase().replace(/[^a-z0-9]/g, "_")}.${item.format || "glb"}`,
+        script: item.script || undefined,
+        format: (item.format || "glb") as ExportFormat,
+        sizeBytes: 0,
+        exitCode: 0,
+        executionTimeMs: 0,
+        success: true,
+      });
+    } else if (item.script) {
+      setCustomLoadedResult(null);
+      executeTool("blender_mesh", { script: item.script, format: (item.format || "glb") as ExportFormat }, token);
+    }
+  };
+
+  const effectiveResult = customLoadedResult || lastResult;
 
   return (
     <main className="flex flex-col h-screen w-screen overflow-hidden bg-[#18181b] text-[#f4f4f5] select-none font-sans">
@@ -144,6 +201,9 @@ export default function Home() {
         isRightOpen={isRightOpen}
         onToggleRight={() => setIsRightOpen(!isRightOpen)}
         onOpenShortcuts={() => setIsShortcutsOpen(true)}
+        onOpenPasteBpy={() => setIsPasteBpyOpen(true)}
+        onOpenShare={() => setIsShareOpen(true)}
+        onOpenShowcase={() => setIsShowcaseOpen(true)}
       />
 
       {/* 2. Main Workstation 3-Panel DCC Layout */}
@@ -155,7 +215,7 @@ export default function Home() {
               tools={tools}
               isLoading={isLoading}
               onExecute={handleExecute}
-              lastResult={lastResult}
+              lastResult={effectiveResult}
               error={error}
               hasToken={!!token}
               selectedMeshName={selectedMeshName}
@@ -173,11 +233,11 @@ export default function Home() {
         <section className="flex-1 min-w-0 h-full flex flex-col bg-[#141416] relative">
           {mounted ? (
             <Viewport3D
-              assetUrl={lastResult?.assetUrl}
-              assetName={lastResult?.assetName}
-              snapshotUrl={lastResult?.snapshotUrl}
-              telemetry={lastResult?.telemetry}
-              format={lastResult?.format || "glb"}
+              assetUrl={effectiveResult?.assetUrl}
+              assetName={effectiveResult?.assetName}
+              snapshotUrl={effectiveResult?.snapshotUrl}
+              telemetry={effectiveResult?.telemetry}
+              format={effectiveResult?.format || "glb"}
               apiBase={apiBase}
               onMeshSelect={handleMeshSelect}
               onMeshListUpdate={setMeshList}
@@ -200,11 +260,12 @@ export default function Home() {
         {isRightOpen && (
           <aside className="w-[320px] shrink-0 h-full overflow-hidden flex flex-col z-20">
             <CodeInspector
-              script={lastResult?.script || null}
+              script={effectiveResult?.script || null}
+              assetUrl={effectiveResult?.assetUrl}
               onExecuteScript={handleExecuteRawScript}
               isLoading={isLoading}
-              stdout={lastResult?.stdout || null}
-              stderr={lastResult?.stderr || null}
+              stdout={effectiveResult?.stdout || null}
+              stderr={effectiveResult?.stderr || null}
               meshList={meshList}
               selectedMeshName={selectedMeshName}
               onSelectMesh={handleMeshSelect}
@@ -220,6 +281,31 @@ export default function Home() {
       <ShortcutsModal
         isOpen={isShortcutsOpen}
         onClose={() => setIsShortcutsOpen(false)}
+      />
+
+      {/* 4. Paste Blender Python Code Modal */}
+      <PasteBpyModal
+        isOpen={isPasteBpyOpen}
+        onClose={() => setIsPasteBpyOpen(false)}
+        onExecute={handleExecuteRawScript}
+        isLoading={isLoading}
+      />
+
+      {/* 5. 3D Model Share Modal */}
+      <ShareModal
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        assetUrl={effectiveResult?.assetUrl}
+        assetName={effectiveResult?.assetName}
+        script={effectiveResult?.script}
+        format={effectiveResult?.format || "glb"}
+      />
+
+      {/* 6. Community Showcase Drawer */}
+      <CommunityShowcaseDrawer
+        isOpen={isShowcaseOpen}
+        onClose={() => setIsShowcaseOpen(false)}
+        onLoadModel={handleLoadCommunityModel}
       />
     </main>
   );

@@ -20,6 +20,9 @@ import {
   Palette,
   Keyboard,
   HelpCircle,
+  Share2,
+  Sparkles,
+  Terminal,
 } from "lucide-react";
 
 interface TerminalHeaderProps {
@@ -34,6 +37,9 @@ interface TerminalHeaderProps {
   isRightOpen?: boolean;
   onToggleRight?: () => void;
   onOpenShortcuts?: () => void;
+  onOpenPasteBpy?: () => void;
+  onOpenShare?: () => void;
+  onOpenShowcase?: () => void;
 }
 
 export function TerminalHeader({
@@ -48,6 +54,9 @@ export function TerminalHeader({
   isRightOpen = false,
   onToggleRight,
   onOpenShortcuts,
+  onOpenPasteBpy,
+  onOpenShare,
+  onOpenShowcase,
 }: TerminalHeaderProps) {
   const { theme, setTheme } = useTheme();
   const [isKeyDrawerOpen, setIsKeyDrawerOpen] = useState(false);
@@ -163,6 +172,42 @@ export function TerminalHeader({
               {isBlenderReady ? "Blender 5.2" : "Offline"}
             </span>
           </div>
+
+          {/* Paste bpy Script Button */}
+          {onOpenPasteBpy && (
+            <button
+              onClick={onOpenPasteBpy}
+              title="Paste raw Blender Python (bpy) script"
+              className="tool-btn space-x-1"
+            >
+              <Terminal className="w-3 h-3 text-[#ea580c]" />
+              <span className="font-mono text-[10px] hidden sm:inline">PASTE BPY</span>
+            </button>
+          )}
+
+          {/* Community Showcase Trigger */}
+          {onOpenShowcase && (
+            <button
+              onClick={onOpenShowcase}
+              title="Explore Community & Featured 3D Models"
+              className="tool-btn space-x-1"
+            >
+              <Sparkles className="w-3 h-3 text-[#ea580c]" />
+              <span className="font-mono text-[10px] hidden sm:inline">SHOWCASE</span>
+            </button>
+          )}
+
+          {/* Share Model Button */}
+          {onOpenShare && (
+            <button
+              onClick={onOpenShare}
+              title="Share current 3D scene via permanent interactive link"
+              className="tool-btn space-x-1 border-[#ea580c]/60 bg-[#ea580c]/10 hover:bg-[#ea580c]/20 text-[#f4f4f5]"
+            >
+              <Share2 className="w-3 h-3 text-[#ea580c]" />
+              <span className="font-mono text-[10px] font-semibold text-[#ea580c]">↗ SHARE</span>
+            </button>
+          )}
 
           {/* Key Drawer Toggle */}
           <button

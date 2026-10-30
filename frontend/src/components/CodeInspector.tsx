@@ -20,6 +20,7 @@ import {
 
 interface CodeInspectorProps {
   script: string | null;
+  assetUrl?: string | null;
   onExecuteScript?: (script: string) => void;
   isLoading?: boolean;
   stdout?: string | null;
@@ -34,6 +35,7 @@ interface CodeInspectorProps {
 
 export function CodeInspector({
   script,
+  assetUrl,
   onExecuteScript,
   isLoading,
   stdout,
@@ -47,8 +49,103 @@ export function CodeInspector({
 }: CodeInspectorProps) {
   const [activeTab, setActiveTab] = useState<"script" | "outliner" | "logs">("script");
   const [copied, setCopied] = useState(false);
+  const [copiedHtml, setCopiedHtml] = useState(false);
   const [isEditable, setIsEditable] = useState(false);
   const [editableScript, setEditableScript] = useState("");
+
+  const handleCopyStandaloneHtml = () => {
+    const fullUrl = assetUrl
+      ? (assetUrl.startsWith("http") ? assetUrl : `http://localhost:8080${assetUrl}`)
+      : "";
+
+    const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kosh 3D Model</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #141416; font-family: sans-serif; }
+    #canvas-container { width: 100vw; height: 100vh; }
+    .badge { position: absolute; bottom: 20px; left: 20px; background: rgba(26,26,30,0.85); color: #f4f4f5; padding: 8px 14px; border-radius: 6px; font-size: 12px; border: 1px solid #333338; backdrop-filter: blur(4px); }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div class="badge">Kosh Standalone 3D Export</div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x141416);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(4, 3, 5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x22222a, 0.8));
+    const key = new THREE.DirectionalLight(0xffffff, 1.4);
+    key.position.set(5, 8, 5);
+    scene.add(key);
+
+    const grid = new THREE.GridHelper(10, 20, 0x3f3f46, 0x27272a);
+    scene.add(grid);
+
+    let mixer = null;
+    const loader = new GLTFLoader();
+    loader.load('${fullUrl}', (gltf) => {
+      scene.add(gltf.scene);
+      const bbox = new THREE.Box3().setFromObject(gltf.scene);
+      const center = bbox.getCenter(new THREE.Vector3());
+      controls.target.copy(center);
+      if (gltf.animations.length > 0) {
+        mixer = new THREE.AnimationMixer(gltf.scene);
+        gltf.animations.forEach((clip) => mixer.clipAction(clip).play());
+      }
+    });
+
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      if (mixer) mixer.update(delta);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>`;
+
+    navigator.clipboard.writeText(htmlContent);
+    setCopiedHtml(true);
+    setTimeout(() => setCopiedHtml(false), 2000);
+  };
 
   React.useEffect(() => {
     if (script) {
@@ -155,6 +252,25 @@ export function CodeInspector({
 
             <button onClick={handleDownload} disabled={!activeContent} className="tool-btn p-1" title="Download script">
               <Download className="w-3 h-3" />
+            </button>
+
+            <button
+              onClick={handleCopyStandaloneHtml}
+              disabled={!assetUrl}
+              className="tool-btn px-1.5 py-0.5 space-x-1 border-[#ea580c]/50 hover:border-[#ea580c]"
+              title="Copy 1-File Standalone HTML Embed"
+            >
+              {copiedHtml ? (
+                <>
+                  <Check className="w-3 h-3 text-[#10b981]" />
+                  <span className="text-[10px] text-[#10b981]">HTML Copied</span>
+                </>
+              ) : (
+                <>
+                  <FileCode className="w-3 h-3 text-[#ea580c]" />
+                  <span className="text-[10px] font-mono">HTML</span>
+                </>
+              )}
             </button>
           </div>
         )}
