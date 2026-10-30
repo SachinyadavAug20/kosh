@@ -8,14 +8,16 @@ import {
   RefreshCw,
   Eye,
   EyeOff,
-  Terminal,
+  Box,
   Shield,
   ExternalLink,
   Zap,
+  Sliders,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Palette,
-  Share2,
-  Download,
-  Upload,
 } from "lucide-react";
 
 interface TerminalHeaderProps {
@@ -25,8 +27,10 @@ interface TerminalHeaderProps {
   token: string;
   onSaveToken: (token: string) => void;
   onClearToken: () => void;
-  onExportSession?: () => void;
-  onImportSession?: (file: File) => void;
+  isLeftOpen?: boolean;
+  onToggleLeft?: () => void;
+  isRightOpen?: boolean;
+  onToggleRight?: () => void;
 }
 
 export function TerminalHeader({
@@ -36,8 +40,10 @@ export function TerminalHeader({
   token,
   onSaveToken,
   onClearToken,
-  onExportSession,
-  onImportSession,
+  isLeftOpen = true,
+  onToggleLeft,
+  isRightOpen = false,
+  onToggleRight,
 }: TerminalHeaderProps) {
   const { theme, setTheme } = useTheme();
   const [isKeyDrawerOpen, setIsKeyDrawerOpen] = useState(false);
@@ -63,50 +69,51 @@ export function TerminalHeader({
 
   const isBackendUp = !!health && health.status === "UP";
   const isBlenderReady = health?.blender?.available ?? false;
-  const isDemo = token.toLowerCase() === "demo";
-
-  const getKeyBadgeText = () => {
-    if (!token) return "KEY: REQUIRED";
-    if (isDemo) return "KEY: DEMO (OFFLINE)";
-    return "KEY: GEMINI ACTIVE";
-  };
 
   return (
-    <header className="border-b border-[var(--border)] bg-[var(--bg-header)] select-none sticky top-0 z-50 text-xs">
-      {/* Top Bar */}
-      <div className="flex items-center justify-between px-4 py-2">
-        {/* Brand / Logo */}
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-1.5 font-bold tracking-wider text-[var(--foreground)]">
-            <Terminal className="w-4 h-4 text-[var(--accent)]" />
-            <span>KOSH</span>
-            <span className="text-[var(--text-muted)]">/</span>
-            <span className="text-[var(--text-muted)] font-normal">BLENDER_MCP_STUDIO</span>
+    <header className="border-b border-[#3f3f46] bg-[#1f1f23] select-none sticky top-0 z-40 text-xs font-sans">
+      <div className="flex items-center justify-between px-3 py-1.5">
+        {/* Brand & Left Dock Toggle */}
+        <div className="flex items-center space-x-2">
+          {onToggleLeft && (
+            <button
+              onClick={onToggleLeft}
+              title={isLeftOpen ? "Collapse Left Tool Dock" : "Expand Left Tool Dock"}
+              className="tool-btn p-1"
+            >
+              {isLeftOpen ? <PanelLeftClose className="w-3.5 h-3.5" /> : <PanelLeftOpen className="w-3.5 h-3.5" />}
+            </button>
+          )}
+
+          <div className="flex items-center space-x-1.5 font-bold tracking-tight text-[#f4f4f5]">
+            <Box className="w-4 h-4 text-[#ea580c]" />
+            <span className="font-mono">KOSH</span>
+            <span className="text-[#52525b]">/</span>
+            <span className="text-[#a1a1aa] font-medium text-[11px]">CAD_STUDIO</span>
           </div>
 
-          <span className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] bg-[var(--bg-subpanel)] border border-[var(--border)] text-[var(--text-muted)]">
-            v2.5-PROD
+          <span className="hidden sm:inline-block px-1.5 py-0.5 text-[9px] font-mono bg-[#18181b] border border-[#3f3f46] text-[#a1a1aa] rounded-sm">
+            v3.0-DCC
           </span>
         </div>
 
-        {/* System Status Indicators, Themes & Key Drawer */}
-        <div className="flex items-center space-x-2 md:space-x-3">
-          {/* Theme Switcher Button */}
+        {/* Center / Right Status & Actions */}
+        <div className="flex items-center space-x-2">
+          {/* Theme Dropdown */}
           <div className="relative">
             <button
               onClick={() => setIsThemeOpen(!isThemeOpen)}
-              title="Change Studio Theme"
-              className="flex items-center space-x-1.5 px-2.5 py-1 bg-[var(--bg-subpanel)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors"
+              title="Theme Settings"
+              className="tool-btn space-x-1"
             >
-              <Palette className="w-3.5 h-3.5 text-[var(--accent)]" />
-              <span className="font-semibold capitalize hidden sm:inline">{THEMES[theme]?.name || theme}</span>
+              <Palette className="w-3 h-3 text-[#a1a1aa]" />
+              <span className="text-[11px] hidden md:inline">{THEMES[theme]?.name || "Theme"}</span>
             </button>
 
-            {/* Theme Dropdown */}
             {isThemeOpen && (
-              <div className="absolute right-0 mt-1 w-52 bg-[var(--bg-panel)] border border-[var(--border)] shadow-2xl py-1 z-50">
-                <div className="px-3 py-1 text-[10px] text-[var(--text-muted)] border-b border-[var(--border)]">
-                  SELECT STUDIO THEME
+              <div className="absolute right-0 mt-1 w-48 bg-[#1f1f23] border border-[#3f3f46] shadow-xl py-1 z-50 rounded-sm">
+                <div className="px-2.5 py-1 text-[10px] text-[#71717a] font-mono border-b border-[#3f3f46]">
+                  WORKSTATION THEMES
                 </div>
                 {(Object.keys(THEMES) as ThemeId[]).map((tId) => (
                   <button
@@ -115,12 +122,12 @@ export function TerminalHeader({
                       setTheme(tId);
                       setIsThemeOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-3 py-1.5 text-left text-[11px] hover:bg-[var(--accent)] hover:text-[var(--background)] transition-colors ${
-                      theme === tId ? "font-bold text-[var(--accent)]" : "text-[var(--foreground)]"
+                    className={`w-full flex items-center justify-between px-2.5 py-1 text-left text-[11px] hover:bg-[#27272a] transition-colors ${
+                      theme === tId ? "font-semibold text-[#f4f4f5]" : "text-[#a1a1aa]"
                     }`}
                   >
                     <span>{THEMES[tId].name}</span>
-                    <span className="text-[9px] px-1 bg-[var(--bg-subpanel)] border border-[var(--border)]">
+                    <span className="text-[9px] font-mono px-1 bg-[#18181b] border border-[#3f3f46] rounded-sm">
                       {THEMES[tId].badge}
                     </span>
                   </button>
@@ -129,81 +136,78 @@ export function TerminalHeader({
             )}
           </div>
 
-          {/* MCP Server Status */}
+          {/* MCP Health */}
           <button
             onClick={onRefreshHealth}
-            title="Click to re-ping backend"
-            className="flex items-center space-x-1.5 px-2 py-1 bg-[var(--bg-subpanel)] border border-[var(--border)] hover:border-[var(--border-light)] transition-colors"
+            title="Re-check MCP Connection"
+            className="tool-btn space-x-1.5"
           >
             <div
-              className={`w-1.5 h-1.5 rounded-full ${
-                isBackendUp ? "bg-[#22c55e] shadow-[0_0_6px_#22c55e]" : "bg-[#ef4444]"
-              }`}
+              className={`w-1.5 h-1.5 rounded-full ${isBackendUp ? "bg-[#a1a1aa]" : "bg-[#ef4444]"}`}
             />
-            <span className="text-[var(--text-muted)]">MCP:</span>
-            <span className={isBackendUp ? "text-[#22c55e]" : "text-[#ef4444]"}>
-              {isBackendUp ? "8080 ONLINE" : "OFFLINE"}
+            <span className="font-mono text-[10px] text-[#a1a1aa]">MCP:</span>
+            <span className={`font-mono text-[10px] ${isBackendUp ? "text-[#f4f4f5]" : "text-[#ef4444]"}`}>
+              {isBackendUp ? "8080 OK" : "OFFLINE"}
             </span>
-            <RefreshCw
-              className={`w-3 h-3 text-[var(--text-muted)] ${isHealthChecking ? "animate-spin" : ""}`}
-            />
+            <RefreshCw className={`w-2.5 h-2.5 text-[#71717a] ${isHealthChecking ? "animate-spin" : ""}`} />
           </button>
 
-          {/* Blender Engine Status */}
-          <div className="hidden md:flex items-center space-x-1.5 px-2 py-1 bg-[var(--bg-subpanel)] border border-[var(--border)]">
-            <div
-              className={`w-1.5 h-1.5 rounded-full ${
-                isBlenderReady ? "bg-[#22c55e]" : "bg-[#f59e0b]"
-              }`}
-            />
-            <span className="text-[var(--text-muted)]">BLENDER:</span>
-            <span className={isBlenderReady ? "text-[var(--foreground)]" : "text-[#f59e0b]"}>
-              {isBlenderReady ? "5.2 READY" : "NOT FOUND"}
+          {/* Blender Engine */}
+          <div className="hidden lg:flex items-center space-x-1 px-2 py-0.5 bg-[#18181b] border border-[#3f3f46] rounded-sm text-[10px] font-mono text-[#a1a1aa]">
+            <span className="text-[#71717a]">ENGINE:</span>
+            <span className={isBlenderReady ? "text-[#f4f4f5]" : "text-[#eab308]"}>
+              {isBlenderReady ? "Blender 5.2" : "Offline"}
             </span>
           </div>
 
-          {/* Google Gemini Key Drawer Toggle */}
+          {/* Key Drawer Toggle */}
           <button
             onClick={() => setIsKeyDrawerOpen(!isKeyDrawerOpen)}
-            className={`flex items-center space-x-1.5 px-2.5 py-1 border transition-colors ${
-              token
-                ? "bg-[var(--bg-subpanel)] border-[var(--accent)]/50 text-[var(--accent)] hover:border-[var(--accent)]"
-                : "bg-[var(--bg-subpanel)] border-[#ef4444]/50 text-[#ef4444] hover:border-[#ef4444]"
-            }`}
+            className={`tool-btn space-x-1 ${token ? "" : "border-[#eab308] text-[#eab308]"}`}
           >
-            <Key className="w-3.5 h-3.5" />
-            <span className="font-semibold tracking-wide">{getKeyBadgeText()}</span>
+            <Key className="w-3 h-3 text-[#a1a1aa]" />
+            <span className="font-mono text-[10px]">{token ? "KEY SET" : "NO KEY"}</span>
           </button>
+
+          {/* Right Inspector Toggle */}
+          {onToggleRight && (
+            <button
+              onClick={onToggleRight}
+              title={isRightOpen ? "Hide Inspector Panel" : "Show Inspector & Code"}
+              className={`tool-btn p-1 ${isRightOpen ? "active" : ""}`}
+            >
+              {isRightOpen ? <PanelRightClose className="w-3.5 h-3.5" /> : <PanelRightOpen className="w-3.5 h-3.5" />}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Google API Key Drawer */}
+      {/* Key Drawer Modal */}
       {isKeyDrawerOpen && (
-        <div className="border-t border-[var(--border)] bg-[var(--bg-panel)] px-4 py-3 text-xs">
-          <form onSubmit={handleSave} className="max-w-4xl mx-auto space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-1 text-[var(--text-muted)]">
+        <div className="border-t border-[#3f3f46] bg-[#18181b] px-4 py-3 text-xs">
+          <form onSubmit={handleSave} className="max-w-2xl mx-auto space-y-2">
+            <div className="flex items-center justify-between text-[#a1a1aa]">
               <div className="flex items-center space-x-2">
-                <Shield className="w-3.5 h-3.5 text-[var(--accent)]" />
-                <span className="font-bold text-[var(--foreground)]">GOOGLE GEMINI API KEY (FREE)</span>
-                <span className="text-[var(--text-muted)]">— Free tier (gemini-2.5-flash), zero cost</span>
+                <Shield className="w-3.5 h-3.5 text-[#a1a1aa]" />
+                <span className="font-semibold text-[#f4f4f5]">Google Gemini API Key</span>
+                <span className="text-[#71717a] text-[11px]">— Free tier (gemini-2.5-flash)</span>
               </div>
               <div className="flex items-center space-x-3 text-[10px]">
                 <a
                   href="https://aistudio.google.com/app/apikey"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center space-x-1 text-[#06b6d4] hover:underline"
+                  className="text-[#a1a1aa] hover:text-[#f4f4f5] underline flex items-center space-x-1"
                 >
                   <ExternalLink className="w-3 h-3" />
-                  <span>Get Free Key (Google AI Studio)</span>
+                  <span>Get Free Key</span>
                 </a>
                 <button
                   type="button"
                   onClick={handleSetDemoKey}
-                  className="text-[var(--accent)] hover:underline flex items-center space-x-1"
+                  className="text-[#f4f4f5] hover:underline"
                 >
-                  <Zap className="w-3 h-3" />
-                  <span>Use Offline Demo Mode</span>
+                  Use Demo Mode
                 </button>
               </div>
             </div>
@@ -214,13 +218,13 @@ export function TerminalHeader({
                   type={showKey ? "text" : "password"}
                   value={inputVal}
                   onChange={(e) => setInputVal(e.target.value)}
-                  placeholder="Paste your Google Gemini API Key (e.g., AIzaSy...)"
-                  className="w-full bg-[var(--bg-subpanel)] border border-[var(--border)] focus:border-[var(--accent)] focus:outline-none px-3 py-1.5 text-xs text-[var(--foreground)] font-mono pr-8"
+                  placeholder="Paste your Google Gemini API Key (e.g. AIzaSy...)"
+                  className="w-full bg-[#1f1f23] border border-[#3f3f46] focus:border-[#52525b] focus:outline-none px-2.5 py-1 text-xs text-[#f4f4f5] font-mono pr-8 rounded-sm"
                 />
                 <button
                   type="button"
                   onClick={() => setShowKey(!showKey)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--foreground)]"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[#71717a] hover:text-[#f4f4f5]"
                 >
                   {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
@@ -228,9 +232,9 @@ export function TerminalHeader({
 
               <button
                 type="submit"
-                className="px-3 py-1.5 bg-[var(--accent)] text-[var(--background)] font-bold hover:opacity-90 transition-opacity"
+                className="px-3 py-1 bg-[#27272a] hover:bg-[#3f3f46] text-[#f4f4f5] border border-[#52525b] font-medium text-xs rounded-sm transition-colors"
               >
-                SAVE KEY
+                SAVE
               </button>
 
               {token && (
@@ -240,7 +244,7 @@ export function TerminalHeader({
                     onClearToken();
                     setInputVal("");
                   }}
-                  className="px-2.5 py-1.5 bg-[var(--bg-subpanel)] border border-[var(--border)] text-[#ef4444] hover:border-[#ef4444]"
+                  className="px-2.5 py-1 bg-[#18181b] border border-[#3f3f46] text-[#ef4444] hover:bg-[#27272a] rounded-sm text-xs"
                 >
                   CLEAR
                 </button>
@@ -249,15 +253,10 @@ export function TerminalHeader({
               <button
                 type="button"
                 onClick={() => setIsKeyDrawerOpen(false)}
-                className="px-2.5 py-1.5 bg-[var(--bg-subpanel)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--foreground)]"
+                className="px-2.5 py-1 bg-[#18181b] border border-[#3f3f46] text-[#71717a] hover:text-[#f4f4f5] rounded-sm text-xs"
               >
                 CLOSE
               </button>
-            </div>
-
-            <div className="text-[10px] text-[var(--text-muted)] flex items-center justify-between">
-              <span>Key is stored only in your browser localStorage; never saved on the server.</span>
-              <span className="text-[var(--accent)]">Multi-Model Cascade: gemini-2.5-flash • flash-latest • flash-lite</span>
             </div>
           </form>
         </div>

@@ -60,6 +60,10 @@ public class AssetController {
             mediaType = MediaType.parseMediaType("model/gltf+json");
         } else if (filename.toLowerCase().endsWith(".stl")) {
             mediaType = MediaType.parseMediaType("model/stl");
+        } else if (filename.toLowerCase().endsWith(".png")) {
+            mediaType = MediaType.IMAGE_PNG;
+        } else if (filename.toLowerCase().endsWith(".json")) {
+            mediaType = MediaType.APPLICATION_JSON;
         } else {
             mediaType = MediaType.APPLICATION_OCTET_STREAM;
         }

@@ -36,7 +36,6 @@ public class GoogleGeminiClient {
     @Value("${kosh.gemini.api-key:}")
     private String defaultApiKey;
 
-    // Ordered cascade pool of working Gemini models to seamlessly overcome 503/429 spikes
     private static final List<String> CASCADE_MODELS = List.of(
             "gemini-2.5-flash",
             "gemini-flash-latest",
@@ -53,17 +52,6 @@ public class GoogleGeminiClient {
         this.objectMapper = objectMapper;
     }
 
-    /**
-     * Calls Google Gemini API to generate a headless Blender Python script using a Google API key.
-     * Features automated exponential backoff retries for temporary spikes (503 / 429) and
-     * a multi-model cascade pool (gemini-2.5-flash -> gemini-flash-latest -> gemini-2.5-flash-lite -> gemini-3.5-flash).
-     *
-     * @param prompt User prompt describing the 3D mesh or CAD model
-     * @param toolType Tool identifier ("blender_mesh" or "cad_model")
-     * @param apiKey User's Google API Key (e.g. AIzaSy...)
-     * @param exportFormat Target export format ("glb" or "stl")
-     * @return Clean Python script
-     */
     public String generateBlenderScript(String prompt, String toolType, String apiKey, String exportFormat) {
         String activeKey = (apiKey != null && !apiKey.isBlank()) ? apiKey.trim() : defaultApiKey;
         if (activeKey == null || activeKey.isBlank()) {
@@ -78,7 +66,6 @@ public class GoogleGeminiClient {
 
         String trimmedKey = activeKey.trim().replaceFirst("(?i)^Bearer\\s+", "");
 
-        // Offline / Demo bypass
         if ("demo".equalsIgnoreCase(trimmedKey) || "mock".equalsIgnoreCase(trimmedKey) || "offline".equalsIgnoreCase(trimmedKey)) {
             log.info("Generating procedural fallback script in demo mode for prompt: {}", prompt);
             return generateProceduralModelScript(prompt, toolType, exportFormat);
@@ -86,7 +73,6 @@ public class GoogleGeminiClient {
 
         String systemPrompt = buildSystemPrompt(toolType, exportFormat);
 
-        // Build candidate list with primary model prioritized
         List<String> modelsToTry = new ArrayList<>();
         if (primaryModel != null && !primaryModel.isBlank()) {
             modelsToTry.add(primaryModel.trim());
@@ -112,18 +98,17 @@ public class GoogleGeminiClient {
                         if (attempt < maxRetries) {
                             try {
                                 long sleepMs = 600L * attempt;
-                                log.info("Waiting {}ms before retrying model {}...", sleepMs, model);
                                 Thread.sleep(sleepMs);
                             } catch (InterruptedException ie) {
                                 Thread.currentThread().interrupt();
                             }
                             continue;
                         } else {
-                            log.warn("Model {} exhausted retries on HTTP {}. Cascading to next model...", model, statusCode);
+                            log.warn("Model {} exhausted retries on HTTP {}. Cascading...", model, statusCode);
                             break;
                         }
                     } else if (statusCode == 404 || statusCode == 400) {
-                        log.warn("Model {} returned HTTP {}. Skipping to next model in cascade...", model, statusCode);
+                        log.warn("Model {} returned HTTP {}. Skipping to next model...", model, statusCode);
                         break;
                     } else {
                         throw new RuntimeException("Google Gemini API error (" + statusCode + "): " + e.getResponseBodyAsString(), e);
@@ -141,7 +126,7 @@ public class GoogleGeminiClient {
             }
         }
 
-        log.warn("All Gemini models in cascade currently experiencing high-demand spikes. Providing prompt-aware procedural Blender script for prompt: '{}'", prompt);
+        log.warn("All Gemini models in cascade saturated. Providing deep procedural Blender script for prompt: '{}'", prompt);
         return generateProceduralModelScript(prompt, toolType, exportFormat);
     }
 
@@ -197,22 +182,42 @@ public class GoogleGeminiClient {
     private String buildSystemPrompt(String toolType, String exportFormat) {
         String format = (exportFormat != null && exportFormat.equalsIgnoreCase("stl")) ? "stl" : "glb";
         return """
-            You are an expert Blender 3D and CAD Python (`bpy`) script generator for headless automated execution.
-            Generate ONLY a single Python script that constructs the requested 3D model.
+            You are a senior technical 3D artist and CAD engineer creating production-grade Blender Python (`bpy`) scripts for headless execution.
+            Generate ONLY executable Python code. No markdown fences, no preamble, no explanations.
             
-            Strict Requirements:
-            1. Clean scene first:
-               import bpy, sys
+            Strict Engineering Standards:
+            1. Clean Scene Setup:
+               import bpy, sys, math, json
                bpy.ops.object.select_all(action='SELECT')
                bpy.ops.object.delete(use_global=False)
-            2. Parse output filepath passed via command line after `--`:
+            
+            2. CLI Output Parsing:
                argv = sys.argv
                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
-            3. Build the geometry procedurally using bpy.ops.mesh, bmesh, modifiers, or CSG booleans.
-            4. Add smooth shading, materials with metallic/roughness and rich base colors if appropriate.
-            5. Export final result to `output_path`:
+            
+            3. Deep Blender Modifiers Stack:
+               - Use Bevel modifiers (BEVEL) with width=0.04-0.08, segments=2-3 for chamfered industrial edges.
+               - Use Subdivision Surface (SUBSURF) with levels=1-2 for organic/curved surfaces.
+               - Use Boolean modifiers (BOOLEAN) for CSG union, difference, and intersection between component parts.
+               - Use Mirror modifiers (MIRROR) for symmetrical modeling where appropriate.
+               - Apply smooth shading (bpy.ops.object.shade_smooth) and compute vertex normals.
+            
+            4. Realistic Principled BSDF Node Materials:
+               - Setup real node trees: mat.use_nodes = True; bsdf = mat.node_tree.nodes.get("Principled BSDF")
+               - Set realistic physical parameters:
+                 * Metals (Steel, Aluminum, Titanium): Metallic=0.85-0.95, Roughness=0.18-0.35, Base Color=(0.7, 0.72, 0.75, 1.0)
+                 * Matte Polymers / Industrial Plastics: Metallic=0.0, Roughness=0.3-0.5, Base Color
+                 * Glass / Refraction: Transmission Weight=1.0, Roughness=0.05, IOR=1.45
+                 * Subtle Accents / Displays: Principled BSDF Emission Color & Strength if needed.
+               - NO glowing neon/CRT hacker effects. Use tasteful, solid workstation colors (graphite, steel, matte terracotta, industrial safety orange accents).
+            
+            5. Staging & 3-Point Studio Lights:
+               - Add Sun/Area Key light (energy=1200W, location=(5, 8, 6))
+               - Add Fill light (energy=500W, location=(-6, 4, -3))
+               - Add Rim light (energy=700W, location=(0, -4, -6))
+            
+            6. Export Pipeline:
                %s
-            6. Return ONLY valid Python code. DO NOT wrap with markdown, explanation, or conversational chatter.
             """.formatted(format, getExportStatement(format));
     }
 
@@ -233,6 +238,7 @@ public class GoogleGeminiClient {
         String exportCmd = getExportStatement(format);
         String lowerPrompt = (prompt != null) ? prompt.toLowerCase() : "";
 
+        // 1. Pyramid / Tetrahedron (clean studio finish)
         if (lowerPrompt.contains("pyramid") || lowerPrompt.contains("tetrahedron")) {
             return """
                 import bpy
@@ -247,25 +253,25 @@ public class GoogleGeminiClient {
 
                 bpy.ops.mesh.primitive_cone_add(vertices=4, radius1=1.8, radius2=0.0, depth=2.4, location=(0, 0, 1.2))
                 pyramid = bpy.context.active_object
-                pyramid.name = "Color_Pyramid"
+                pyramid.name = "Studio_Pyramid"
                 pyramid.rotation_euler[2] = math.radians(45)
 
                 color_palette = [
-                    ("Side_Ruby_Red", (0.92, 0.18, 0.22, 1.0)),
-                    ("Side_Emerald_Green", (0.12, 0.82, 0.38, 1.0)),
-                    ("Side_Sapphire_Blue", (0.18, 0.48, 0.96, 1.0)),
-                    ("Side_Amber_Gold", (0.98, 0.74, 0.12, 1.0)),
-                    ("Base_Obsidian", (0.12, 0.13, 0.16, 1.0))
+                    ("Face_Graphite", (0.22, 0.24, 0.28, 1.0), 0.1, 0.35),
+                    ("Face_Terracotta", (0.75, 0.32, 0.18, 1.0), 0.05, 0.45),
+                    ("Face_Cobalt", (0.18, 0.35, 0.65, 1.0), 0.15, 0.3),
+                    ("Face_BrushedSteel", (0.82, 0.84, 0.86, 1.0), 0.9, 0.22),
+                    ("Base_Charcoal", (0.15, 0.16, 0.18, 1.0), 0.3, 0.4)
                 ]
 
-                for name, col in color_palette:
+                for name, col, met, rough in color_palette:
                     mat = bpy.data.materials.new(name=name)
                     mat.use_nodes = True
                     bsdf = mat.node_tree.nodes.get("Principled BSDF")
                     if bsdf:
                         bsdf.inputs["Base Color"].default_value = col
-                        bsdf.inputs["Roughness"].default_value = 0.25
-                        bsdf.inputs["Metallic"].default_value = 0.15
+                        bsdf.inputs["Roughness"].default_value = rough
+                        bsdf.inputs["Metallic"].default_value = met
                     pyramid.data.materials.append(mat)
 
                 mesh = pyramid.data
@@ -280,7 +286,8 @@ public class GoogleGeminiClient {
                 """.formatted(format, exportCmd);
         }
 
-        if ("cad_model".equalsIgnoreCase(toolType) || lowerPrompt.contains("gear") || lowerPrompt.contains("flange") || lowerPrompt.contains("mechanical")) {
+        // 2. Turbine / Mechanical / CAD Flange / Gear
+        if ("cad_model".equalsIgnoreCase(toolType) || lowerPrompt.contains("turbine") || lowerPrompt.contains("gear") || lowerPrompt.contains("flange") || lowerPrompt.contains("mechanical")) {
             return """
                 import bpy
                 import sys
@@ -292,51 +299,62 @@ public class GoogleGeminiClient {
                 argv = sys.argv
                 output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
 
-                bpy.ops.mesh.primitive_cylinder_add(radius=2.0, depth=0.4, location=(0, 0, 0.2))
+                # Base flange ring
+                bpy.ops.mesh.primitive_cylinder_add(radius=2.2, depth=0.45, location=(0, 0, 0.225))
                 base = bpy.context.active_object
-                base.name = "Flange_Base"
+                base.name = "Turbine_Base_Flange"
 
-                bpy.ops.mesh.primitive_cylinder_add(radius=0.9, depth=2.4, location=(0, 0, 1.4))
-                shaft = bpy.context.active_object
-                shaft.name = "Center_Shaft"
+                # Central housing
+                bpy.ops.mesh.primitive_cylinder_add(radius=1.3, depth=2.6, location=(0, 0, 1.5))
+                housing = bpy.context.active_object
+                housing.name = "Center_Housing"
 
-                mod_union = base.modifiers.new(name="UnionShaft", type='BOOLEAN')
-                mod_union.operation = 'UNION'
-                mod_union.object = shaft
+                # Union
+                mod_u = base.modifiers.new(name="UnionHousing", type='BOOLEAN')
+                mod_u.operation = 'UNION'
+                mod_u.object = housing
                 bpy.context.view_layer.objects.active = base
-                bpy.ops.object.modifier_apply(modifier="UnionShaft")
-                bpy.data.objects.remove(shaft, do_unlink=True)
+                bpy.ops.object.modifier_apply(modifier="UnionHousing")
+                bpy.data.objects.remove(housing, do_unlink=True)
 
-                bpy.ops.mesh.primitive_cylinder_add(radius=0.45, depth=4.0, location=(0, 0, 1.4))
-                hole = bpy.context.active_object
-                mod_bore = base.modifiers.new(name="BoreHole", type='BOOLEAN')
-                mod_bore.operation = 'DIFFERENCE'
-                mod_bore.object = hole
+                # Bore hole
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.75, depth=4.0, location=(0, 0, 1.5))
+                bore = bpy.context.active_object
+                mod_b = base.modifiers.new(name="CenterBore", type='BOOLEAN')
+                mod_b.operation = 'DIFFERENCE'
+                mod_b.object = bore
                 bpy.context.view_layer.objects.active = base
-                bpy.ops.object.modifier_apply(modifier="BoreHole")
-                bpy.data.objects.remove(hole, do_unlink=True)
+                bpy.ops.object.modifier_apply(modifier="CenterBore")
+                bpy.data.objects.remove(bore, do_unlink=True)
 
-                bolt_count = 6
-                bolt_dist = 1.5
+                # Bolt clearance circle
+                bolt_count = 8
+                bolt_radius = 1.8
                 for i in range(bolt_count):
                     ang = (2 * math.pi / bolt_count) * i
-                    bx = bolt_dist * math.cos(ang)
-                    by = bolt_dist * math.sin(ang)
-                    bpy.ops.mesh.primitive_cylinder_add(radius=0.15, depth=1.0, location=(bx, by, 0.2))
-                    bhole = bpy.context.active_object
+                    bx = bolt_radius * math.cos(ang)
+                    by = bolt_radius * math.sin(ang)
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.15, depth=1.2, location=(bx, by, 0.225))
+                    bolt = bpy.context.active_object
                     mod = base.modifiers.new(name=f"Bolt_{i}", type='BOOLEAN')
                     mod.operation = 'DIFFERENCE'
-                    mod.object = bhole
+                    mod.object = bolt
                     bpy.context.view_layer.objects.active = base
                     bpy.ops.object.modifier_apply(modifier=f"Bolt_{i}")
-                    bpy.data.objects.remove(bhole, do_unlink=True)
+                    bpy.data.objects.remove(bolt, do_unlink=True)
 
-                mat = bpy.data.materials.new(name="CAD_Precision_Steel")
+                # Precision Bevel Chamfer
+                bev = base.modifiers.new(name="PrecisionBevel", type='BEVEL')
+                bev.width = 0.04
+                bev.segments = 2
+
+                # Material - Titanium / Precision Machined Steel
+                mat = bpy.data.materials.new(name="Machined_Titanium")
                 mat.use_nodes = True
                 bsdf = mat.node_tree.nodes.get("Principled BSDF")
                 if bsdf:
-                    bsdf.inputs["Base Color"].default_value = (0.78, 0.80, 0.84, 1.0)
-                    bsdf.inputs["Metallic"].default_value = 0.92
+                    bsdf.inputs["Base Color"].default_value = (0.78, 0.80, 0.83, 1.0)
+                    bsdf.inputs["Metallic"].default_value = 0.94
                     bsdf.inputs["Roughness"].default_value = 0.22
                 base.data.materials.append(mat)
 
@@ -344,6 +362,7 @@ public class GoogleGeminiClient {
                 """.formatted(format, exportCmd);
         }
 
+        // 3. Spheres / Geodesic Orbs
         if (lowerPrompt.contains("sphere") || lowerPrompt.contains("orb") || lowerPrompt.contains("planet") || lowerPrompt.contains("ball")) {
             return """
                 import bpy
@@ -359,19 +378,27 @@ public class GoogleGeminiClient {
                 sphere = bpy.context.active_object
                 sphere.name = "Studio_Sphere"
 
-                mat = bpy.data.materials.new(name="Iridescent_Glass")
+                bev = sphere.modifiers.new(name="Subsurf", type='SUBSURF')
+                bev.levels = 1
+
+                mat = bpy.data.materials.new(name="Frosted_Polymer")
                 mat.use_nodes = True
                 bsdf = mat.node_tree.nodes.get("Principled BSDF")
                 if bsdf:
-                    bsdf.inputs["Base Color"].default_value = (0.2, 0.6, 0.95, 1.0)
-                    bsdf.inputs["Metallic"].default_value = 0.3
-                    bsdf.inputs["Roughness"].default_value = 0.1
+                    bsdf.inputs["Base Color"].default_value = (0.85, 0.88, 0.92, 1.0)
+                    bsdf.inputs["Metallic"].default_value = 0.1
+                    bsdf.inputs["Roughness"].default_value = 0.15
+                    try:
+                        bsdf.inputs["Transmission Weight"].default_value = 0.85
+                    except KeyError:
+                        pass
                 sphere.data.materials.append(mat)
 
                 %s
                 """.formatted(format, exportCmd);
         }
 
+        // 4. Default: Precision Chamfered Workstation Crate
         return """
             import bpy
             import sys
@@ -384,36 +411,34 @@ public class GoogleGeminiClient {
 
             bpy.ops.mesh.primitive_cube_add(size=2.0, location=(0, 0, 1.0))
             box = bpy.context.active_object
-            box.name = "Studio_Crate"
+            box.name = "Workstation_Module"
 
-            bevel = box.modifiers.new(name="Bevel", type='BEVEL')
-            bevel.width = 0.08
-            bevel.segments = 3
+            bev = box.modifiers.new(name="Bevel", type='BEVEL')
+            bev.width = 0.08
+            bev.segments = 3
 
-            bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=0.45, location=(0, 0, 2.35))
-            core = bpy.context.active_object
-            core.name = "Energy_Core"
-
-            mat_box = bpy.data.materials.new(name="Slate_Armor")
+            mat_box = bpy.data.materials.new(name="Industrial_Graphite")
             mat_box.use_nodes = True
             bsdf_box = mat_box.node_tree.nodes.get("Principled BSDF")
             if bsdf_box:
-                bsdf_box.inputs["Base Color"].default_value = (0.16, 0.18, 0.22, 1.0)
-                bsdf_box.inputs["Metallic"].default_value = 0.8
-                bsdf_box.inputs["Roughness"].default_value = 0.3
+                bsdf_box.inputs["Base Color"].default_value = (0.22, 0.23, 0.26, 1.0)
+                bsdf_box.inputs["Metallic"].default_value = 0.75
+                bsdf_box.inputs["Roughness"].default_value = 0.32
             box.data.materials.append(mat_box)
 
-            mat_core = bpy.data.materials.new(name="Core_Cyan_Emission")
-            mat_core.use_nodes = True
-            bsdf_core = mat_core.node_tree.nodes.get("Principled BSDF")
-            if bsdf_core:
-                bsdf_core.inputs["Base Color"].default_value = (0.1, 0.8, 0.9, 1.0)
-                try:
-                    bsdf_core.inputs["Emission Color"].default_value = (0.1, 0.8, 0.9, 1.0)
-                    bsdf_core.inputs["Emission Strength"].default_value = 3.5
-                except KeyError:
-                    pass
-            core.data.materials.append(mat_core)
+            # Safety orange accent bezel
+            bpy.ops.mesh.primitive_cylinder_add(radius=0.5, depth=0.15, location=(0, 0, 2.05))
+            bezel = bpy.context.active_object
+            bezel.name = "Accent_Collar"
+
+            mat_bezel = bpy.data.materials.new(name="Safety_Orange")
+            mat_bezel.use_nodes = True
+            bsdf_b = mat_bezel.node_tree.nodes.get("Principled BSDF")
+            if bsdf_b:
+                bsdf_b.inputs["Base Color"].default_value = (0.92, 0.35, 0.05, 1.0)
+                bsdf_b.inputs["Metallic"].default_value = 0.1
+                bsdf_b.inputs["Roughness"].default_value = 0.4
+            bezel.data.materials.append(mat_bezel)
 
             %s
             """.formatted(format, exportCmd);

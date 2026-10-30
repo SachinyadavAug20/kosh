@@ -2,63 +2,49 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 
-export type ThemeId =
-  | "phosphor-hacker"
-  | "blueprint-cyan"
-  | "amber-monolith"
-  | "blender-dark";
+export type ThemeId = "cad-dark" | "blender-studio" | "titanium-slate" | "cad-light";
 
 export interface ThemeConfig {
   id: ThemeId;
   name: string;
   badge: string;
-  role: string;
   viewportBg: number;
   gridMajor: number;
   gridMinor: number;
-  accentHex: string;
 }
 
 export const THEMES: Record<ThemeId, ThemeConfig> = {
-  "phosphor-hacker": {
-    id: "phosphor-hacker",
-    name: "Phosphor Hacker",
-    badge: "CRT GREEN",
-    role: "Classic CRT Terminal",
-    viewportBg: 0x050507,
-    gridMajor: 0x27272a,
-    gridMinor: 0x18181b,
-    accentHex: "#22c55e",
+  "cad-dark": {
+    id: "cad-dark",
+    name: "CAD Dark (Zinc)",
+    badge: "WORKSTATION",
+    viewportBg: 0x141416,
+    gridMajor: 0x3f3f46,
+    gridMinor: 0x27272a,
   },
-  "blueprint-cyan": {
-    id: "blueprint-cyan",
-    name: "Monochromatic Blueprint",
-    badge: "CAD BLUE",
-    role: "Clean Engineering Tool",
-    viewportBg: 0x060709,
-    gridMajor: 0x1e242c,
-    gridMinor: 0x12161c,
-    accentHex: "#06b6d4",
-  },
-  "amber-monolith": {
-    id: "amber-monolith",
-    name: "Amber Monolith",
-    badge: "AMBER CRT",
-    role: "Industrial CRT",
-    viewportBg: 0x070605,
-    gridMajor: 0x292524,
-    gridMinor: 0x1c1917,
-    accentHex: "#f59e0b",
-  },
-  "blender-dark": {
-    id: "blender-dark",
-    name: "Blender Studio Dark",
+  "blender-studio": {
+    id: "blender-studio",
+    name: "Blender Studio",
     badge: "BLENDER 5.x",
-    role: "Studio DCC Interface",
-    viewportBg: 0x202020,
-    gridMajor: 0x3d3d42,
-    gridMinor: 0x2e2e33,
-    accentHex: "#e68523",
+    viewportBg: 0x1e1e20,
+    gridMajor: 0x383838,
+    gridMinor: 0x282828,
+  },
+  "titanium-slate": {
+    id: "titanium-slate",
+    name: "Titanium Slate",
+    badge: "ENGINEERING",
+    viewportBg: 0x0f1117,
+    gridMajor: 0x2d3748,
+    gridMinor: 0x1a202c,
+  },
+  "cad-light": {
+    id: "cad-light",
+    name: "Precision Light",
+    badge: "DAYLIGHT",
+    viewportBg: 0xe5e7eb,
+    gridMajor: 0x9ca3af,
+    gridMinor: 0xd1d5db,
   },
 };
 
@@ -69,13 +55,13 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: "phosphor-hacker",
-  config: THEMES["phosphor-hacker"],
+  theme: "cad-dark",
+  config: THEMES["cad-dark"],
   setTheme: () => {},
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeId>("phosphor-hacker");
+  const [theme, setThemeState] = useState<ThemeId>("cad-dark");
 
   useEffect(() => {
     const saved = localStorage.getItem("kosh_theme") as ThemeId;
@@ -83,7 +69,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setThemeState(saved);
       document.documentElement.setAttribute("data-theme", saved);
     } else {
-      document.documentElement.setAttribute("data-theme", "phosphor-hacker");
+      document.documentElement.setAttribute("data-theme", "cad-dark");
     }
   }, []);
 

@@ -7,7 +7,6 @@ import { CodeInspector } from "@/components/CodeInspector";
 import { Viewport3D } from "@/components/Viewport3D";
 import { useLocalStorageToken } from "@/hooks/useLocalStorageToken";
 import { useMcpClient } from "@/hooks/useMcpClient";
-import { Terminal, Code, Cpu } from "lucide-react";
 
 export default function Home() {
   const [mounted, setMounted] = useState(false);
@@ -24,7 +23,9 @@ export default function Home() {
     apiBase,
   } = useMcpClient();
 
-  const [leftTab, setLeftTab] = useState<"console" | "code">("console");
+  // Workstation Panel State (Left generator open 300px, Right inspector collapsible)
+  const [isLeftOpen, setIsLeftOpen] = useState(true);
+  const [isRightOpen, setIsRightOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -42,8 +43,8 @@ export default function Home() {
   };
 
   return (
-    <main className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)] select-none font-mono">
-      {/* 1. Header with System Health, BYOK Credentials & Themes */}
+    <main className="flex flex-col h-screen w-screen overflow-hidden bg-[#18181b] text-[#f4f4f5] select-none font-sans">
+      {/* 1. Sleek Workstation Menu / Header */}
       <TerminalHeader
         health={health}
         isHealthChecking={isHealthChecking}
@@ -51,72 +52,30 @@ export default function Home() {
         token={token}
         onSaveToken={saveToken}
         onClearToken={clearToken}
+        isLeftOpen={isLeftOpen}
+        onToggleLeft={() => setIsLeftOpen(!isLeftOpen)}
+        isRightOpen={isRightOpen}
+        onToggleRight={() => setIsRightOpen(!isRightOpen)}
       />
 
-      {/* 2. Main Studio Split Layout */}
-      <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
-        {/* Left Pane (50%): MCP Studio, Logs & Code Inspector */}
-        <div className="w-full md:w-1/2 flex flex-col min-h-0 border-r border-[var(--border)] bg-[var(--background)]">
-          {/* Sub-nav switcher for Console vs Code */}
-          <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--bg-header)] px-3 py-1.5 text-xs">
-            <div className="flex items-center space-x-1">
-              <button
-                onClick={() => setLeftTab("console")}
-                className={`flex items-center space-x-1.5 px-3 py-1 border transition-colors ${
-                  leftTab === "console"
-                    ? "bg-[var(--background)] border-[var(--accent)] text-[var(--accent)] font-semibold"
-                    : "border-transparent text-[var(--text-muted)] hover:text-[var(--foreground)]"
-                }`}
-              >
-                <Terminal className="w-3.5 h-3.5" />
-                <span>COMMAND_CONSOLE</span>
-              </button>
+      {/* 2. Main Workstation 3-Panel DCC Layout */}
+      <div className="flex-1 flex min-h-0 min-w-0 overflow-hidden relative">
+        {/* Left Panel: Compact Tool Parameters & Generator (300px, collapsible) */}
+        {isLeftOpen && (
+          <aside className="w-[300px] shrink-0 h-full overflow-hidden flex flex-col z-20">
+            <CommandConsole
+              tools={tools}
+              isLoading={isLoading}
+              onExecute={handleExecute}
+              lastResult={lastResult}
+              error={error}
+              hasToken={!!token}
+            />
+          </aside>
+        )}
 
-              <button
-                onClick={() => setLeftTab("code")}
-                className={`flex items-center space-x-1.5 px-3 py-1 border transition-colors ${
-                  leftTab === "code"
-                    ? "bg-[var(--background)] border-[var(--accent)] text-[var(--accent)] font-semibold"
-                    : "border-transparent text-[var(--text-muted)] hover:text-[var(--foreground)]"
-                }`}
-              >
-                <Code className="w-3.5 h-3.5" />
-                <span>CODE_INSPECTOR</span>
-                {lastResult?.script && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
-                )}
-              </button>
-            </div>
-
-            <div className="hidden sm:flex items-center space-x-2 text-[10px] text-[var(--text-muted)]">
-              <Cpu className="w-3 h-3 text-[var(--accent)]" />
-              <span>PID: MCP-8080</span>
-            </div>
-          </div>
-
-          {/* Active Left View */}
-          <div className="flex-1 min-h-0">
-            {leftTab === "console" ? (
-              <CommandConsole
-                tools={tools}
-                isLoading={isLoading}
-                onExecute={handleExecute}
-                lastResult={lastResult}
-                error={error}
-                hasToken={!!token}
-              />
-            ) : (
-              <CodeInspector
-                script={lastResult?.script || null}
-                onExecuteScript={handleExecuteRawScript}
-                isLoading={isLoading}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Right Pane (50%): Three.js Blender 3D Viewport */}
-        <div className="viewport-container w-full md:w-1/2 flex flex-col min-h-0">
+        {/* Center Panel: 3D Viewport DOMINATES THE ENTIRE SCREEN */}
+        <section className="flex-1 min-w-0 h-full flex flex-col bg-[#141416] relative">
           {mounted ? (
             <Viewport3D
               assetUrl={lastResult?.assetUrl}
@@ -125,12 +84,25 @@ export default function Home() {
               apiBase={apiBase}
             />
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center bg-[var(--background)] text-[var(--text-muted)] font-mono text-xs">
-              <div className="w-6 h-6 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin mb-3" />
-              <span>INITIALIZING THREE.JS WEBGL CONTEXT...</span>
+            <div className="w-full h-full flex flex-col items-center justify-center bg-[#141416] text-[#71717a] font-mono text-xs">
+              <div className="w-5 h-5 border border-[#52525b] border-t-transparent rounded-full animate-spin mb-2" />
+              <span>INITIALIZING BLENDER THREE.JS CONTEXT...</span>
             </div>
           )}
-        </div>
+        </section>
+
+        {/* Right Panel: Scene Outliner, Python Script & Build Logs (320px, collapsible) */}
+        {isRightOpen && (
+          <aside className="w-[320px] shrink-0 h-full overflow-hidden flex flex-col z-20">
+            <CodeInspector
+              script={lastResult?.script || null}
+              onExecuteScript={handleExecuteRawScript}
+              isLoading={isLoading}
+              stdout={lastResult?.stdout || null}
+              stderr={lastResult?.stderr || null}
+            />
+          </aside>
+        )}
       </div>
     </main>
   );
