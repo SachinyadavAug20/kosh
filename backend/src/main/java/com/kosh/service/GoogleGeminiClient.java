@@ -26,10 +26,10 @@ public class GoogleGeminiClient {
     @Value("${google.gemini.api.base-url:https://generativelanguage.googleapis.com/v1beta}")
     private String geminiBaseUrl;
 
-    @Value("${google.gemini.model:gemini-1.5-flash}")
+    @Value("${google.gemini.model:gemini-2.5-flash}")
     private String primaryModel;
 
-    @Value("${google.gemini.fallback-model:gemini-2.0-flash}")
+    @Value("${google.gemini.fallback-model:gemini-flash-latest}")
     private String fallbackModel;
 
     @Value("${kosh.gemini.api-key:}")
@@ -77,12 +77,19 @@ public class GoogleGeminiClient {
         // Try primary model first (gemini-2.5-flash), fallback if unavailable
         try {
             return callGeminiGenerateContent(prompt, systemPrompt, primaryModel, trimmedKey);
-        } catch (WebClientResponseException e) {
-            if ((e.getStatusCode().value() == 404 || e.getStatusCode().value() == 400) && !primaryModel.equals(fallbackModel)) {
-                log.warn("Model {} failed with {}, retrying with fallback model: {}", primaryModel, e.getStatusCode(), fallbackModel);
-                return callGeminiGenerateContent(prompt, systemPrompt, fallbackModel, trimmedKey);
+        } catch (Exception e) {
+            if (!primaryModel.equals(fallbackModel)) {
+                log.warn("Model {} failed ({}), retrying with fallback model: {}", primaryModel, e.getMessage(), fallbackModel);
+                try {
+                    return callGeminiGenerateContent(prompt, systemPrompt, fallbackModel, trimmedKey);
+                } catch (Exception fallbackErr) {
+                    log.error("Fallback model {} also failed: {}", fallbackModel, fallbackErr.getMessage());
+                }
             }
-            throw e;
+            if (e instanceof RuntimeException re) {
+                throw re;
+            }
+            throw new RuntimeException(e);
         }
     }
 
