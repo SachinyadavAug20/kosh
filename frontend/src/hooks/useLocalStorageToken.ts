@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 
-const STORAGE_KEY = "kosh_bharatcode_token";
+const STORAGE_KEY = "kosh_gemini_token";
+const LEGACY_STORAGE_KEY = "kosh_bharatcode_token";
 const DEFAULT_ENV_KEY = process.env.NEXT_PUBLIC_DEFAULT_GEMINI_KEY || "";
 
 export function useLocalStorageToken() {
@@ -11,14 +12,17 @@ export function useLocalStorageToken() {
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      let stored = localStorage.getItem(STORAGE_KEY);
+      if (!stored) {
+        stored = localStorage.getItem(LEGACY_STORAGE_KEY);
+      }
       if (stored) {
         setTokenState(stored);
       } else if (DEFAULT_ENV_KEY) {
         setTokenState(DEFAULT_ENV_KEY);
       }
     } catch (e) {
-      console.warn("Could not read BharatCode token from localStorage", e);
+      console.warn("Could not read Gemini token from localStorage", e);
     } finally {
       setIsLoaded(true);
     }
@@ -31,6 +35,7 @@ export function useLocalStorageToken() {
         localStorage.setItem(STORAGE_KEY, newToken.trim());
       } else {
         localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(LEGACY_STORAGE_KEY);
       }
     } catch (e) {
       console.error("Could not write token to localStorage", e);
@@ -41,6 +46,7 @@ export function useLocalStorageToken() {
     setTokenState("");
     try {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
     } catch (e) {
       console.error("Could not remove token from localStorage", e);
     }

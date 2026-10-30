@@ -167,8 +167,8 @@ export function CommandConsole({
 
         <div className="flex items-center justify-between">
           <div className="text-[11px] text-[#71717a]">
-            Protocol: <span className="text-[#f4f4f5]">JSON-RPC 2.0</span> / Engine:{" "}
-            <span className="text-[#f4f4f5]">Blender 5.x Headless</span>
+            AI: <span className="text-[#22c55e]">Gemini 2.5 Flash</span> / Engine:{" "}
+            <span className="text-[#f4f4f5]">Blender 5.2 LTS</span>
           </div>
 
           <button

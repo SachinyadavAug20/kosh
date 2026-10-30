@@ -22,7 +22,6 @@ public class GoogleGeminiClient {
     private final WebClient.Builder webClientBuilder;
     private final ScriptSanitizer scriptSanitizer;
     private final ObjectMapper objectMapper;
-    private final BharatCodeClient fallbackDemoClient;
 
     @Value("${google.gemini.api.base-url:https://generativelanguage.googleapis.com/v1beta}")
     private String geminiBaseUrl;
@@ -33,18 +32,19 @@ public class GoogleGeminiClient {
     @Value("${google.gemini.fallback-model:gemini-1.5-flash}")
     private String fallbackModel;
 
+    @Value("${kosh.gemini.api-key:}")
+    private String defaultApiKey;
+
     public GoogleGeminiClient(WebClient.Builder webClientBuilder,
                               ScriptSanitizer scriptSanitizer,
-                              ObjectMapper objectMapper,
-                              BharatCodeClient fallbackDemoClient) {
+                              ObjectMapper objectMapper) {
         this.webClientBuilder = webClientBuilder;
         this.scriptSanitizer = scriptSanitizer;
         this.objectMapper = objectMapper;
-        this.fallbackDemoClient = fallbackDemoClient;
     }
 
     /**
-     * Calls Google Gemini API to generate a headless Blender Python script using a user-provided Google API key.
+     * Calls Google Gemini API to generate a headless Blender Python script using a Google API key.
      *
      * @param prompt User prompt describing the 3D mesh or CAD model
      * @param toolType Tool identifier ("blender_mesh" or "cad_model")
@@ -53,26 +53,33 @@ public class GoogleGeminiClient {
      * @return Clean Python script
      */
     public String generateBlenderScript(String prompt, String toolType, String apiKey, String exportFormat) {
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalArgumentException("Google API key is required. Pass via X-Google-Key or Authorization header.");
+        String activeKey = (apiKey != null && !apiKey.isBlank()) ? apiKey.trim() : defaultApiKey;
+        if (activeKey == null || activeKey.isBlank()) {
+            activeKey = System.getenv("GEMINI_API_KEY");
         }
 
-        String trimmedKey = apiKey.trim().replaceFirst("(?i)^Bearer\\s+", "");
+        if (activeKey == null || activeKey.isBlank()) {
+            throw new IllegalArgumentException(
+                "Google Gemini API key is required. Please paste your Google API key (from https://aistudio.google.com/app/apikey) in the top bar, set GEMINI_API_KEY in .env, or use 'demo' mode."
+            );
+        }
+
+        String trimmedKey = activeKey.trim().replaceFirst("(?i)^Bearer\\s+", "");
 
         // Demo / offline bypass
         if ("demo".equalsIgnoreCase(trimmedKey) || "mock".equalsIgnoreCase(trimmedKey) || "offline".equalsIgnoreCase(trimmedKey)) {
             log.info("Generating procedural fallback script in demo mode for prompt: {}", prompt);
-            return fallbackDemoClient.generateDemoScript(prompt, toolType, exportFormat);
+            return generateDemoScript(prompt, toolType, exportFormat);
         }
 
         String systemPrompt = buildSystemPrompt(toolType, exportFormat);
 
-        // Try primary model first, fallback if unavailable
+        // Try primary model first (gemini-2.5-flash), fallback if unavailable
         try {
             return callGeminiGenerateContent(prompt, systemPrompt, primaryModel, trimmedKey);
         } catch (WebClientResponseException e) {
-            if (e.getStatusCode().value() == 404 && !primaryModel.equals(fallbackModel)) {
-                log.warn("Model {} returned 404, retrying with fallback model: {}", primaryModel, fallbackModel);
+            if ((e.getStatusCode().value() == 404 || e.getStatusCode().value() == 400) && !primaryModel.equals(fallbackModel)) {
+                log.warn("Model {} failed with {}, retrying with fallback model: {}", primaryModel, e.getStatusCode(), fallbackModel);
                 return callGeminiGenerateContent(prompt, systemPrompt, fallbackModel, trimmedKey);
             }
             throw e;
@@ -109,7 +116,7 @@ public class GoogleGeminiClient {
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
-                    .timeout(Duration.ofSeconds(30))
+                    .timeout(Duration.ofSeconds(35))
                     .block();
 
             JsonNode root = objectMapper.readTree(responseBody);
@@ -163,5 +170,143 @@ public class GoogleGeminiClient {
                 """;
         }
         return "bpy.ops.export_scene.gltf(filepath=output_path, export_format='GLB')";
+    }
+
+    /**
+     * Deterministic procedural fallback script generator for offline / demo mode.
+     */
+    public String generateDemoScript(String prompt, String toolType, String exportFormat) {
+        String format = (exportFormat != null && exportFormat.equalsIgnoreCase("stl")) ? "stl" : "glb";
+        String exportCmd = getExportStatement(format);
+
+        if ("cad_model".equalsIgnoreCase(toolType)) {
+            return """
+                import bpy
+                import sys
+                import math
+
+                # Clear scene
+                bpy.ops.object.select_all(action='SELECT')
+                bpy.ops.object.delete(use_global=False)
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                # Create CAD base cylinder (Flange)
+                bpy.ops.mesh.primitive_cylinder_add(radius=2.0, depth=0.4, location=(0, 0, 0.2))
+                base = bpy.context.active_object
+                base.name = "Flange_Base"
+
+                # Central shaft
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.9, depth=2.5, location=(0, 0, 1.45))
+                shaft = bpy.context.active_object
+                shaft.name = "Center_Shaft"
+
+                # Union shaft to base
+                bool_union = base.modifiers.new(name="UnionShaft", type='BOOLEAN')
+                bool_union.operation = 'UNION'
+                bool_union.object = shaft
+                bpy.context.view_layer.objects.active = base
+                bpy.ops.object.modifier_apply(modifier="UnionShaft")
+                bpy.data.objects.remove(shaft, do_unlink=True)
+
+                # Bore hole through center
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.45, depth=4.0, location=(0, 0, 1.5))
+                hole = bpy.context.active_object
+                bool_hole = base.modifiers.new(name="BoreHole", type='BOOLEAN')
+                bool_hole.operation = 'DIFFERENCE'
+                bool_hole.object = hole
+                bpy.context.view_layer.objects.active = base
+                bpy.ops.object.modifier_apply(modifier="BoreHole")
+                bpy.data.objects.remove(hole, do_unlink=True)
+
+                # Bolt circle holes
+                bolt_count = 6
+                bolt_radius = 1.5
+                for i in range(bolt_count):
+                    angle = (2 * math.pi / bolt_count) * i
+                    bx = bolt_radius * math.cos(angle)
+                    by = bolt_radius * math.sin(angle)
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.15, depth=1.0, location=(bx, by, 0.2))
+                    bolt = bpy.context.active_object
+                    mod = base.modifiers.new(name=f"BoltHole_{i}", type='BOOLEAN')
+                    mod.operation = 'DIFFERENCE'
+                    mod.object = bolt
+                    bpy.context.view_layer.objects.active = base
+                    bpy.ops.object.modifier_apply(modifier=f"BoltHole_{i}")
+                    bpy.data.objects.remove(bolt, do_unlink=True)
+
+                # Material
+                mat = bpy.data.materials.new(name="CAD_Steel")
+                mat.use_nodes = True
+                nodes = mat.node_tree.nodes
+                bsdf = nodes.get("Principled BSDF")
+                if bsdf:
+                    bsdf.inputs["Base Color"].default_value = (0.2, 0.25, 0.3, 1.0)
+                    bsdf.inputs["Metallic"].default_value = 0.95
+                    bsdf.inputs["Roughness"].default_value = 0.2
+                base.data.materials.append(mat)
+
+                # Export
+                %s
+                """.formatted(format, exportCmd);
+        }
+
+        return """
+            import bpy
+            import sys
+            import math
+
+            # Clear scene
+            bpy.ops.object.select_all(action='SELECT')
+            bpy.ops.object.delete(use_global=False)
+
+            argv = sys.argv
+            output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+            # Create main cube
+            bpy.ops.mesh.primitive_cube_add(size=2.0, location=(0, 0, 1.0))
+            box = bpy.context.active_object
+            box.name = "SciFi_Container"
+
+            # Bevel modifier
+            bevel = box.modifiers.new(name="Bevel", type='BEVEL')
+            bevel.width = 0.08
+            bevel.segments = 3
+
+            # Subdivisions
+            sub = box.modifiers.new(name="Subsurf", type='SUBSURF')
+            sub.levels = 1
+
+            # Top accent gem
+            bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=0.45, location=(0, 0, 2.35))
+            core = bpy.context.active_object
+            core.name = "Energy_Core"
+
+            # Materials
+            mat_box = bpy.data.materials.new(name="Obsidian_Metal")
+            mat_box.use_nodes = True
+            bsdf_box = mat_box.node_tree.nodes.get("Principled BSDF")
+            if bsdf_box:
+                bsdf_box.inputs["Base Color"].default_value = (0.05, 0.06, 0.08, 1.0)
+                bsdf_box.inputs["Metallic"].default_value = 0.8
+                bsdf_box.inputs["Roughness"].default_value = 0.35
+            box.data.materials.append(mat_box)
+
+            mat_core = bpy.data.materials.new(name="Phosphor_Emission")
+            mat_core.use_nodes = True
+            bsdf_core = mat_core.node_tree.nodes.get("Principled BSDF")
+            if bsdf_core:
+                bsdf_core.inputs["Base Color"].default_value = (0.1, 0.9, 0.4, 1.0)
+                try:
+                    bsdf_core.inputs["Emission Color"].default_value = (0.1, 0.9, 0.4, 1.0)
+                    bsdf_core.inputs["Emission Strength"].default_value = 4.0
+                except KeyError:
+                    pass
+            core.data.materials.append(mat_core)
+
+            # Export
+            %s
+            """.formatted(format, exportCmd);
     }
 }

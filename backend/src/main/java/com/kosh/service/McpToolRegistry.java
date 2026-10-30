@@ -15,16 +15,13 @@ import java.util.Map;
 public class McpToolRegistry {
 
     private final GoogleGeminiClient googleGeminiClient;
-    private final BharatCodeClient bharatCodeClient;
     private final BlenderExecutionService blenderExecutionService;
     private final ScriptSanitizer scriptSanitizer;
 
     public McpToolRegistry(GoogleGeminiClient googleGeminiClient,
-                           BharatCodeClient bharatCodeClient,
                            BlenderExecutionService blenderExecutionService,
                            ScriptSanitizer scriptSanitizer) {
         this.googleGeminiClient = googleGeminiClient;
-        this.bharatCodeClient = bharatCodeClient;
         this.blenderExecutionService = blenderExecutionService;
         this.scriptSanitizer = scriptSanitizer;
     }
@@ -38,7 +35,7 @@ public class McpToolRegistry {
         // 1. blender_mesh
         Map<String, Object> meshTool = new LinkedHashMap<>();
         meshTool.put("name", "blender_mesh");
-        meshTool.put("description", "Generate procedural 3D meshes and scenes in Blender using natural language prompts or raw bpy code, exporting to optimized binary GLTF (.glb).");
+        meshTool.put("description", "Generate procedural 3D meshes and scenes in Blender using Google Gemini and headless bpy code, exporting to optimized binary GLTF (.glb).");
         meshTool.put("inputSchema", Map.of(
                 "type", "object",
                 "properties", Map.of(
@@ -106,15 +103,8 @@ public class McpToolRegistry {
             log.info("Executing user-provided script for tool: {}", toolName);
             finalScript = scriptSanitizer.sanitize(rawScript);
         } else if (prompt != null && !prompt.isBlank()) {
-            // Determine whether to use Google Gemini or BharatCode based on key signature or default
-            boolean isGoogleKey = token != null && (token.startsWith("AIzaSy") || token.contains("AIza"));
-            if (isGoogleKey) {
-                log.info("Generating script from prompt using Google Gemini for tool: {}", toolName);
-                finalScript = googleGeminiClient.generateBlenderScript(prompt, toolName, token, format);
-            } else {
-                log.info("Generating script from prompt using BharatCode/OpenAI client for tool: {}", toolName);
-                finalScript = bharatCodeClient.generateBlenderScript(prompt, toolName, token, format);
-            }
+            log.info("Generating script from prompt using Google Gemini for tool: {}", toolName);
+            finalScript = googleGeminiClient.generateBlenderScript(prompt, toolName, token, format);
         } else {
             throw new IllegalArgumentException("Either 'prompt' or 'script' must be supplied in tool arguments.");
         }

@@ -44,14 +44,12 @@ export function TerminalHeader({
   const isBackendUp = !!health && health.status === "UP";
   const isBlenderReady = health?.blender?.available ?? false;
 
-  const isGoogleKey = token.startsWith("AIzaSy") || token.startsWith("AIza");
   const isDemo = token.toLowerCase() === "demo";
 
   const getKeyBadgeText = () => {
-    if (!token) return "BYOK: REQUIRED";
+    if (!token) return "GOOGLE KEY: REQUIRED";
     if (isDemo) return "KEY: DEMO (OFFLINE)";
-    if (isGoogleKey) return "KEY: GOOGLE GEMINI";
-    return "KEY: CONFIGURED";
+    return "KEY: GEMINI ACTIVE";
   };
 
   return (
@@ -64,11 +62,11 @@ export function TerminalHeader({
             <Terminal className="w-4 h-4 text-[#22c55e]" />
             <span>KOSH</span>
             <span className="text-[#3f3f46]">/</span>
-            <span className="text-[#71717a] font-normal">CREATIVE_MCP_HUB</span>
+            <span className="text-[#71717a] font-normal">BLENDER_MCP_STUDIO</span>
           </div>
 
           <span className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] bg-[#18181b] border border-[#27272a] text-[#71717a]">
-            v1.0.0-PROD
+            v2.0-PROD
           </span>
         </div>
 
@@ -103,11 +101,11 @@ export function TerminalHeader({
             />
             <span className="text-[#a1a1aa]">BLENDER:</span>
             <span className={isBlenderReady ? "text-[#f4f4f5]" : "text-[#f59e0b]"}>
-              {isBlenderReady ? "READY" : "NOT FOUND"}
+              {isBlenderReady ? "5.2 READY" : "NOT FOUND"}
             </span>
           </div>
 
-          {/* BYOK Key Drawer Toggle */}
+          {/* Google Gemini Key Drawer Toggle */}
           <button
             onClick={() => setIsKeyDrawerOpen(!isKeyDrawerOpen)}
             className={`flex items-center space-x-1.5 px-2.5 py-1 border transition-colors ${
@@ -122,15 +120,15 @@ export function TerminalHeader({
         </div>
       </div>
 
-      {/* BYOK Token Drawer */}
+      {/* Google API Key Drawer */}
       {isKeyDrawerOpen && (
         <div className="border-t border-[#27272a] bg-[#121215] px-4 py-3 text-xs">
           <form onSubmit={handleSave} className="max-w-4xl mx-auto space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-1 text-[#a1a1aa]">
               <div className="flex items-center space-x-2">
                 <Shield className="w-3.5 h-3.5 text-[#22c55e]" />
-                <span className="font-bold text-[#f4f4f5]">SESSION API CREDENTIALS (BYOK)</span>
-                <span className="text-[#71717a]">— Never stored on server; passed in session headers</span>
+                <span className="font-bold text-[#f4f4f5]">GOOGLE GEMINI API KEY (FREE)</span>
+                <span className="text-[#71717a]">— Free tier (gemini-2.5-flash), zero cost</span>
               </div>
               <div className="flex items-center space-x-3 text-[10px]">
                 <a
@@ -140,7 +138,7 @@ export function TerminalHeader({
                   className="flex items-center space-x-1 text-[#06b6d4] hover:underline"
                 >
                   <ExternalLink className="w-3 h-3" />
-                  <span>Get Free Google Gemini Key</span>
+                  <span>Get Free Key (Google AI Studio)</span>
                 </a>
                 <button
                   type="button"
@@ -148,7 +146,7 @@ export function TerminalHeader({
                   className="text-[#22c55e] hover:underline flex items-center space-x-1"
                 >
                   <Zap className="w-3 h-3" />
-                  <span>Offline Demo Mode</span>
+                  <span>Use Offline Demo Mode</span>
                 </button>
               </div>
             </div>
@@ -159,7 +157,7 @@ export function TerminalHeader({
                   type={showKey ? "text" : "password"}
                   value={inputVal}
                   onChange={(e) => setInputVal(e.target.value)}
-                  placeholder="Paste Google API Key (AIzaSy...) or BharatCode / OpenAI key"
+                  placeholder="Paste your Google Gemini API Key (e.g., AIzaSy...)"
                   className="w-full bg-[#09090b] border border-[#27272a] focus:border-[#22c55e] focus:outline-none px-3 py-1.5 text-xs text-[#f4f4f5] font-mono pr-8"
                 />
                 <button
@@ -200,11 +198,10 @@ export function TerminalHeader({
               </button>
             </div>
 
-            {inputVal.startsWith("AIzaSy") && (
-              <div className="text-[10px] text-[#22c55e] flex items-center space-x-1">
-                <span>✓ Detected Google Gemini API Key. Free tier enabled with gemini-2.5-flash.</span>
-              </div>
-            )}
+            <div className="text-[10px] text-[#71717a] flex items-center justify-between">
+              <span>Key is stored only in your browser localStorage; never saved on the server.</span>
+              <span className="text-[#22c55e]">Default Model: gemini-2.5-flash</span>
+            </div>
           </form>
         </div>
       )}

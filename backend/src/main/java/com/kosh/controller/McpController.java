@@ -69,8 +69,8 @@ public class McpController {
         if (activeToken == null || activeToken.isBlank()) {
             if (defaultGeminiApiKey != null && !defaultGeminiApiKey.isBlank()) {
                 activeToken = defaultGeminiApiKey.trim();
-            } else if (defaultBharatCodeApiKey != null && !defaultBharatCodeApiKey.isBlank()) {
-                activeToken = defaultBharatCodeApiKey.trim();
+            } else if (System.getenv("GEMINI_API_KEY") != null && !System.getenv("GEMINI_API_KEY").isBlank()) {
+                activeToken = System.getenv("GEMINI_API_KEY").trim();
             }
         }
 
@@ -109,12 +109,12 @@ public class McpController {
                     // Check if token is required (when prompt is provided without raw script)
                     boolean hasRawScript = arguments.containsKey("script") && arguments.get("script") != null && !arguments.get("script").toString().isBlank();
                     if (!hasRawScript && (activeToken == null || activeToken.isBlank())) {
-                        log.warn("Unauthorized tools/call: Missing API key");
+                        log.warn("Unauthorized tools/call: Missing Google Gemini API key");
                         return ResponseEntity.status(401).body(McpRpcResponse.error(
                                 id,
                                 -32001,
-                                "Unauthorized: Missing API key. Provide your Google Gemini API key or BharatCode token via headers ('X-Google-Key', 'X-BharatCode-Token', or 'Authorization: Bearer <key>') or the UI key drawer.",
-                                Map.of("supportedProviders", List.of("Google Gemini (Free via AI Studio)", "BharatCode", "OpenAI"))
+                                "Unauthorized: Missing Google Gemini API key. Provide header 'X-Google-Key', set GEMINI_API_KEY in .env, or use the UI key drawer.",
+                                Map.of("provider", "Google Gemini (Free tier from https://aistudio.google.com/app/apikey)")
                         ));
                     }
 
