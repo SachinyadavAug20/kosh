@@ -1,0 +1,139 @@
+"use client";
+
+import React, { useState } from "react";
+import dynamic from "next/dynamic";
+import { TerminalHeader } from "@/components/TerminalHeader";
+import { CommandConsole } from "@/components/CommandConsole";
+import { CodeInspector } from "@/components/CodeInspector";
+import { useLocalStorageToken } from "@/hooks/useLocalStorageToken";
+import { useMcpClient } from "@/hooks/useMcpClient";
+import { Terminal, Code, Cpu } from "lucide-react";
+
+// Dynamically import Viewport3D with SSR disabled to guarantee clean WebGL mounting
+const Viewport3D = dynamic(
+  () => import("@/components/Viewport3D").then((mod) => mod.Viewport3D),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-[#09090b] text-[#71717a] font-mono text-xs">
+        <div className="w-6 h-6 border-2 border-[#22c55e] border-t-transparent rounded-full animate-spin mb-3" />
+        <span>INITIALIZING THREE.JS WEBGL CONTEXT...</span>
+      </div>
+    ),
+  }
+);
+
+export default function Home() {
+  const { token, saveToken, clearToken } = useLocalStorageToken();
+  const {
+    health,
+    tools,
+    isLoading,
+    isHealthChecking,
+    error,
+    lastResult,
+    checkHealth,
+    executeTool,
+    apiBase,
+  } = useMcpClient();
+
+  const [leftTab, setLeftTab] = useState<"console" | "code">("console");
+
+  const handleExecute = (
+    toolName: string,
+    args: { prompt?: string; script?: string; format: "glb" | "stl" }
+  ) => {
+    executeTool(toolName, args, token);
+  };
+
+  const handleExecuteRawScript = (rawScript: string) => {
+    executeTool("blender_mesh", { script: rawScript, format: "glb" }, token);
+  };
+
+  return (
+    <main className="flex flex-col h-screen w-screen overflow-hidden bg-[#09090b] text-[#f4f4f5] select-none font-mono">
+      {/* 1. Header with System Health & BYOK Credentials */}
+      <TerminalHeader
+        health={health}
+        isHealthChecking={isHealthChecking}
+        onRefreshHealth={checkHealth}
+        token={token}
+        onSaveToken={saveToken}
+        onClearToken={clearToken}
+      />
+
+      {/* 2. Main Studio Split Layout */}
+      <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
+        {/* Left Pane (50%): MCP Studio, Logs & Code Inspector */}
+        <div className="w-full md:w-1/2 flex flex-col min-h-0 border-r border-[#27272a] bg-[#09090b]">
+          {/* Sub-nav switcher for Console vs Code */}
+          <div className="flex items-center justify-between border-b border-[#27272a] bg-[#121215] px-3 py-1.5 text-xs">
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={() => setLeftTab("console")}
+                className={`flex items-center space-x-1.5 px-3 py-1 border transition-colors ${
+                  leftTab === "console"
+                    ? "bg-[#09090b] border-[#22c55e] text-[#22c55e] font-semibold"
+                    : "border-transparent text-[#71717a] hover:text-[#f4f4f5]"
+                }`}
+              >
+                <Terminal className="w-3.5 h-3.5" />
+                <span>COMMAND_CONSOLE</span>
+              </button>
+
+              <button
+                onClick={() => setLeftTab("code")}
+                className={`flex items-center space-x-1.5 px-3 py-1 border transition-colors ${
+                  leftTab === "code"
+                    ? "bg-[#09090b] border-[#22c55e] text-[#22c55e] font-semibold"
+                    : "border-transparent text-[#71717a] hover:text-[#f4f4f5]"
+                }`}
+              >
+                <Code className="w-3.5 h-3.5" />
+                <span>CODE_INSPECTOR</span>
+                {lastResult?.script && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
+                )}
+              </button>
+            </div>
+
+            <div className="hidden sm:flex items-center space-x-2 text-[10px] text-[#71717a]">
+              <Cpu className="w-3 h-3 text-[#22c55e]" />
+              <span>PID: MCP-8080</span>
+            </div>
+          </div>
+
+          {/* Active Left View */}
+          <div className="flex-1 min-h-0">
+            {leftTab === "console" ? (
+              <CommandConsole
+                tools={tools}
+                isLoading={isLoading}
+                onExecute={handleExecute}
+                lastResult={lastResult}
+                error={error}
+                hasToken={!!token}
+              />
+            ) : (
+              <CodeInspector
+                script={lastResult?.script || null}
+                onExecuteScript={handleExecuteRawScript}
+                isLoading={isLoading}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Right Pane (50%): Three.js Monospace 3D Viewport */}
+        <div className="w-full md:w-1/2 flex flex-col min-h-0 bg-[#09090b]">
+          <Viewport3D
+            assetUrl={lastResult?.assetUrl}
+            assetName={lastResult?.assetName}
+            format={lastResult?.format || "glb"}
+            apiBase={apiBase}
+          />
+        </div>
+      </div>
+    </main>
+  );
+}
