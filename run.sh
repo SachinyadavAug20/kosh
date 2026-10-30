@@ -9,6 +9,13 @@ YELLOW="\033[33m"
 RED="\033[31m"
 ZINC="\033[90m"
 
+# Load environment configuration from .env if present
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
+
 echo -e "${BOLD}${GREEN}====================================================${RESET}"
 echo -e "${BOLD}${GREEN}  KOSH // Minimalist Creative MCP Hub Bootloader    ${RESET}"
 echo -e "${BOLD}${GREEN}====================================================${RESET}"

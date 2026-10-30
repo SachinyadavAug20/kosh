@@ -22,6 +22,12 @@ public class McpController {
 
     private final McpToolRegistry mcpToolRegistry;
 
+    @org.springframework.beans.factory.annotation.Value("${kosh.gemini.api-key:}")
+    private String defaultGeminiApiKey;
+
+    @org.springframework.beans.factory.annotation.Value("${kosh.bharatcode.api-key:}")
+    private String defaultBharatCodeApiKey;
+
     public McpController(McpToolRegistry mcpToolRegistry) {
         this.mcpToolRegistry = mcpToolRegistry;
     }
@@ -46,7 +52,7 @@ public class McpController {
             );
         }
 
-        // Determine user API token (BYOK: Google Gemini or BharatCode)
+        // Determine user API token (BYOK session headers prioritized; falls back to environment defaults)
         String activeToken = null;
         if (googleKeyHeader != null && !googleKeyHeader.isBlank()) {
             activeToken = googleKeyHeader.trim();
@@ -58,6 +64,14 @@ public class McpController {
             activeToken = keyHeader.trim();
         } else if (authHeader != null && !authHeader.isBlank()) {
             activeToken = authHeader.replaceFirst("(?i)^Bearer\\s+", "").trim();
+        }
+
+        if (activeToken == null || activeToken.isBlank()) {
+            if (defaultGeminiApiKey != null && !defaultGeminiApiKey.isBlank()) {
+                activeToken = defaultGeminiApiKey.trim();
+            } else if (defaultBharatCodeApiKey != null && !defaultBharatCodeApiKey.isBlank()) {
+                activeToken = defaultBharatCodeApiKey.trim();
+            }
         }
 
         try {

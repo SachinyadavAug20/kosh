@@ -9,7 +9,9 @@ import {
   ToolExecutionResult,
 } from "@/types/mcp";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const MCP_URL = process.env.NEXT_PUBLIC_MCP_URL || "http://localhost:8080/mcp";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || MCP_URL.replace(/\/mcp\/?$/, "");
+const ASSET_BASE = process.env.NEXT_PUBLIC_ASSET_URL || `${API_BASE}/api/assets`;
 
 export function useMcpClient() {
   const [health, setHealth] = useState<BackendHealth | null>(null);
@@ -52,7 +54,7 @@ export function useMcpClient() {
         method: "tools/list",
       };
 
-      const res = await fetch(`${API_BASE}/mcp`, {
+      const res = await fetch(MCP_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -104,7 +106,7 @@ export function useMcpClient() {
       }
 
       try {
-        const res = await fetch(`${API_BASE}/mcp`, {
+        const res = await fetch(MCP_URL, {
           method: "POST",
           headers,
           body: JSON.stringify(payload),

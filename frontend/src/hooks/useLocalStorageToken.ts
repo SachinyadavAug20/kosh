@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 
 const STORAGE_KEY = "kosh_bharatcode_token";
+const DEFAULT_ENV_KEY = process.env.NEXT_PUBLIC_DEFAULT_GEMINI_KEY || "";
 
 export function useLocalStorageToken() {
   const [token, setTokenState] = useState<string>("");
@@ -13,6 +14,8 @@ export function useLocalStorageToken() {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         setTokenState(stored);
+      } else if (DEFAULT_ENV_KEY) {
+        setTokenState(DEFAULT_ENV_KEY);
       }
     } catch (e) {
       console.warn("Could not read BharatCode token from localStorage", e);
