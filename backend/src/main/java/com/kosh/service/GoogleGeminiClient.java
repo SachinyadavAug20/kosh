@@ -255,7 +255,10 @@ public class GoogleGeminiClient {
                 SPECIALIZED DIRECTIVE FOR ANIMATION ENGINE (blender_animation):
                 - Create rich, production-grade keyframed animations across 60 to 120 frames.
                 - Set scene.frame_start = 1; scene.frame_end = 120; scene.frame_current = 1.
-                - Rig dynamic motion with keyframes on location, rotation_euler, or scale.
+                - Implement Kinematic Linkages & Parent-Child Hierarchies:
+                  * Central driver (e.g. Sun_Gear) keyframed with continuous rotation across frames 1, 30, 60, 90, 120.
+                  * Orbiting satellites/planet gears mathematically keyframed or parented to rotating empty carriers.
+                  * Planet gears orbit around the driver center (location keyframes) while simultaneously spinning on their own axes (rotation_euler keyframes).
                 - Mandatory: Export with animations preserved:
                   bpy.ops.export_scene.gltf(filepath=output_path, export_format='GLB', export_animations=True)
                 """;
@@ -697,23 +700,26 @@ public class GoogleGeminiClient {
                 sun = bpy.context.active_object
                 sun.name = "Sun_Gear"
                 sun.rotation_mode = 'XYZ'
-                sun.rotation_euler = (0, 0, 0)
-                sun.keyframe_insert(data_path="rotation_euler", frame=1)
-                sun.rotation_euler = (0, 0, math.radians(720))
-                sun.keyframe_insert(data_path="rotation_euler", frame=120)
+                for f_idx, f_num in enumerate([1, 30, 60, 90, 120]):
+                    sun.rotation_euler = (0, 0, (f_idx / 4.0) * math.radians(720))
+                    sun.keyframe_insert(data_path="rotation_euler", frame=f_num)
 
                 for i in range(3):
-                    angle = (i * 2.0 * math.pi) / 3.0
-                    px = 2.2 * math.cos(angle)
-                    py = 2.2 * math.sin(angle)
-                    bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=0.6, depth=0.35, location=(px, py, 0.2))
+                    base_angle = (i * 2.0 * math.pi) / 3.0
+                    px = 2.2 * math.cos(base_angle)
+                    py = 2.2 * math.sin(base_angle)
+                    bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.6, depth=0.35, location=(px, py, 0.2))
                     planet = bpy.context.active_object
                     planet.name = f"Planet_Gear_{i+1}"
                     planet.rotation_mode = 'XYZ'
-                    planet.rotation_euler = (0, 0, 0)
-                    planet.keyframe_insert(data_path="rotation_euler", frame=1)
-                    planet.rotation_euler = (0, 0, -math.radians(1440))
-                    planet.keyframe_insert(data_path="rotation_euler", frame=120)
+                    for f_idx, f_num in enumerate([1, 30, 60, 90, 120]):
+                        orbit_angle = base_angle + (f_idx / 4.0) * 2.0 * math.pi
+                        ox = 2.2 * math.cos(orbit_angle)
+                        oy = 2.2 * math.sin(orbit_angle)
+                        planet.location = (ox, oy, 0.2)
+                        planet.keyframe_insert(data_path="location", frame=f_num)
+                        planet.rotation_euler = (0, 0, -(f_idx / 4.0) * 4.0 * math.pi)
+                        planet.keyframe_insert(data_path="rotation_euler", frame=f_num)
 
                 bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=3.2, depth=0.3, location=(0, 0, 0.15))
                 ring = bpy.context.active_object

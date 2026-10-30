@@ -11,6 +11,8 @@ import { OBJExporter } from "three/examples/jsm/exporters/OBJExporter.js";
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
 import { useTheme } from "@/context/ThemeContext";
 import { ExportFormat } from "@/types/mcp";
+import { Timeline, KeyframeMarker, InterpolationType } from "./Timeline";
+import { FloatingInspector, SwatchPreset } from "./FloatingInspector";
 import {
   Download,
   RotateCw,
@@ -171,6 +173,24 @@ export function Viewport3D({
   const [isLooping, setIsLooping] = useState<boolean>(true);
   const [hoverActive, setHoverActive] = useState<boolean>(false);
   const [explodedFactor, setExplodedFactor] = useState<number>(0.0);
+
+  // Modern Dope Sheet Timeline State
+  const [turntableMode, setTurntableMode] = useState<"loop" | "infinite">("loop");
+  const [interpolation, setInterpolation] = useState<InterpolationType>("linear");
+  const [keyframes, setKeyframes] = useState<KeyframeMarker[]>([
+    { id: "kf-0", frame: 0, type: "transform", label: "Start Pose" },
+    { id: "kf-30", frame: 30, type: "transform", label: "Pose 1" },
+    { id: "kf-60", frame: 60, type: "transform", label: "Midpoint" },
+    { id: "kf-90", frame: 90, type: "transform", label: "Pose 2" },
+    { id: "kf-120", frame: 120, type: "transform", label: "End Pose" },
+  ]);
+
+  // Direct Numeric Typed Input for Active Transform Modal (G, R, S)
+  const [typedNumericBuffer, setTypedNumericBuffer] = useState<string>("");
+
+  // Refs for horizon-fade grid and ground contact shadow
+  const contactShadowRef = useRef<THREE.Mesh | null>(null);
+  const fadeGridRef = useRef<THREE.Mesh | null>(null);
 
   // Active Overlay Popovers
   const [activeOverlay, setActiveOverlay] = useState<"none" | "material" | "transform" | "add">("none");
@@ -355,11 +375,85 @@ export function Viewport3D({
     rimLight.position.set(0, -5, -6);
     scene.add(rimLight);
 
-    // G. Workstation Helpers (Grid & Coordinate Axes)
-    const grid = new THREE.GridHelper(20, 20, 0x52525b, 0x27272a);
-    grid.position.y = 0;
-    scene.add(grid);
-    gridHelperRef.current = grid;
+    // G. Workstation Helpers (Horizon-Fade Grid & Ground Contact Shadow Catcher)
+    const gridGeo = new THREE.PlaneGeometry(60, 60);
+    gridGeo.rotateX(-Math.PI / 2);
+    const gridMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      uniforms: {
+        uSize: { value: 1.0 },
+        uMajorSize: { value: 5.0 },
+        uColorMajor: { value: new THREE.Color(0x3f3f46) },
+        uColorMinor: { value: new THREE.Color(0x27272a) },
+        uFadeDistance: { value: 24.0 },
+      },
+      vertexShader: `
+        varying vec3 vWorldPos;
+        void main() {
+          vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+          gl_Position = projectionMatrix * viewMatrix * vec4(vWorldPos, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vWorldPos;
+        uniform float uSize;
+        uniform float uMajorSize;
+        uniform vec3 uColorMajor;
+        uniform vec3 uColorMinor;
+        uniform float uFadeDistance;
+        void main() {
+          vec2 coord = vWorldPos.xz / uSize;
+          vec2 grid = abs(fract(coord - 0.5) - 0.5) / fwidth(coord);
+          float lineMinor = 1.0 - min(min(grid.x, grid.y), 1.0);
+
+          vec2 coordMaj = vWorldPos.xz / uMajorSize;
+          vec2 gridMaj = abs(fract(coordMaj - 0.5) - 0.5) / fwidth(coordMaj);
+          float lineMajor = 1.0 - min(min(gridMaj.x, gridMaj.y), 1.0);
+
+          float dist = length(vWorldPos.xz);
+          float alpha = 1.0 - smoothstep(uFadeDistance * 0.35, uFadeDistance, dist);
+          if (alpha <= 0.005) discard;
+
+          vec3 col = mix(uColorMinor, uColorMajor, lineMajor);
+          float intensity = max(lineMinor * 0.3, lineMajor * 0.85);
+          gl_FragColor = vec4(col, intensity * alpha);
+        }
+      `,
+    });
+    const fadeGrid = new THREE.Mesh(gridGeo, gridMat);
+    fadeGrid.position.y = 0;
+    scene.add(fadeGrid);
+    fadeGridRef.current = fadeGrid;
+
+    // Contact Shadow Catcher Plane underneath model base
+    const shadowCanvas = document.createElement("canvas");
+    shadowCanvas.width = 128;
+    shadowCanvas.height = 128;
+    const sCtx = shadowCanvas.getContext("2d");
+    if (sCtx) {
+      const grad = sCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      grad.addColorStop(0, "rgba(0, 0, 0, 0.65)");
+      grad.addColorStop(0.35, "rgba(0, 0, 0, 0.28)");
+      grad.addColorStop(0.7, "rgba(0, 0, 0, 0.07)");
+      grad.addColorStop(1, "rgba(0, 0, 0, 0)");
+      sCtx.fillStyle = grad;
+      sCtx.fillRect(0, 0, 128, 128);
+    }
+    const shadowTex = new THREE.CanvasTexture(shadowCanvas);
+    const shadowGeo = new THREE.PlaneGeometry(1, 1);
+    shadowGeo.rotateX(-Math.PI / 2);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      map: shadowTex,
+      transparent: true,
+      opacity: 0.75,
+      depthWrite: false,
+    });
+    const contactShadow = new THREE.Mesh(shadowGeo, shadowMat);
+    contactShadow.position.y = 0.002;
+    contactShadow.visible = false;
+    scene.add(contactShadow);
+    contactShadowRef.current = contactShadow;
 
     const axes = new THREE.AxesHelper(2.5);
     axes.position.set(0, 0.001, 0);
@@ -403,9 +497,9 @@ export function Viewport3D({
         mixerRef.current.update(delta);
       }
 
-      // Procedural turntable rotation
-      if (autoRotate && rootModelGroupRef.current) {
-        rootModelGroupRef.current.rotation.y += delta * 0.5;
+      // Procedural turntable rotation / Infinite Spin (30 RPM continuous smooth orbit)
+      if ((autoRotate || (isPlaying && turntableMode === "infinite")) && rootModelGroupRef.current) {
+        rootModelGroupRef.current.rotation.y += delta * 1.0;
       }
 
       // Procedural floating hover
@@ -413,8 +507,8 @@ export function Viewport3D({
         rootModelGroupRef.current.position.y = Math.sin(time * 2) * 0.1;
       }
 
-      // Timeline playback frame increment
-      if (isPlaying) {
+      // Timeline playback frame increment (in Loop Scrub mode)
+      if (isPlaying && turntableMode === "loop") {
         setCurrentFrame((prev) => {
           if (prev >= totalFrames) {
             return isLooping ? 0 : totalFrames;
@@ -508,6 +602,14 @@ export function Viewport3D({
       object.position.x = -center.x;
       object.position.y = -box.min.y;
       object.position.z = -center.z;
+
+      // Ground Contact Shadow Catcher Placement
+      if (contactShadowRef.current) {
+        const radius = Math.max(size.x, size.z) * 1.5;
+        contactShadowRef.current.scale.set(radius, radius, 1);
+        contactShadowRef.current.position.set(0, 0.002, 0);
+        contactShadowRef.current.visible = true;
+      }
 
       // Extract Sub-Meshes for Raycasting & Scene Outliner
       const detectedMeshes: MeshNodeInfo[] = [];
@@ -604,12 +706,34 @@ export function Viewport3D({
             const mixer = new THREE.AnimationMixer(gltf.scene);
             mixerRef.current = mixer;
             const actions: THREE.AnimationAction[] = [];
+            const detectedFrames = new Set<number>();
+
             gltf.animations.forEach((clip) => {
               const act = mixer.clipAction(clip);
               act.play();
               actions.push(act);
+
+              clip.tracks.forEach((track) => {
+                for (let i = 0; i < track.times.length; i++) {
+                  const f = Math.round(track.times[i] * 30);
+                  if (f <= 120) detectedFrames.add(f);
+                }
+              });
             });
             actionRef.current = actions;
+
+            if (detectedFrames.size > 0) {
+              const sorted = Array.from(detectedFrames).sort((a, b) => a - b);
+              setKeyframes(
+                sorted.map((f, idx) => ({
+                  id: `kf-clip-${idx}-${f}`,
+                  frame: f,
+                  type: "transform" as const,
+                  label: `Frame ${f}`,
+                }))
+              );
+            }
+
             setIsPlaying(true);
             setIsTimelineOpen(true);
           } else {
@@ -1063,6 +1187,163 @@ export function Viewport3D({
     orbitControlsRef.current.update();
   }, [selectedMesh]);
 
+  // --- Modern Dope Sheet Keyframe Handlers ---
+  const handleSeekFrame = useCallback((frame: number) => {
+    setCurrentFrame(frame);
+    if (mixerRef.current) {
+      const time = (frame / totalFrames) * 4.0;
+      mixerRef.current.setTime(time);
+    }
+  }, [totalFrames]);
+
+  const handleAddKeyframe = useCallback((frame: number) => {
+    const id = `kf-${Date.now()}`;
+    const label = selectedMesh ? `${selectedMesh.name} Pose` : `Keyframe ${frame}`;
+    setKeyframes((prev) => {
+      const filtered = prev.filter((k) => k.frame !== frame);
+      const newKf: KeyframeMarker = { id, frame, type: "transform", label };
+      return [...filtered, newKf].sort((a, b) => a.frame - b.frame);
+    });
+  }, [selectedMesh]);
+
+  const handleMoveKeyframe = useCallback((keyframeId: string, newFrame: number) => {
+    setKeyframes((prev) =>
+      prev.map((k) => (k.id === keyframeId ? { ...k, frame: newFrame } : k)).sort((a, b) => a.frame - b.frame)
+    );
+  }, []);
+
+  const handleDeleteKeyframe = useCallback((keyframeId: string) => {
+    setKeyframes((prev) => prev.filter((k) => k.id !== keyframeId));
+  }, []);
+
+  const handleChangeInterpolation = useCallback((type: InterpolationType) => {
+    setInterpolation(type);
+    actionRef.current.forEach((act) => {
+      const clip = act.getClip();
+      clip.tracks.forEach((track) => {
+        if (type === "linear") {
+          track.setInterpolation(THREE.InterpolateLinear);
+        } else if (type === "bezier") {
+          track.setInterpolation(THREE.InterpolateSmooth);
+        } else if (type === "step") {
+          track.setInterpolation(THREE.InterpolateDiscrete);
+        }
+      });
+    });
+  }, []);
+
+  // --- Sub-Mesh In-Viewport HUD Handlers ---
+  const handleApplySwatch = useCallback((swatch: SwatchPreset) => {
+    if (!selectedMesh) return;
+    setMatColor(swatch.color);
+    setMatRoughness(swatch.roughness);
+    setMatMetalness(swatch.metalness);
+    if (swatch.emissive) setMatEmissive(swatch.emissive);
+
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(swatch.color),
+      roughness: swatch.roughness,
+      metalness: swatch.metalness,
+      emissive: swatch.emissive ? new THREE.Color(swatch.emissive) : new THREE.Color(0x000000),
+      emissiveIntensity: swatch.emissive ? 0.6 : 0.0,
+    });
+    selectedMesh.material = mat;
+  }, [selectedMesh]);
+
+  const handleUpdateSelectedMaterial = useCallback((rough: number, metal: number, color?: string) => {
+    if (!selectedMesh) return;
+    setMatRoughness(rough);
+    setMatMetalness(metal);
+    if (color) setMatColor(color);
+
+    if (selectedMesh.material instanceof THREE.MeshStandardMaterial) {
+      selectedMesh.material.roughness = rough;
+      selectedMesh.material.metalness = metal;
+      if (color) selectedMesh.material.color.set(color);
+      selectedMesh.material.needsUpdate = true;
+    }
+  }, [selectedMesh]);
+
+  const handleSubdivide = useCallback(() => {
+    if (!selectedMesh) return;
+    const geo = selectedMesh.geometry;
+    if (!geo || !geo.attributes.position) return;
+
+    const posAttr = geo.attributes.position;
+    const isIndexed = !!geo.index;
+    const indices: number[] = [];
+    if (isIndexed) {
+      const idx = geo.index!;
+      for (let i = 0; i < idx.count; i++) indices.push(idx.getX(i));
+    } else {
+      for (let i = 0; i < posAttr.count; i++) indices.push(i);
+    }
+
+    const newPositions: number[] = [];
+    const getVertex = (i: number) => new THREE.Vector3(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
+
+    for (let i = 0; i < indices.length; i += 3) {
+      const v0 = getVertex(indices[i]);
+      const v1 = getVertex(indices[i + 1]);
+      const v2 = getVertex(indices[i + 2]);
+
+      const m01 = new THREE.Vector3().addVectors(v0, v1).multiplyScalar(0.5);
+      const m12 = new THREE.Vector3().addVectors(v1, v2).multiplyScalar(0.5);
+      const m20 = new THREE.Vector3().addVectors(v2, v0).multiplyScalar(0.5);
+
+      // 4 Subdivided Triangles
+      newPositions.push(v0.x, v0.y, v0.z, m01.x, m01.y, m01.z, m20.x, m20.y, m20.z);
+      newPositions.push(v1.x, v1.y, v1.z, m12.x, m12.y, m12.z, m01.x, m01.y, m01.z);
+      newPositions.push(v2.x, v2.y, v2.z, m20.x, m20.y, m20.z, m12.x, m12.y, m12.z);
+      newPositions.push(m01.x, m01.y, m01.z, m12.x, m12.y, m12.z, m20.x, m20.y, m20.z);
+    }
+
+    const newGeo = new THREE.BufferGeometry();
+    newGeo.setAttribute("position", new THREE.Float32BufferAttribute(newPositions, 3));
+    newGeo.computeVertexNormals();
+    selectedMesh.geometry.dispose();
+    selectedMesh.geometry = newGeo;
+
+    const newTris = newPositions.length / 9;
+    const newVerts = newPositions.length / 3;
+    setMeshList((prev) =>
+      prev.map((m) =>
+        m.name === selectedMesh.name ? { ...m, triangles: newTris, vertices: newVerts } : m
+      )
+    );
+    if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+  }, [selectedMesh]);
+
+  const applyTypedValue = (valStr: string) => {
+    const val = parseFloat(valStr);
+    if (isNaN(val)) return;
+    const target = selectedMesh || currentModelRef.current;
+    if (!target || !preTransformSnapshotRef.current) return;
+
+    if (transformMode === "rotate") {
+      const rad = THREE.MathUtils.degToRad(val);
+      const axis = axisConstraint === "x" ? "x" : axisConstraint === "y" ? "y" : "z";
+      target.rotation.copy(preTransformSnapshotRef.current.rotation);
+      target.rotation[axis] = preTransformSnapshotRef.current.rotation[axis] + rad;
+      target.updateMatrixWorld();
+    } else if (transformMode === "translate") {
+      const axis = axisConstraint === "x" ? "x" : axisConstraint === "y" ? "y" : axisConstraint === "z" ? "z" : "y";
+      target.position.copy(preTransformSnapshotRef.current.position);
+      target.position[axis] = preTransformSnapshotRef.current.position[axis] + val;
+      target.updateMatrixWorld();
+    } else if (transformMode === "scale") {
+      target.scale.copy(preTransformSnapshotRef.current.scale);
+      if (axisConstraint === "none") {
+        target.scale.multiplyScalar(val);
+      } else {
+        const axis = axisConstraint === "x" ? "x" : axisConstraint === "y" ? "y" : "z";
+        target.scale[axis] = preTransformSnapshotRef.current.scale[axis] * val;
+      }
+      target.updateMatrixWorld();
+    }
+    if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+  };
+
   // Duplicate Selected Sub-Mesh (Shift + D)
   const handleDuplicate = useCallback(() => {
     if (!selectedMesh || !currentModelRef.current) return;
@@ -1239,6 +1520,40 @@ export function Viewport3D({
         e.preventDefault();
         setShadingMode((prev) => (prev === "wireframe" ? "solid" : "wireframe"));
         return;
+      }
+
+      // Direct Numeric Typing in active transform modal (0-9, ., -, Backspace, Enter, Esc)
+      if (transformMode !== "select") {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          handleConfirmTransform();
+          setTypedNumericBuffer("");
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          handleCancelTransform();
+          setTypedNumericBuffer("");
+          return;
+        }
+        if (e.key === "Backspace") {
+          e.preventDefault();
+          setTypedNumericBuffer((prev) => {
+            const next = prev.slice(0, -1);
+            applyTypedValue(next);
+            return next;
+          });
+          return;
+        }
+        if (/^[0-9.\-]$/.test(e.key)) {
+          e.preventDefault();
+          setTypedNumericBuffer((prev) => {
+            const next = prev + e.key;
+            applyTypedValue(next);
+            return next;
+          });
+          return;
+        }
       }
 
       // Axis Locking during Active Transform (X, Y, Z, Shift+X, Shift+Y, Shift+Z)
@@ -1651,6 +1966,7 @@ export function Viewport3D({
 
     if (exportFmt === "glb") {
       const exporter = new GLTFExporter();
+      const exportAnimations = actionRef.current.map((a) => a.getClip());
       exporter.parse(
         rootModelGroupRef.current,
         (gltf) => {
@@ -1665,7 +1981,7 @@ export function Viewport3D({
           URL.revokeObjectURL(url);
         },
         (err) => console.error("Export error", err),
-        { binary: true }
+        { binary: true, animations: exportAnimations }
       );
     } else if (exportFmt === "stl") {
       try {
@@ -2351,69 +2667,93 @@ export function Viewport3D({
         </div>
       </div>
 
-      {/* Expandable Bottom Timeline Drawer */}
-      {isTimelineOpen && (
-        <div className="border-t border-[#3f3f46] bg-[#18181b] px-3 py-2 flex items-center space-x-3 text-xs z-20">
-          {/* Play/Pause */}
-          <div className="flex items-center space-x-1 shrink-0">
-            <button
-              onClick={() => setIsPlaying(!isPlaying)}
-              className="p-1.5 bg-[#ea580c] hover:bg-[#f97316] text-white rounded-sm"
-              title="Play / Pause (Space)"
-            >
-              {isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-            </button>
-            <button
-              onClick={() => setCurrentFrame(0)}
-              className="p-1.5 bg-[#27272a] hover:bg-[#3f3f46] text-[#a1a1aa] rounded-sm"
-              title="Rewind to Frame 0"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setIsLooping(!isLooping)}
-              title="Loop Timeline"
-              className={`p-1.5 rounded-sm border ${
-                isLooping ? "bg-[#27272a] text-[#f4f4f5] border-[#52525b]" : "text-[#71717a] border-[#3f3f46]"
-              }`}
-            >
-              <Repeat className="w-3.5 h-3.5" />
-            </button>
-            <span className="font-mono text-[11px] text-[#a1a1aa]">
-              {currentFrame} / {totalFrames}f
-            </span>
-          </div>
+      {/* Floating Contextual Compact Inspector (HUD) */}
+      <FloatingInspector
+        selectedMeshName={selectedMesh?.name || null}
+        triangles={
+          selectedMesh?.geometry?.index
+            ? selectedMesh.geometry.index.count / 3
+            : selectedMesh?.geometry?.attributes?.position
+            ? selectedMesh.geometry.attributes.position.count / 3
+            : 0
+        }
+        onClose={() => {
+          setSelectedMesh(null);
+          onMeshSelect?.(null);
+        }}
+        onFocus={handleFocus}
+        onApplySwatch={handleApplySwatch}
+        onUpdateMaterial={handleUpdateSelectedMaterial}
+        currentRoughness={matRoughness}
+        currentMetalness={matMetalness}
+        currentColor={matColor}
+        onSubdivide={handleSubdivide}
+        onAddKeyframe={() => handleAddKeyframe(currentFrame)}
+      />
 
-          {/* Timeline Scrubber */}
-          <div className="flex-1 flex items-center space-x-2">
-            <input
-              type="range"
-              min="0"
-              max={totalFrames}
-              step="1"
-              value={currentFrame}
-              onChange={(e) => setCurrentFrame(parseInt(e.target.value, 10))}
-              className="w-full accent-[#ea580c] cursor-pointer"
-            />
-          </div>
-
-          {/* Exploded View Slider */}
-          <div className="flex items-center space-x-2 w-52 bg-[#1f1f23] border border-[#3f3f46] px-2 py-1 rounded-sm">
-            <span className="text-[10px] text-[#a1a1aa] font-mono whitespace-nowrap">
-              EXPLODE: {(explodedFactor * 100).toFixed(0)}%
+      {/* Floating Transform Numeric Input Pill (While G, R, S active) */}
+      {transformMode !== "select" && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 flex items-center space-x-2 bg-[#18181b]/95 border border-[#ea580c] px-3 py-1.5 rounded-sm shadow-xl font-mono text-xs text-[#f4f4f5]">
+          <span className="font-bold text-[#ea580c] uppercase">
+            {transformMode === "translate" ? "G: TRANSLATE" : transformMode === "rotate" ? (isTrackball ? "R: TRACKBALL" : "R: ROTATE") : "S: SCALE"}
+          </span>
+          <span className="text-[#3f3f46]">|</span>
+          {transformMode === "translate" && (
+            <span>
+              X: {liveTransform.pos[0].toFixed(2)}m  Y: {liveTransform.pos[1].toFixed(2)}m  Z: {liveTransform.pos[2].toFixed(2)}m
             </span>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.02"
-              value={explodedFactor}
-              onChange={(e) => handleExplodedChange(parseFloat(e.target.value))}
-              className="w-full accent-[#38bdf8] cursor-pointer"
-            />
-          </div>
+          )}
+          {transformMode === "rotate" && (
+            <span>
+              X: {liveTransform.rot[0].toFixed(1)}°  Y: {liveTransform.rot[1].toFixed(1)}°  Z: {liveTransform.rot[2].toFixed(1)}°
+            </span>
+          )}
+          {transformMode === "scale" && (
+            <span>
+              X: {liveTransform.scale[0].toFixed(2)}x  Y: {liveTransform.scale[1].toFixed(2)}x  Z: {liveTransform.scale[2].toFixed(2)}x
+            </span>
+          )}
+          {axisConstraint !== "none" && (
+            <span className="px-1 py-0.2 bg-[#ea580c]/20 text-[#ea580c] text-[10px] uppercase font-bold rounded">
+              [{axisConstraint}]
+            </span>
+          )}
+          {typedNumericBuffer ? (
+            <span className="px-1.5 py-0.5 bg-[#ea580c] text-white rounded font-bold">
+              VAL: {typedNumericBuffer} (Enter)
+            </span>
+          ) : (
+            <span className="text-[10px] text-[#71717a]">
+              (Type numbers, Enter to commit, Esc to cancel)
+            </span>
+          )}
         </div>
       )}
+
+      {/* Modern Dope Sheet Timeline Component */}
+      <Timeline
+        isOpen={isTimelineOpen}
+        onToggleOpen={() => setIsTimelineOpen(!isTimelineOpen)}
+        isPlaying={isPlaying}
+        onTogglePlay={() => setIsPlaying(!isPlaying)}
+        onRewind={() => handleSeekFrame(0)}
+        currentFrame={currentFrame}
+        totalFrames={totalFrames}
+        onSeekFrame={handleSeekFrame}
+        isLooping={isLooping}
+        onToggleLoop={() => setIsLooping(!isLooping)}
+        turntableMode={turntableMode}
+        onToggleTurntableMode={setTurntableMode}
+        keyframes={keyframes}
+        onAddKeyframe={handleAddKeyframe}
+        onMoveKeyframe={handleMoveKeyframe}
+        onDeleteKeyframe={handleDeleteKeyframe}
+        activeObjectName={selectedMesh?.name}
+        interpolation={interpolation}
+        onChangeInterpolation={handleChangeInterpolation}
+        explodedFactor={explodedFactor}
+        onExplodedChange={handleExplodedChange}
+      />
 
       {/* Viewport Bottom Status Bar (Real-Time DCC Telemetry & Contextual Key Hints HUD) */}
       <div className="flex items-center justify-between px-3 py-1 border-t border-[#27272a] bg-[#18181b] text-[11px] text-[#a1a1aa] font-mono">
