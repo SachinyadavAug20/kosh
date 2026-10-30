@@ -7,7 +7,10 @@ import { TransformControls } from "three/examples/jsm/controls/TransformControls
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
+import { OBJExporter } from "three/examples/jsm/exporters/OBJExporter.js";
+import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
 import { useTheme } from "@/context/ThemeContext";
+import { ExportFormat } from "@/types/mcp";
 import {
   Download,
   RotateCw,
@@ -41,10 +44,20 @@ import {
   X,
   Keyboard,
   HelpCircle,
+  Hammer,
+  Brush,
+  Scissors,
+  Square,
+  Circle,
+  Camera as CameraIcon,
+  Lightbulb,
 } from "lucide-react";
 
 export type ShadingMode = "solid" | "material" | "wireframe" | "normals";
-export type MatcapPreset = "studio" | "clay" | "redwax" | "chrome" | "obsidian";
+export type MatcapPreset = "studio" | "clay" | "redwax" | "chrome" | "obsidian" | "pearl" | "check" | "zebra" | "toon";
+export type InteractionMode = "object" | "edit" | "sculpt" | "paint" | "weight";
+export type EditElement = "vertex" | "edge" | "face";
+export type SculptBrush = "draw" | "clay" | "inflate" | "flatten" | "grab" | "crease" | "smooth";
 export type CameraView = "iso" | "front" | "back" | "top" | "bottom" | "right" | "left";
 export type AxisConstraint = "none" | "x" | "y" | "z" | "shift-x" | "shift-y" | "shift-z";
 export type SnapTarget = "closest" | "center" | "median" | "active";
@@ -71,7 +84,7 @@ export interface Viewport3DProps {
     materials: string[];
     objects: string[];
   } | null;
-  format?: "glb" | "stl";
+  format?: ExportFormat;
   apiBase?: string;
   onMeshSelect?: (meshName: string | null) => void;
   onMeshListUpdate?: (list: MeshNodeInfo[]) => void;
@@ -114,6 +127,16 @@ export function Viewport3D({
   // Viewport Settings
   const [shadingMode, setShadingMode] = useState<ShadingMode>("solid");
   const [matcap, setMatcap] = useState<MatcapPreset>("studio");
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>("object");
+  const [editElement, setEditElement] = useState<EditElement>("vertex");
+  const [sculptBrush, setSculptBrush] = useState<SculptBrush>("clay");
+  const [sculptRadius, setSculptRadius] = useState<number>(0.35);
+  const [sculptStrength, setSculptStrength] = useState<number>(0.5);
+  const [sculptSymmetryX, setSculptSymmetryX] = useState<boolean>(false);
+  const [paintColor, setPaintColor] = useState<string>("#ea580c");
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState<boolean>(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState<boolean>(false);
+  const [lastAddedPrimitive, setLastAddedPrimitive] = useState<{ type: string; mesh: THREE.Mesh; radius?: number; depth?: number; segments?: number } | null>(null);
   const [transformMode, setTransformMode] = useState<"select" | "translate" | "rotate" | "scale">("select");
   const [axisConstraint, setAxisConstraint] = useState<AxisConstraint>("none");
   const [isTrackball, setIsTrackball] = useState<boolean>(false);
@@ -202,6 +225,9 @@ export function Viewport3D({
   const gridHelperRef = useRef<THREE.GridHelper | null>(null);
   const axesHelperRef = useRef<THREE.AxesHelper | null>(null);
   const selectionBoxHelperRef = useRef<THREE.BoxHelper | null>(null);
+  const sculptRingRef = useRef<THREE.Mesh | null>(null);
+  const mixerRef = useRef<THREE.AnimationMixer | null>(null);
+  const actionRef = useRef<THREE.AnimationAction[]>([]);
 
   // Raycaster & Mouse Click Tracking (to distinguish click vs orbit drag)
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
@@ -355,6 +381,14 @@ export function Viewport3D({
     scene.add(boxHelper);
     selectionBoxHelperRef.current = boxHelper;
 
+    // Sculpt Brush Ring Indicator Cursor
+    const ringGeo = new THREE.RingGeometry(0.32, 0.35, 32);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xea580c, side: THREE.DoubleSide });
+    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    ringMesh.visible = false;
+    scene.add(ringMesh);
+    sculptRingRef.current = ringMesh;
+
     // J. Render Loop
     let animationFrameId: number;
     let clock = new THREE.Clock();
@@ -363,6 +397,11 @@ export function Viewport3D({
       animationFrameId = requestAnimationFrame(animate);
       const delta = clock.getDelta();
       const time = clock.getElapsedTime();
+
+      // Play embedded glTF animation tracks
+      if (mixerRef.current && isPlaying) {
+        mixerRef.current.update(delta);
+      }
 
       // Procedural turntable rotation
       if (autoRotate && rootModelGroupRef.current) {
@@ -561,6 +600,22 @@ export function Viewport3D({
       gltfLoader.load(
         resolvedUrl,
         (gltf) => {
+          if (gltf.animations && gltf.animations.length > 0) {
+            const mixer = new THREE.AnimationMixer(gltf.scene);
+            mixerRef.current = mixer;
+            const actions: THREE.AnimationAction[] = [];
+            gltf.animations.forEach((clip) => {
+              const act = mixer.clipAction(clip);
+              act.play();
+              actions.push(act);
+            });
+            actionRef.current = actions;
+            setIsPlaying(true);
+            setIsTimelineOpen(true);
+          } else {
+            mixerRef.current = null;
+            actionRef.current = [];
+          }
           onLoad(gltf.scene);
         },
         undefined,
@@ -592,9 +647,13 @@ export function Viewport3D({
               redwax: 0x991b1b,
               chrome: 0xe2e8f0,
               obsidian: 0x1e293b,
+              pearl: 0xf1f5f9,
+              check: 0x38bdf8,
+              zebra: 0x0f172a,
+              toon: 0xfbbf24,
             };
-            const rough = cap === "chrome" ? 0.05 : cap === "clay" ? 0.75 : 0.4;
-            const metal = cap === "chrome" ? 0.95 : cap === "obsidian" ? 0.8 : 0.1;
+            const rough = cap === "chrome" ? 0.05 : cap === "clay" ? 0.75 : cap === "pearl" ? 0.2 : cap === "toon" ? 0.9 : 0.4;
+            const metal = cap === "chrome" ? 0.95 : cap === "obsidian" ? 0.8 : cap === "pearl" ? 0.6 : cap === "zebra" ? 0.9 : 0.1;
 
             child.material = new THREE.MeshStandardMaterial({
               color: matcapColors[cap],
@@ -943,6 +1002,14 @@ export function Viewport3D({
   useEffect(() => {
     if (liveTurntable !== undefined) setAutoRotate(liveTurntable);
   }, [liveTurntable]);
+
+  useEffect(() => {
+    if (actionRef.current.length > 0) {
+      actionRef.current.forEach((act) => {
+        act.paused = !isPlaying;
+      });
+    }
+  }, [isPlaying]);
 
   useEffect(() => {
     if (liveHover !== undefined) setHoverActive(liveHover);
@@ -1365,6 +1432,298 @@ export function Viewport3D({
     onOpenShortcuts,
   ]);
 
+
+  // -------------------------------------------------------------
+  // Parametric Primitives Insertion Library (Shift + A)
+  // -------------------------------------------------------------
+  const handleAddPrimitive = (type: string) => {
+    if (!rootModelGroupRef.current || !sceneRef.current) return;
+    let geo: THREE.BufferGeometry;
+    let name = "Primitive";
+
+    switch (type) {
+      case "cube":
+        geo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+        name = "Cube";
+        break;
+      case "cylinder":
+        geo = new THREE.CylinderGeometry(0.6, 0.6, 1.6, 32);
+        name = "Cylinder";
+        break;
+      case "uv_sphere":
+        geo = new THREE.SphereGeometry(0.8, 32, 16);
+        name = "UV_Sphere";
+        break;
+      case "ico_sphere":
+        geo = new THREE.IcosahedronGeometry(0.8, 2);
+        name = "Ico_Sphere";
+        break;
+      case "cone":
+        geo = new THREE.ConeGeometry(0.8, 1.6, 32);
+        name = "Cone";
+        break;
+      case "torus":
+        geo = new THREE.TorusGeometry(0.8, 0.25, 16, 48);
+        name = "Torus";
+        break;
+      case "plane":
+        geo = new THREE.PlaneGeometry(2.5, 2.5);
+        name = "Plane";
+        break;
+      case "grid":
+        geo = new THREE.PlaneGeometry(4.0, 4.0, 8, 8);
+        name = "Grid";
+        break;
+      case "suzanne":
+        geo = new THREE.TorusKnotGeometry(0.6, 0.2, 64, 16);
+        name = "Suzanne_Knot";
+        break;
+      case "light_point": {
+        const light = new THREE.PointLight(0xffeedd, 15, 10);
+        light.position.set(0, 2.5, 0);
+        light.name = `Point_Light_${Date.now() % 1000}`;
+        sceneRef.current.add(light);
+        setIsAddMenuOpen(false);
+        return;
+      }
+      case "light_sun": {
+        const sun = new THREE.DirectionalLight(0xffffff, 2.5);
+        sun.position.set(5, 8, 5);
+        sun.name = `Sun_Light_${Date.now() % 1000}`;
+        sceneRef.current.add(sun);
+        setIsAddMenuOpen(false);
+        return;
+      }
+      default:
+        geo = new THREE.BoxGeometry(1, 1, 1);
+        name = "Primitive";
+    }
+
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xcbd5e1,
+      roughness: 0.35,
+      metalness: 0.25,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = `${name}_${Date.now() % 1000}`;
+    mesh.position.set(0, 0.8, 0);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    rootModelGroupRef.current.add(mesh);
+    setSelectedMesh(mesh);
+    onMeshSelect?.(mesh.name);
+    setLastAddedPrimitive({ type, mesh });
+    setIsAddMenuOpen(false);
+
+    // Refresh mesh stats
+    const list: MeshNodeInfo[] = [];
+    rootModelGroupRef.current.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.name && !child.name.includes("Helper")) {
+        list.push({
+          id: child.uuid,
+          name: child.name,
+          triangles: child.geometry.index ? child.geometry.index.count / 3 : child.geometry.attributes.position.count / 3,
+          vertices: child.geometry.attributes.position.count,
+          visible: child.visible,
+          meshRef: child,
+        });
+      }
+    });
+    setMeshList(list);
+    onMeshListUpdate?.(list);
+  };
+
+  // -------------------------------------------------------------
+  // In-Viewport Digital Sculpting Stroke Handler
+  // -------------------------------------------------------------
+  const handleSculptStroke = (intersectPoint: THREE.Vector3, intersectNormal: THREE.Vector3, isSmooth: boolean) => {
+    const target = selectedMesh || (rootModelGroupRef.current?.children[0] as THREE.Mesh);
+    if (!target || !(target.geometry instanceof THREE.BufferGeometry)) return;
+
+    const geo = target.geometry;
+    const posAttr = geo.attributes.position;
+    const normAttr = geo.attributes.normal;
+    if (!posAttr) return;
+
+    const localCenter = intersectPoint.clone();
+    target.worldToLocal(localCenter);
+    const radius = sculptRadius / (target.scale.x || 1.0);
+
+    const v = new THREE.Vector3();
+    const n = new THREE.Vector3();
+
+    for (let i = 0; i < posAttr.count; i++) {
+      v.fromBufferAttribute(posAttr, i);
+      const dist = v.distanceTo(localCenter);
+      if (dist < radius) {
+        const falloff = Math.pow(1.0 - dist / radius, 2);
+
+        if (isSmooth || sculptBrush === "smooth" || isShiftHeld) {
+          // Laplacian Smoothing
+          v.lerp(localCenter, 0.08 * sculptStrength * falloff);
+        } else if (sculptBrush === "clay" || sculptBrush === "draw") {
+          if (normAttr) n.fromBufferAttribute(normAttr, i);
+          else n.copy(intersectNormal);
+          v.addScaledVector(n, 0.04 * sculptStrength * falloff);
+        } else if (sculptBrush === "inflate") {
+          if (normAttr) n.fromBufferAttribute(normAttr, i);
+          else n.copy(intersectNormal);
+          v.addScaledVector(n, 0.06 * sculptStrength * falloff);
+        } else if (sculptBrush === "flatten") {
+          const planeDist = (v.x - localCenter.x) * intersectNormal.x +
+                            (v.y - localCenter.y) * intersectNormal.y +
+                            (v.z - localCenter.z) * intersectNormal.z;
+          v.addScaledVector(intersectNormal, -planeDist * 0.25 * falloff);
+        } else if (sculptBrush === "crease") {
+          if (normAttr) n.fromBufferAttribute(normAttr, i);
+          else n.copy(intersectNormal);
+          v.lerp(localCenter, 0.04 * falloff);
+          v.addScaledVector(n, -0.03 * sculptStrength * falloff);
+        } else if (sculptBrush === "grab") {
+          v.addScaledVector(intersectNormal, 0.05 * sculptStrength * falloff);
+        }
+
+        posAttr.setXYZ(i, v.x, v.y, v.z);
+      }
+    }
+
+    posAttr.needsUpdate = true;
+    geo.computeVertexNormals();
+    if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+  };
+
+  // -------------------------------------------------------------
+  // In-Viewport Vertex Color Painting Stroke Handler
+  // -------------------------------------------------------------
+  const handleVertexPaintStroke = (intersectPoint: THREE.Vector3) => {
+    const target = selectedMesh || (rootModelGroupRef.current?.children[0] as THREE.Mesh);
+    if (!target || !(target.geometry instanceof THREE.BufferGeometry)) return;
+
+    const geo = target.geometry;
+    const posAttr = geo.attributes.position;
+    if (!posAttr) return;
+
+    let colAttr = geo.attributes.color;
+    if (!colAttr) {
+      const colors = new Float32Array(posAttr.count * 3);
+      colors.fill(1.0);
+      geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      colAttr = geo.attributes.color;
+    }
+
+    const localCenter = intersectPoint.clone();
+    target.worldToLocal(localCenter);
+    const radius = sculptRadius / (target.scale.x || 1.0);
+    const v = new THREE.Vector3();
+    const c = new THREE.Color(paintColor);
+
+    for (let i = 0; i < posAttr.count; i++) {
+      v.fromBufferAttribute(posAttr, i);
+      const dist = v.distanceTo(localCenter);
+      if (dist < radius) {
+        const falloff = Math.pow(1.0 - dist / radius, 2);
+        const curR = colAttr.getX(i);
+        const curG = colAttr.getY(i);
+        const curB = colAttr.getZ(i);
+        colAttr.setXYZ(
+          i,
+          curR + (c.r - curR) * falloff * sculptStrength,
+          curG + (c.g - curG) * falloff * sculptStrength,
+          curB + (c.b - curB) * falloff * sculptStrength
+        );
+      }
+    }
+
+    colAttr.needsUpdate = true;
+    if (target.material) {
+      (target.material as any).vertexColors = true;
+      (target.material as any).needsUpdate = true;
+    }
+  };
+
+  // -------------------------------------------------------------
+  // Direct Multi-Format Exporters (GLB, STL, OBJ, PNG Snapshot)
+  // -------------------------------------------------------------
+  const handleExportDirect = (exportFmt: "glb" | "stl" | "obj" | "png", alphaBackground = false) => {
+    if (!rootModelGroupRef.current || !rendererRef.current) return;
+    const baseName = assetName ? assetName.replace(/\.[^/.]+$/, "") : "kosh_scene";
+
+    if (exportFmt === "glb") {
+      const exporter = new GLTFExporter();
+      exporter.parse(
+        rootModelGroupRef.current,
+        (gltf) => {
+          const blob = new Blob([gltf as ArrayBuffer], { type: "model/gltf-binary" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${baseName}.glb`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        },
+        (err) => console.error("Export error", err),
+        { binary: true }
+      );
+    } else if (exportFmt === "stl") {
+      try {
+        const exporter = new STLExporter();
+        const stlString = exporter.parse(rootModelGroupRef.current, { binary: true });
+        const blob = new Blob([stlString as any], { type: "application/octet-stream" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${baseName}.stl`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        console.error("STL export error", e);
+      }
+    } else if (exportFmt === "obj") {
+      try {
+        const exporter = new OBJExporter();
+        const objText = exporter.parse(rootModelGroupRef.current);
+        const blob = new Blob([objText], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${baseName}.obj`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        console.error("OBJ export error", e);
+      }
+    } else if (exportFmt === "png") {
+      const renderer = rendererRef.current;
+      const oldBg = sceneRef.current?.background;
+      if (alphaBackground && sceneRef.current) {
+        sceneRef.current.background = null;
+      }
+      const activeCam = isOrtho ? orthoCameraRef.current : cameraRef.current;
+      if (sceneRef.current && activeCam) {
+        renderer.render(sceneRef.current, activeCam);
+        const dataUrl = renderer.domElement.toDataURL("image/png");
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = `${baseName}_snapshot.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      if (sceneRef.current) {
+        sceneRef.current.background = oldBg || null;
+      }
+    }
+
+    setIsExportMenuOpen(false);
+  };
+
   // Export Modified GLB from Browser Canvas
   const handleExportModifiedGLB = () => {
     if (!currentModelRef.current) return;
@@ -1410,11 +1769,160 @@ export function Viewport3D({
           handleCancelTransform();
         }
       }}
+      onPointerDown={(e) => {
+        if (interactionMode === "sculpt" || interactionMode === "paint") {
+          if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
+          // Raycast
+          if (!containerRef.current || !cameraRef.current || !sceneRef.current) return;
+          const rect = containerRef.current.getBoundingClientRect();
+          const mouse = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1
+          );
+          const activeCam = isOrtho ? orthoCameraRef.current : cameraRef.current;
+          if (!activeCam) return;
+          raycasterRef.current.setFromCamera(mouse, activeCam);
+          const target = selectedMesh || rootModelGroupRef.current;
+          if (target) {
+            const hits = raycasterRef.current.intersectObjects(target.children.length > 0 ? target.children : [target], true);
+            if (hits.length > 0 && hits[0].face) {
+              if (interactionMode === "sculpt") {
+                handleSculptStroke(hits[0].point, hits[0].face.normal, e.shiftKey);
+              } else if (interactionMode === "paint") {
+                handleVertexPaintStroke(hits[0].point);
+              }
+            }
+          }
+        }
+      }}
+      onPointerMove={(e) => {
+        if (!containerRef.current || !sceneRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const mouse = new THREE.Vector2(
+          ((e.clientX - rect.left) / rect.width) * 2 - 1,
+          -((e.clientY - rect.top) / rect.height) * 2 + 1
+        );
+        const activeCam = isOrtho ? orthoCameraRef.current : cameraRef.current;
+        if (!activeCam) return;
+        raycasterRef.current.setFromCamera(mouse, activeCam);
+
+        if (interactionMode === "sculpt" || interactionMode === "paint") {
+          const target = selectedMesh || rootModelGroupRef.current;
+          if (target) {
+            const hits = raycasterRef.current.intersectObjects(target.children.length > 0 ? target.children : [target], true);
+            if (hits.length > 0 && hits[0].face) {
+              if (sculptRingRef.current) {
+                sculptRingRef.current.visible = true;
+                sculptRingRef.current.position.copy(hits[0].point);
+                sculptRingRef.current.lookAt(hits[0].point.clone().add(hits[0].face.normal));
+                sculptRingRef.current.scale.set(sculptRadius, sculptRadius, sculptRadius);
+              }
+              // Active stroke
+              if (e.buttons === 1) {
+                if (interactionMode === "sculpt") {
+                  handleSculptStroke(hits[0].point, hits[0].face.normal, e.shiftKey);
+                } else if (interactionMode === "paint") {
+                  handleVertexPaintStroke(hits[0].point);
+                }
+              }
+            } else if (sculptRingRef.current) {
+              sculptRingRef.current.visible = false;
+            }
+          }
+        } else if (sculptRingRef.current) {
+          sculptRingRef.current.visible = false;
+        }
+      }}
+      onPointerUp={() => {
+        if (orbitControlsRef.current) orbitControlsRef.current.enabled = true;
+      }}
     >
       {/* Top DCC Control Strip */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#3f3f46] bg-[#18181b] z-20">
-        {/* Left: Shading & Matcaps */}
+        {/* Left: Mode Switcher, Add Menu & Shading */}
         <div className="flex items-center space-x-1">
+          {/* 1. Blender Interaction Mode Switcher */}
+          <div className="flex items-center bg-[#1f1f23] border border-[#ea580c]/50 p-0.5 rounded-sm">
+            {(["object", "edit", "sculpt", "paint", "weight"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setInteractionMode(m)}
+                className={`px-1.5 py-0.5 text-[9px] font-mono capitalize rounded-sm transition-colors ${
+                  interactionMode === m
+                    ? "bg-[#ea580c] text-white font-bold"
+                    : "text-[#a1a1aa] hover:text-[#f4f4f5]"
+                }`}
+              >
+                {m === "object" ? "Object" : m === "edit" ? "Edit" : m === "sculpt" ? "Sculpt" : m === "paint" ? "Paint" : "Weight"}
+              </button>
+            ))}
+          </div>
+
+          {/* 2. Parametric Primitives Insertion Menu (Shift + A) */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsAddMenuOpen(!isAddMenuOpen)}
+              className={`tool-btn space-x-1 ${isAddMenuOpen ? "active bg-[#ea580c] text-white" : ""}`}
+              title="Add Parametric Primitives (Shift + A)"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span className="font-mono text-[10px]">Add</span>
+            </button>
+
+            {isAddMenuOpen && (
+              <div className="absolute top-7 left-0 w-44 bg-[#1f1f23] border border-[#52525b] rounded-sm shadow-xl p-1 z-50 text-[10px] space-y-1">
+                <div className="text-[9px] font-mono uppercase text-[#71717a] px-1.5 py-0.5 border-b border-[#3f3f46]">
+                  Mesh Primitives
+                </div>
+                <div className="grid grid-cols-2 gap-0.5">
+                  {[
+                    { id: "cube", label: "Cube" },
+                    { id: "cylinder", label: "Cylinder" },
+                    { id: "uv_sphere", label: "UV Sphere" },
+                    { id: "ico_sphere", label: "Ico Sphere" },
+                    { id: "cone", label: "Cone" },
+                    { id: "torus", label: "Torus" },
+                    { id: "plane", label: "Plane" },
+                    { id: "grid", label: "Grid" },
+                    { id: "suzanne", label: "Suzanne" },
+                  ].map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleAddPrimitive(p.id)}
+                      className="px-1.5 py-1 text-left hover:bg-[#27272a] rounded-sm font-mono truncate text-[#f4f4f5]"
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="text-[9px] font-mono uppercase text-[#71717a] px-1.5 py-0.5 border-b border-[#3f3f46] pt-1">
+                  Lighting & Cameras
+                </div>
+                <div className="grid grid-cols-2 gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => handleAddPrimitive("light_point")}
+                    className="px-1.5 py-1 text-left hover:bg-[#27272a] rounded-sm font-mono text-[#f4f4f5]"
+                  >
+                    Point Light
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddPrimitive("light_sun")}
+                    className="px-1.5 py-1 text-left hover:bg-[#27272a] rounded-sm font-mono text-[#f4f4f5]"
+                  >
+                    Sun Light
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 3. Shading & Matcaps */}
           <div className="flex items-center bg-[#1f1f23] border border-[#3f3f46] p-0.5 rounded-sm">
             {(["solid", "material", "wireframe", "normals"] as const).map((mode) => (
               <button
@@ -1785,6 +2293,47 @@ export function Viewport3D({
                 <span>2: Normals</span>
               </button>
             </div>
+          </div>
+        )}
+
+        
+        {/* Bottom-Left Parametric Operator Adjustment Popup */}
+        {lastAddedPrimitive && (
+          <div className="absolute bottom-10 left-3 bg-[#1f1f23] border border-[#ea580c]/60 rounded-sm shadow-2xl p-2 w-52 z-30 text-xs space-y-1.5">
+            <div className="flex items-center justify-between border-b border-[#3f3f46] pb-1">
+              <span className="font-mono text-[10px] uppercase font-bold text-[#f4f4f5]">
+                {lastAddedPrimitive.type.toUpperCase()} PARAMETERS
+              </span>
+              <button
+                type="button"
+                onClick={() => setLastAddedPrimitive(null)}
+                className="text-[#71717a] hover:text-[#f4f4f5]"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+            <div className="space-y-1 text-[10px]">
+              <div className="flex justify-between text-[#a1a1aa]">
+                <span>Scale Size</span>
+                <span className="font-mono text-[#ea580c]">{lastAddedPrimitive.mesh.scale.x.toFixed(2)}x</span>
+              </div>
+              <input
+                type="range"
+                min="0.2"
+                max="3.0"
+                step="0.1"
+                defaultValue="1.0"
+                onChange={(e) => {
+                  const s = parseFloat(e.target.value);
+                  lastAddedPrimitive.mesh.scale.set(s, s, s);
+                  if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+                }}
+                className="w-full accent-[#ea580c]"
+              />
+            </div>
+            <p className="text-[8px] text-[#71717a] font-mono leading-tight">
+              Interactive parametric adjustments update geometry buffer in real time.
+            </p>
           </div>
         )}
 

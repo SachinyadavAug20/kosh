@@ -34,6 +34,8 @@ export interface McpToolDefinition {
   };
 }
 
+export type ExportFormat = "glb" | "stl" | "obj" | "fbx" | "usdz";
+
 export interface ToolExecutionResult {
   success: boolean;
   toolName: string;
@@ -49,7 +51,7 @@ export interface ToolExecutionResult {
     materials: string[];
     objects: string[];
   };
-  format: "glb" | "stl";
+  format: ExportFormat;
   sizeBytes: number;
   script?: string;
   stdout?: string;

@@ -8,6 +8,7 @@ import { Viewport3D, MeshNodeInfo } from "@/components/Viewport3D";
 import { ShortcutsModal } from "@/components/ShortcutsModal";
 import { useLocalStorageToken } from "@/hooks/useLocalStorageToken";
 import { useMcpClient } from "@/hooks/useMcpClient";
+import { ExportFormat } from "@/types/mcp";
 
 export default function Home() {
   const [mounted, setMounted] = useState(false);
@@ -34,6 +35,39 @@ export default function Home() {
   // Sub-Mesh Selection & Scene Hierarchy Synchronization
   const [selectedMeshName, setSelectedMeshName] = useState<string | null>(null);
   const [meshList, setMeshList] = useState<MeshNodeInfo[]>([]);
+  const [lockedMeshes, setLockedMeshes] = useState<Set<string>>(new Set());
+
+  const handleToggleMeshVisibility = (meshName: string) => {
+    setMeshList((prevList) =>
+      prevList.map((m) => {
+        if (m.name === meshName) {
+          const nextVis = !m.visible;
+          if (m.meshRef) {
+            m.meshRef.visible = nextVis;
+          }
+          return { ...m, visible: nextVis };
+        }
+        return m;
+      })
+    );
+  };
+
+  const handleToggleMeshLock = (meshName: string) => {
+    setLockedMeshes((prev) => {
+      const next = new Set(prev);
+      if (next.has(meshName)) {
+        next.delete(meshName);
+      } else {
+        next.add(meshName);
+      }
+      return next;
+    });
+  };
+
+  const handleMeshSelect = (meshName: string | null) => {
+    if (meshName && lockedMeshes.has(meshName)) return;
+    setSelectedMeshName(meshName);
+  };
 
   // Real-Time In-Viewport Material & Animation Controls
   const [liveMaterialUpdate, setLiveMaterialUpdate] = useState<{
@@ -86,7 +120,7 @@ export default function Home() {
 
   const handleExecute = (
     toolName: string,
-    args: { prompt?: string; script?: string; format: "glb" | "stl"; previousScript?: string }
+    args: { prompt?: string; script?: string; format: ExportFormat; previousScript?: string }
   ) => {
     executeTool(toolName, args, token);
   };
@@ -145,7 +179,7 @@ export default function Home() {
               telemetry={lastResult?.telemetry}
               format={lastResult?.format || "glb"}
               apiBase={apiBase}
-              onMeshSelect={setSelectedMeshName}
+              onMeshSelect={handleMeshSelect}
               onMeshListUpdate={setMeshList}
               externalSelectedMeshName={selectedMeshName}
               onOpenShortcuts={() => setIsShortcutsOpen(true)}
@@ -173,7 +207,10 @@ export default function Home() {
               stderr={lastResult?.stderr || null}
               meshList={meshList}
               selectedMeshName={selectedMeshName}
-              onSelectMesh={setSelectedMeshName}
+              onSelectMesh={handleMeshSelect}
+              onToggleMeshVisibility={handleToggleMeshVisibility}
+              lockedMeshes={lockedMeshes}
+              onToggleMeshLock={handleToggleMeshLock}
             />
           </aside>
         )}

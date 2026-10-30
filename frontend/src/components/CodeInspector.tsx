@@ -11,6 +11,9 @@ import {
   Terminal,
   FileCode,
   Eye,
+  EyeOff,
+  Lock,
+  Unlock,
   Info,
   MousePointer,
 } from "lucide-react";
@@ -21,9 +24,12 @@ interface CodeInspectorProps {
   isLoading?: boolean;
   stdout?: string | null;
   stderr?: string | null;
-  meshList?: Array<{ id: string; name: string; triangles: number; vertices: number }>;
+  meshList?: Array<{ id: string; name: string; triangles: number; vertices: number; visible?: boolean }>;
   selectedMeshName?: string | null;
   onSelectMesh?: (meshName: string) => void;
+  onToggleMeshVisibility?: (meshName: string) => void;
+  lockedMeshes?: Set<string>;
+  onToggleMeshLock?: (meshName: string) => void;
 }
 
 export function CodeInspector({
@@ -35,6 +41,9 @@ export function CodeInspector({
   meshList = [],
   selectedMeshName,
   onSelectMesh,
+  onToggleMeshVisibility,
+  lockedMeshes,
+  onToggleMeshLock,
 }: CodeInspectorProps) {
   const [activeTab, setActiveTab] = useState<"script" | "outliner" | "logs">("script");
   const [copied, setCopied] = useState(false);
@@ -191,11 +200,15 @@ export function CodeInspector({
             ) : (
               meshList.map((m, i) => {
                 const isSelected = selectedMeshName === m.name;
+                const isVisible = m.visible !== false;
+                const isLocked = lockedMeshes?.has(m.name) ?? false;
                 return (
                   <div
                     key={m.id || i}
-                    onClick={() => onSelectMesh?.(m.name)}
-                    className={`flex items-center justify-between p-1.5 border rounded-sm text-xs cursor-pointer transition-colors ${
+                    onClick={() => {
+                      if (!isLocked) onSelectMesh?.(m.name);
+                    }}
+                    className={`flex items-center justify-between p-1.5 border rounded-sm text-xs cursor-pointer transition-colors group ${
                       isSelected
                         ? "bg-[#27272a] border-[#ea580c] text-[#f4f4f5]"
                         : "bg-[#1f1f23] border-[#3f3f46] hover:bg-[#27272a] text-[#a1a1aa]"
@@ -203,16 +216,44 @@ export function CodeInspector({
                   >
                     <div className="flex items-center space-x-2 truncate">
                       <Layers className={`w-3.5 h-3.5 shrink-0 ${isSelected ? "text-[#ea580c]" : "text-[#a1a1aa]"}`} />
-                      <span className={`font-mono truncate ${isSelected ? "font-bold text-[#f4f4f5]" : ""}`}>
+                      <span className={`font-mono truncate ${isSelected ? "font-bold text-[#f4f4f5]" : ""} ${!isVisible ? "line-through text-[#71717a]" : ""}`}>
                         {m.name}
                       </span>
                     </div>
-                    <div className="flex items-center space-x-2 shrink-0">
+                    <div className="flex items-center space-x-1.5 shrink-0">
                       <span className="text-[10px] font-mono text-[#71717a]">
                         {m.triangles.toLocaleString()} tris
                       </span>
+                      {/* Visibility Eye Toggle */}
+                      <button
+                        type="button"
+                        title={isVisible ? "Hide in viewport" : "Show in viewport"}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleMeshVisibility?.(m.name);
+                        }}
+                        className={`p-1 rounded hover:bg-[#3f3f46] transition-colors ${
+                          isVisible ? "text-[#a1a1aa] hover:text-[#f4f4f5]" : "text-[#ea580c]"
+                        }`}
+                      >
+                        {isVisible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                      </button>
+                      {/* Lock Toggle */}
+                      <button
+                        type="button"
+                        title={isLocked ? "Unlock object" : "Lock object"}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleMeshLock?.(m.name);
+                        }}
+                        className={`p-1 rounded hover:bg-[#3f3f46] transition-colors ${
+                          isLocked ? "text-[#ea580c]" : "text-[#71717a] hover:text-[#a1a1aa]"
+                        }`}
+                      >
+                        {isLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                      </button>
                       {isSelected && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#ea580c]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#ea580c] ml-0.5" />
                       )}
                     </div>
                   </div>

@@ -87,7 +87,13 @@ public class BlenderExecutionService {
      * @return Execution result with asset details and log outputs
      */
     public BlenderRunResult executeScript(String script, String format) {
-        String ext = (format != null && format.equalsIgnoreCase("stl")) ? "stl" : "glb";
+        String requestedExt = (format != null) ? format.trim().toLowerCase() : "glb";
+        String ext;
+        if (java.util.Set.of("stl", "obj", "fbx", "usdz", "usd").contains(requestedExt)) {
+            ext = requestedExt;
+        } else {
+            ext = "glb";
+        }
         String assetId = UUID.randomUUID().toString().substring(0, 12);
         String assetFileName = "kosh_" + assetId + "." + ext;
         Path outputFile = storagePath.resolve(assetFileName);
@@ -99,7 +105,11 @@ public class BlenderExecutionService {
             String executableScript = script;
             boolean hasExport = script.contains("export_scene.gltf") ||
                     script.contains("wm.stl_export") ||
-                    script.contains("export_mesh.stl");
+                    script.contains("export_mesh.stl") ||
+                    script.contains("obj_export") ||
+                    script.contains("export_scene.obj") ||
+                    script.contains("export_scene.fbx") ||
+                    script.contains("usd_export");
 
             if (!hasExport) {
                 String autoExport = """
@@ -156,8 +166,23 @@ public class BlenderExecutionService {
                                 bpy.ops.wm.stl_export(filepath=_out)
                             except Exception:
                                 bpy.ops.export_mesh.stl(filepath=_out)
+                        elif _out.lower().endswith(".obj"):
+                            try:
+                                bpy.ops.wm.obj_export(filepath=_out)
+                            except Exception:
+                                bpy.ops.export_scene.obj(filepath=_out)
+                        elif _out.lower().endswith(".fbx"):
+                            try:
+                                bpy.ops.export_scene.fbx(filepath=_out)
+                            except Exception:
+                                pass
+                        elif _out.lower().endswith(".usdz") or _out.lower().endswith(".usd"):
+                            try:
+                                bpy.ops.wm.usd_export(filepath=_out)
+                            except Exception:
+                                pass
                         else:
-                            bpy.ops.export_scene.gltf(filepath=_out, export_format='GLB')
+                            bpy.ops.export_scene.gltf(filepath=_out, export_format='GLB', export_animations=True)
                     """;
                 executableScript = executableScript + "\n" + autoExport;
             }

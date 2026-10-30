@@ -7,6 +7,7 @@ import {
   McpRpcResponse,
   McpToolDefinition,
   ToolExecutionResult,
+  ExportFormat,
 } from "@/types/mcp";
 
 const MCP_URL = process.env.NEXT_PUBLIC_MCP_URL || "http://localhost:8080/mcp";
@@ -75,7 +76,7 @@ export function useMcpClient() {
   const executeTool = useCallback(
     async (
       toolName: string,
-      args: { prompt?: string; script?: string; previousScript?: string; format?: "glb" | "stl" },
+      args: { prompt?: string; script?: string; previousScript?: string; format?: ExportFormat },
       token?: string
     ): Promise<ToolExecutionResult | null> => {
       setIsLoading(true);
