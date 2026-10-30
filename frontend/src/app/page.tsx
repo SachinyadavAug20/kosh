@@ -1,29 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
-import dynamic from "next/dynamic";
+import React, { useState, useEffect } from "react";
 import { TerminalHeader } from "@/components/TerminalHeader";
 import { CommandConsole } from "@/components/CommandConsole";
 import { CodeInspector } from "@/components/CodeInspector";
+import { Viewport3D } from "@/components/Viewport3D";
 import { useLocalStorageToken } from "@/hooks/useLocalStorageToken";
 import { useMcpClient } from "@/hooks/useMcpClient";
 import { Terminal, Code, Cpu } from "lucide-react";
 
-// Dynamically import Viewport3D with SSR disabled to guarantee clean WebGL mounting
-const Viewport3D = dynamic(
-  () => import("@/components/Viewport3D").then((mod) => mod.Viewport3D),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-[#09090b] text-[#71717a] font-mono text-xs">
-        <div className="w-6 h-6 border-2 border-[#22c55e] border-t-transparent rounded-full animate-spin mb-3" />
-        <span>INITIALIZING THREE.JS WEBGL CONTEXT...</span>
-      </div>
-    ),
-  }
-);
-
 export default function Home() {
+  const [mounted, setMounted] = useState(false);
   const { token, saveToken, clearToken } = useLocalStorageToken();
   const {
     health,
@@ -38,6 +25,10 @@ export default function Home() {
   } = useMcpClient();
 
   const [leftTab, setLeftTab] = useState<"console" | "code">("console");
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleExecute = (
     toolName: string,
@@ -126,12 +117,19 @@ export default function Home() {
 
         {/* Right Pane (50%): Three.js Monospace 3D Viewport */}
         <div className="w-full md:w-1/2 flex flex-col min-h-0 bg-[#09090b]">
-          <Viewport3D
-            assetUrl={lastResult?.assetUrl}
-            assetName={lastResult?.assetName}
-            format={lastResult?.format || "glb"}
-            apiBase={apiBase}
-          />
+          {mounted ? (
+            <Viewport3D
+              assetUrl={lastResult?.assetUrl}
+              assetName={lastResult?.assetName}
+              format={lastResult?.format || "glb"}
+              apiBase={apiBase}
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-[#09090b] text-[#71717a] font-mono text-xs">
+              <div className="w-6 h-6 border-2 border-[#22c55e] border-t-transparent rounded-full animate-spin mb-3" />
+              <span>INITIALIZING THREE.JS WEBGL CONTEXT...</span>
+            </div>
+          )}
         </div>
       </div>
     </main>
