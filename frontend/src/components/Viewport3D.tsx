@@ -16,6 +16,7 @@ import { FloatingInspector, SwatchPreset } from "./FloatingInspector";
 import { SimplifyModifier } from "three/examples/jsm/modifiers/SimplifyModifier.js";
 import { CanvasOverlay } from "./CanvasOverlay";
 import { DccQuickTray, LightingStage } from "./DccQuickTray";
+import { UniversalGizmo, GizmoMode, DragBadgeInfo } from "./UniversalGizmo";
 import {
   Download,
   RotateCw,
@@ -67,6 +68,7 @@ export type CameraView = "iso" | "front" | "back" | "top" | "bottom" | "right" |
 export type AxisConstraint = "none" | "x" | "y" | "z" | "shift-x" | "shift-y" | "shift-z";
 export type SnapTarget = "closest" | "center" | "median" | "active";
 export type SnapElement = "increment" | "vertex" | "edge" | "face" | "volume";
+export type TransformMode = "all" | "select" | "translate" | "rotate" | "scale";
 
 export interface MeshNodeInfo {
   id: string;
@@ -142,7 +144,9 @@ export function Viewport3D({
   const [isAddMenuOpen, setIsAddMenuOpen] = useState<boolean>(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState<boolean>(false);
   const [lastAddedPrimitive, setLastAddedPrimitive] = useState<{ type: string; mesh: THREE.Mesh; radius?: number; depth?: number; segments?: number } | null>(null);
-  const [transformMode, setTransformMode] = useState<"select" | "translate" | "rotate" | "scale">("select");
+  const [transformMode, setTransformMode] = useState<TransformMode>("all");
+  const [liveDragBadge, setLiveDragBadge] = useState<DragBadgeInfo | null>(null);
+  const universalGizmoRef = useRef<UniversalGizmo | null>(null);
   const [axisConstraint, setAxisConstraint] = useState<AxisConstraint>("none");
   const [isTrackball, setIsTrackball] = useState<boolean>(false);
   const [isOrtho, setIsOrtho] = useState<boolean>(false);
@@ -372,6 +376,51 @@ export function Viewport3D({
     scene.add(transform.getHelper());
     transformControlsRef.current = transform;
 
+    // H. Modern All-In-One Universal Gizmo
+    const universalGizmo = new UniversalGizmo(perspCamera, renderer.domElement, {
+      mode: "all",
+      snapEnabled: false,
+      gridSnapUnit: 0.5,
+      rotationSnapStep: 15,
+      isShiftHeld: false,
+      isCtrlHeld: false,
+      onDragStart: () => {
+        orbit.enabled = false;
+      },
+      onDragMove: (badge) => {
+        setLiveDragBadge(badge);
+      },
+      onDragEnd: () => {
+        orbit.enabled = true;
+        setLiveDragBadge(null);
+      },
+      onObjectChange: () => {
+        const obj = universalGizmo.getTarget();
+        if (obj) {
+          setLiveTransform({
+            pos: [
+              parseFloat(obj.position.x.toFixed(2)),
+              parseFloat(obj.position.y.toFixed(2)),
+              parseFloat(obj.position.z.toFixed(2)),
+            ],
+            rot: [
+              parseFloat(THREE.MathUtils.radToDeg(obj.rotation.x).toFixed(1)),
+              parseFloat(THREE.MathUtils.radToDeg(obj.rotation.y).toFixed(1)),
+              parseFloat(THREE.MathUtils.radToDeg(obj.rotation.z).toFixed(1)),
+            ],
+            scale: [
+              parseFloat(obj.scale.x.toFixed(2)),
+              parseFloat(obj.scale.y.toFixed(2)),
+              parseFloat(obj.scale.z.toFixed(2)),
+            ],
+          });
+          if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+        }
+      },
+    });
+    scene.add(universalGizmo.group);
+    universalGizmoRef.current = universalGizmo;
+
     // F. Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
     scene.add(ambientLight);
@@ -539,7 +588,9 @@ export function Viewport3D({
       }
 
       orbit.update();
+      universalGizmo.update();
       const activeCamera = isOrtho ? orthoCamera : perspCamera;
+      universalGizmo.setCamera(activeCamera);
       renderer.render(scene, activeCamera);
     };
     animate();
@@ -571,6 +622,7 @@ export function Viewport3D({
       orbit.dispose();
       transform.dispose();
       renderer.dispose();
+      universalGizmo.dispose();
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
@@ -839,17 +891,65 @@ export function Viewport3D({
   }, [shadingMode, matcap, applyShading]);
 
   // -------------------------------------------------------------
-  // 4. Raycasting & Sub-Mesh Selection (Click vs Orbit Drag)
+  // 4. Raycasting & Sub-Mesh Selection (Click vs Orbit Drag & Universal Gizmo)
   // -------------------------------------------------------------
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!containerRef.current || !cameraRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycasterRef.current.setFromCamera(
+      new THREE.Vector2(x, y),
+      isOrtho && orthoCameraRef.current ? orthoCameraRef.current : cameraRef.current
+    );
+
+    if (universalGizmoRef.current) {
+      universalGizmoRef.current.setOptions({
+        isShiftHeld,
+        isCtrlHeld,
+        snapEnabled,
+        gridSnapUnit,
+        rotationSnapStep,
+      });
+      const handled = universalGizmoRef.current.onPointerMove(e.nativeEvent, raycasterRef.current);
+      if (handled) return;
+    }
+  };
+
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     pointerDownPosRef.current = { x: e.clientX, y: e.clientY };
+
+    if (containerRef.current && cameraRef.current && universalGizmoRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycasterRef.current.setFromCamera(
+        new THREE.Vector2(x, y),
+        isOrtho && orthoCameraRef.current ? orthoCameraRef.current : cameraRef.current
+      );
+
+      const gizmoIntercepted = universalGizmoRef.current.onPointerDown(e.nativeEvent, raycasterRef.current);
+      if (gizmoIntercepted) {
+        if (orbitControlsRef.current) orbitControlsRef.current.enabled = false;
+        return;
+      }
+    }
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (orbitControlsRef.current) orbitControlsRef.current.enabled = true;
+    if (universalGizmoRef.current?.isDragging) {
+      universalGizmoRef.current.onPointerUp();
+      setLiveDragBadge(null);
+      return;
+    }
+    setLiveDragBadge(null);
+
     const dx = Math.abs(e.clientX - pointerDownPosRef.current.x);
     const dy = Math.abs(e.clientY - pointerDownPosRef.current.y);
 
-    // If mouse moved more than 4px, user was rotating/orbiting camera, not selecting
+    // If mouse moved more than 4px, user was orbiting camera
     if (dx > 4 || dy > 4) return;
     if (!containerRef.current || !cameraRef.current || !currentModelRef.current) return;
 
@@ -857,7 +957,10 @@ export function Viewport3D({
     const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
-    raycasterRef.current.setFromCamera(new THREE.Vector2(x, y), isOrtho ? orthoCameraRef.current! : cameraRef.current);
+    raycasterRef.current.setFromCamera(
+      new THREE.Vector2(x, y),
+      isOrtho && orthoCameraRef.current ? orthoCameraRef.current : cameraRef.current
+    );
     const intersects = raycasterRef.current.intersectObjects(currentModelRef.current.children, true);
 
     if (intersects.length > 0) {
@@ -872,6 +975,7 @@ export function Viewport3D({
       if (hitMesh) {
         setSelectedMesh(hitMesh);
         onMeshSelect?.(hitMesh.name);
+        universalGizmoRef.current?.attach(hitMesh);
 
         // Update live transform state to match selected mesh
         setLiveTransform({
@@ -901,9 +1005,41 @@ export function Viewport3D({
         }
       }
     } else {
-      // Clicked in empty space -> Deselect
+      // Clicked in empty space -> Deselect cleanly and hide gizmo
       setSelectedMesh(null);
       onMeshSelect?.(null);
+      universalGizmoRef.current?.attach(null);
+    }
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!containerRef.current || !cameraRef.current || !orbitControlsRef.current || !currentModelRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycasterRef.current.setFromCamera(
+      new THREE.Vector2(x, y),
+      isOrtho && orthoCameraRef.current ? orthoCameraRef.current : cameraRef.current
+    );
+    const intersects = raycasterRef.current.intersectObjects(currentModelRef.current.children, true);
+
+    if (intersects.length > 0) {
+      let hitMesh: THREE.Mesh | null = null;
+      for (const hit of intersects) {
+        if (hit.object instanceof THREE.Mesh) {
+          hitMesh = hit.object;
+          break;
+        }
+      }
+      if (hitMesh) {
+        setSelectedMesh(hitMesh);
+        onMeshSelect?.(hitMesh.name);
+        universalGizmoRef.current?.attach(hitMesh);
+        smoothFocusObject(hitMesh);
+      }
+    } else if (currentModelRef.current) {
+      smoothFocusObject(currentModelRef.current);
     }
   };
 
@@ -932,6 +1068,105 @@ export function Viewport3D({
     }
   }, [externalSelectedMeshName]);
 
+  // Sync Modern Universal Gizmo Options with React State
+  useEffect(() => {
+    if (universalGizmoRef.current) {
+      universalGizmoRef.current.setOptions({
+        mode: transformMode as GizmoMode,
+        snapEnabled,
+        gridSnapUnit,
+        rotationSnapStep,
+        isShiftHeld,
+        isCtrlHeld,
+      });
+    }
+  }, [transformMode, snapEnabled, gridSnapUnit, rotationSnapStep, isShiftHeld, isCtrlHeld]);
+
+  // Sync Universal Gizmo Attachment on selectedMesh change
+  useEffect(() => {
+    if (universalGizmoRef.current) {
+      universalGizmoRef.current.attach(selectedMesh);
+    }
+  }, [selectedMesh]);
+
+  // Smooth Focus Camera Animation on Object
+  const smoothFocusObject = useCallback((obj: THREE.Object3D) => {
+    if (!cameraRef.current || !orbitControlsRef.current) return;
+    const box = new THREE.Box3().setFromObject(obj);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z, 0.5);
+    const cam = cameraRef.current;
+    const fov = cam.fov * (Math.PI / 180);
+    let cameraDist = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
+    cameraDist = Math.max(cameraDist, 2.0);
+
+    const startTarget = orbitControlsRef.current.target.clone();
+    const endTarget = center.clone();
+    const startCamPos = cam.position.clone();
+    const dir = startCamPos.clone().sub(startTarget).normalize();
+    const endCamPos = center.clone().add(dir.multiplyScalar(cameraDist));
+
+    const startTime = performance.now();
+    const duration = 380;
+
+    const animateFocus = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1.0, elapsed / duration);
+      const ease = 1 - Math.pow(1 - progress, 3);
+
+      orbitControlsRef.current?.target.lerpVectors(startTarget, endTarget, ease);
+      cam.position.lerpVectors(startCamPos, endCamPos, ease);
+      orbitControlsRef.current?.update();
+
+      if (progress < 1.0) {
+        requestAnimationFrame(animateFocus);
+      }
+    };
+    requestAnimationFrame(animateFocus);
+  }, []);
+
+  // 1-Click Transform Reset Actions for Selected Mesh
+  const handlePlaceOnFloor = useCallback(() => {
+    if (universalGizmoRef.current) {
+      universalGizmoRef.current.placeOnFloor();
+    } else if (selectedMesh) {
+      const bbox = new THREE.Box3().setFromObject(selectedMesh);
+      const bottomOffset = selectedMesh.position.y - bbox.min.y;
+      selectedMesh.position.y = bottomOffset;
+    }
+    if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+  }, [selectedMesh]);
+
+  const handleCenterToOrigin = useCallback(() => {
+    if (universalGizmoRef.current) {
+      universalGizmoRef.current.centerToOrigin();
+    } else if (selectedMesh) {
+      selectedMesh.position.set(0, selectedMesh.position.y, 0);
+    }
+    if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+  }, [selectedMesh]);
+
+  const handleResetRotation = useCallback(() => {
+    if (universalGizmoRef.current) {
+      universalGizmoRef.current.resetRotation();
+    } else if (selectedMesh) {
+      selectedMesh.rotation.set(0, 0, 0);
+    }
+    if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+  }, [selectedMesh]);
+
+  const handleResetScale = useCallback(() => {
+    if (universalGizmoRef.current) {
+      universalGizmoRef.current.resetScale();
+    } else if (selectedMesh) {
+      selectedMesh.scale.set(1, 1, 1);
+    }
+    if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+  }, [selectedMesh]);
+
   // -------------------------------------------------------------
   // 5. Native Blender Transform Gizmo & Snapping Engine
   // -------------------------------------------------------------
@@ -939,7 +1174,7 @@ export function Viewport3D({
     if (!transformControlsRef.current) return;
     const tc = transformControlsRef.current;
 
-    if (transformMode === "select") {
+    if (transformMode === "select" || transformMode === "all") {
       tc.enabled = false;
       tc.detach();
     } else {
@@ -1812,6 +2047,32 @@ export function Viewport3D({
         }
       }
 
+      // Universal & DCC Transform Modes: Q (All), V (Select), W (Move), E (Rotate), R (Scale)
+      if (e.key.toLowerCase() === "q" && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        setTransformMode("all");
+        setAxisConstraint("none");
+        return;
+      }
+      if (e.key.toLowerCase() === "v" && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        setTransformMode("select");
+        setAxisConstraint("none");
+        return;
+      }
+      if (e.key.toLowerCase() === "w" && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        setTransformMode("translate");
+        setAxisConstraint("none");
+        return;
+      }
+      if (e.key.toLowerCase() === "e" && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        setTransformMode("rotate");
+        setAxisConstraint("none");
+        return;
+      }
+
       // Transform Modals: G, R, S
       if (e.key.toLowerCase() === "g" && !e.ctrlKey) {
         e.preventDefault();
@@ -2527,70 +2788,88 @@ export function Viewport3D({
 
         {/* Right: Gizmos, Snapping, Overlays, Direct Downloads */}
         <div className="flex items-center space-x-1">
-          {/* Transform Gizmos (G, R, S) */}
-          <div className="flex items-center bg-[#1f1f23] border border-[#3f3f46] p-0.5 rounded-sm space-x-0.5">
+          {/* Primary Tool Segmented Pill (Q: All, V: Select, W: Move, E: Rotate, R: Scale) */}
+          <div className="flex items-center bg-[#18181b] border border-[#333338] p-0.5 rounded-sm space-x-0.5 font-mono text-[10px]">
+            <button
+              onClick={() => {
+                setTransformMode("all");
+                setAxisConstraint("none");
+              }}
+              title="All-In-One Universal Gizmo (Q) — Move, Rotate & Scale simultaneously"
+              className={`px-2 py-1 rounded-xs flex items-center space-x-1 transition-colors ${
+                transformMode === "all" ? "bg-[#ea580c] text-white font-bold" : "text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a]"
+              }`}
+            >
+              <Sparkles className="w-3 h-3 text-[#ea580c] group-hover:text-white" />
+              <span>All (Q)</span>
+            </button>
             <button
               onClick={() => {
                 setTransformMode("select");
                 setAxisConstraint("none");
               }}
-              title="Select Mode (Q / Esc)"
-              className={`p-1 rounded-sm transition-colors ${
-                transformMode === "select" ? "bg-[#3f3f46] text-[#f4f4f5]" : "text-[#a1a1aa] hover:text-[#f4f4f5]"
+              title="Select Only (V) — Pure raycast click without gizmo"
+              className={`px-2 py-1 rounded-xs flex items-center space-x-1 transition-colors ${
+                transformMode === "select" ? "bg-[#333338] text-[#f4f4f5] font-bold" : "text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a]"
               }`}
             >
-              <Crosshair className="w-3.5 h-3.5" />
+              <Crosshair className="w-3 h-3" />
+              <span>Select (V)</span>
             </button>
             <button
               onClick={() => {
                 setTransformMode("translate");
                 setAxisConstraint("none");
               }}
-              title="Translate Gizmo (G / W)"
-              className={`p-1 rounded-sm transition-colors ${
-                transformMode === "translate" ? "bg-[#3f3f46] text-[#f4f4f5] font-bold" : "text-[#a1a1aa] hover:text-[#f4f4f5]"
+              title="Move / Translate (W / G)"
+              className={`px-2 py-1 rounded-xs flex items-center space-x-1 transition-colors ${
+                transformMode === "translate" ? "bg-[#ea580c] text-white font-bold" : "text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a]"
               }`}
             >
-              <Move className="w-3.5 h-3.5" />
+              <Move className="w-3 h-3" />
+              <span>Move (W)</span>
             </button>
             <button
               onClick={() => {
                 setTransformMode("rotate");
                 setAxisConstraint("none");
               }}
-              title="Rotate Gizmo (R) — Press R twice for Trackball"
-              className={`p-1 rounded-sm transition-colors ${
-                transformMode === "rotate" ? "bg-[#3f3f46] text-[#f4f4f5] font-bold" : "text-[#a1a1aa] hover:text-[#f4f4f5]"
+              title="Rotate (E / R)"
+              className={`px-2 py-1 rounded-xs flex items-center space-x-1 transition-colors ${
+                transformMode === "rotate" ? "bg-[#ea580c] text-white font-bold" : "text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a]"
               }`}
             >
-              <RotateCw className="w-3.5 h-3.5" />
+              <RotateCw className="w-3 h-3" />
+              <span>Rotate (E)</span>
             </button>
             <button
               onClick={() => {
                 setTransformMode("scale");
                 setAxisConstraint("none");
               }}
-              title="Scale Gizmo (S)"
-              className={`p-1 rounded-sm transition-colors ${
-                transformMode === "scale" ? "bg-[#3f3f46] text-[#f4f4f5] font-bold" : "text-[#a1a1aa] hover:text-[#f4f4f5]"
+              title="Scale (R / S)"
+              className={`px-2 py-1 rounded-xs flex items-center space-x-1 transition-colors ${
+                transformMode === "scale" ? "bg-[#ea580c] text-white font-bold" : "text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a]"
               }`}
             >
-              <Scale className="w-3.5 h-3.5" />
+              <Scale className="w-3 h-3" />
+              <span>Scale (R)</span>
             </button>
           </div>
 
-          {/* Magnet Snap Toggle & Settings Popover */}
+          {/* Simple Magnet Toggle (Prominent beginner button) */}
           <div className="relative">
-            <div className="flex items-center bg-[#1f1f23] border border-[#3f3f46] rounded-sm p-0.5">
+            <div className="flex items-center bg-[#18181b] border border-[#333338] rounded-sm p-0.5 font-mono text-[10px]">
               <button
                 type="button"
                 onClick={() => setSnapEnabled(!snapEnabled)}
-                title={`Toggle Snapping (Shift + Tab to configure) | Status: ${snapEnabled ? "ON" : "OFF"}`}
-                className={`p-1 rounded-sm transition-colors ${
-                  snapEnabled ? "bg-[#ea580c] text-white" : "text-[#a1a1aa] hover:text-[#f4f4f5]"
+                title={`Magnet Snap (Ctrl inverts) | Status: ${snapEnabled ? "SNAPPED (ON)" : "FREE (OFF)"}`}
+                className={`px-2 py-1 rounded-xs flex items-center space-x-1.5 transition-colors ${
+                  snapEnabled ? "bg-[#ea580c] text-white font-bold" : "text-[#a1a1aa] hover:text-[#f4f4f5]"
                 }`}
               >
-                <Magnet className="w-3.5 h-3.5" />
+                <Magnet className="w-3 h-3" />
+                <span>{snapEnabled ? "SNAP ON" : "FREE"}</span>
               </button>
               <button
                 type="button"
@@ -2771,9 +3050,25 @@ export function Viewport3D({
       <div
         ref={containerRef}
         onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onDoubleClick={handleDoubleClick}
         className="flex-1 w-full h-full relative overflow-hidden outline-none cursor-grab active:cursor-grabbing"
       >
+        {/* Friendly Live Numeric Dragging Badge (Attached to Mouse) */}
+        {liveDragBadge && (
+          <div
+            className="pointer-events-none fixed z-50 px-2 py-1 rounded bg-[#18181b]/95 border border-[#ea580c] text-white font-mono text-[11px] shadow-2xl flex items-center space-x-1.5 backdrop-blur-xs transform -translate-x-1/2 -translate-y-full mb-2"
+            style={{
+              left: `${liveDragBadge.x}px`,
+              top: `${liveDragBadge.y - 12}px`,
+            }}
+          >
+            <span className="font-bold text-[#ea580c] uppercase">{liveDragBadge.type}</span>
+            <span className="text-[#52525b]">|</span>
+            <span className="font-bold text-[#f4f4f5]">{liveDragBadge.text}</span>
+          </div>
+        )}
         {/* Loading Spinner Overlay */}
         {isLoadingModel && (
           <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#141416]/80 text-[#f4f4f5]">
@@ -2961,6 +3256,10 @@ export function Viewport3D({
         currentColor={matColor}
         onSubdivide={handleSubdivide}
         onAddKeyframe={() => handleAddKeyframe(currentFrame)}
+        onPlaceOnFloor={handlePlaceOnFloor}
+        onCenterOrigin={handleCenterToOrigin}
+        onResetRotation={handleResetRotation}
+        onResetScale={handleResetScale}
       />
 
       {/* Floating Transform Numeric Input Pill (While G, R, S active) */}
@@ -3066,38 +3365,44 @@ export function Viewport3D({
           )}
         </div>
 
-        {/* Context-Sensitive Key Hints Strip */}
-        {transformMode !== "select" ? (
-          <div className="flex items-center space-x-2 text-[10px] font-mono">
-            <span className="px-1.5 py-0.5 bg-[#ea580c] text-white font-bold rounded-xs">
-              [{transformMode === "translate" ? "G: TRANSLATE" : transformMode === "rotate" ? (isTrackball ? "R: TRACKBALL" : "R: ROTATE") : "S: SCALE"}]
-            </span>
-            <span className="text-[#f4f4f5] font-bold">
-              {axisConstraint !== "none" ? `AXIS: ${axisConstraint.toUpperCase()}` : "FREE"}
-            </span>
-            <span className="text-[#a1a1aa]">X/Y/Z: Constrain</span>
-            <span className="text-[#a1a1aa]">Shift+X/Y/Z: Plane</span>
-            <span className="text-[#a1a1aa]">Ctrl: Snap ({gridSnapUnit}m)</span>
-            <span className="text-[#a1a1aa]">Shift: Precision</span>
-            <span className="text-[#f4f4f5] font-semibold">LMB/Enter: Confirm</span>
-            <span className="text-[#ef4444] font-semibold">RMB/Esc: Cancel</span>
-          </div>
-        ) : (
-          <div className="flex items-center space-x-3 text-[10px] text-[#71717a]">
-            <span>Click: Select</span>
-            <span>G: Move</span>
-            <span>R: Rotate</span>
-            <span>S: Scale</span>
-            <span>Ctrl: Snap</span>
-            <span>Shift+Tab: Snap Settings</span>
-            <span>Z: Shading</span>
-            <span>1/3/7: Views</span>
-            <span>F: Focus</span>
+        {/* Onboarding Gentle Hint Ribbon (Friendly Context Bar) */}
+        {selectedMesh ? (
+          <div className="flex items-center space-x-3 text-[11px] font-sans text-[#a1a1aa]">
+            <span className="text-[#ea580c] font-semibold">Drag arrows to move</span>
+            <span className="text-[#52525b]">•</span>
+            <span>Drag rings to turn</span>
+            <span className="text-[#52525b]">•</span>
+            <span>Drag cubes to scale</span>
+            <span className="text-[#52525b]">•</span>
+            <span className="text-[#f4f4f5]">Hold Shift: Drop on floor</span>
+            <span className="text-[#52525b]">•</span>
+            <span>Double click: Focus</span>
+            <span className="text-[#52525b]">•</span>
+            <span>Del: Delete</span>
             {onOpenShortcuts && (
               <button
                 type="button"
                 onClick={onOpenShortcuts}
-                className="text-[#a1a1aa] hover:text-[#f4f4f5] font-semibold underline"
+                className="text-[#f4f4f5] hover:text-[#ea580c] font-mono text-[10px] underline ml-2"
+              >
+                F1: Cheatsheet
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center space-x-3 text-[11px] font-sans text-[#71717a]">
+            <span className="text-[#f4f4f5] font-medium">Click any object to select & edit</span>
+            <span className="text-[#3f3f46]">•</span>
+            <span>Drag empty space to rotate view</span>
+            <span className="text-[#3f3f46]">•</span>
+            <span>Scroll to zoom</span>
+            <span className="text-[#3f3f46]">•</span>
+            <span>Shift + drag to pan</span>
+            {onOpenShortcuts && (
+              <button
+                type="button"
+                onClick={onOpenShortcuts}
+                className="text-[#a1a1aa] hover:text-[#f4f4f5] font-mono text-[10px] underline ml-2"
               >
                 F1: Hotkeys
               </button>

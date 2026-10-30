@@ -567,6 +567,96 @@ public class GoogleGeminiClient {
                 """.formatted(format, exportCmd);
         }
 
+        // Procedural Animation Fallback: House Blasting and Reverse Reassembly
+        if (lowerPrompt.contains("house") || lowerPrompt.contains("blast") || lowerPrompt.contains("explod") || lowerPrompt.contains("shatter") || lowerPrompt.contains("demolish") || lowerPrompt.contains("reverse")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+                from mathutils import Vector, Euler, Matrix
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+                scene.frame_start = 1
+                scene.frame_end = 120
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def create_mat(name, color, metallic=0.0, roughness=0.5):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    b = mat.node_tree.nodes.get('Principled BSDF')
+                    if b:
+                        b.inputs['Base Color'].default_value = color
+                        b.inputs['Metallic'].default_value = metallic
+                        b.inputs['Roughness'].default_value = roughness
+                    return mat
+
+                mat_stone = create_mat('Mat_StoneFoundation', (0.25, 0.25, 0.28, 1.0), 0.1, 0.8)
+                mat_walls = create_mat('Mat_PlasterWalls', (0.85, 0.82, 0.78, 1.0), 0.0, 0.6)
+                mat_roof = create_mat('Mat_SlateRoof', (0.18, 0.22, 0.28, 1.0), 0.1, 0.45)
+                mat_wood = create_mat('Mat_OakTrim', (0.45, 0.28, 0.15, 1.0), 0.05, 0.5)
+                mat_brick = create_mat('Mat_RedBrick', (0.65, 0.25, 0.18, 1.0), 0.0, 0.75)
+
+                parts = [
+                    ('01_Foundation', 'cube', (0, 0, 0.15), (3.2, 3.2, 0.3), mat_stone, (0, 0, -0.4), (0, 0, 0)),
+                    ('02_Wall_Front', 'cube', (0, -1.4, 1.2), (3.0, 0.25, 1.8), mat_walls, (0, -2.5, 1.2), (15, 0, -20)),
+                    ('03_Wall_Back', 'cube', (0, 1.4, 1.2), (3.0, 0.25, 1.8), mat_walls, (0, 2.8, 1.5), (-25, 0, 15)),
+                    ('04_Wall_Left', 'cube', (-1.4, 0, 1.2), (0.25, 2.6, 1.8), mat_walls, (-2.8, 0, 1.4), (0, 30, 25)),
+                    ('05_Wall_Right', 'cube', (1.4, 0, 1.2), (0.25, 2.6, 1.8), mat_walls, (2.9, 0, 1.3), (0, -35, -20)),
+                    ('06_Roof_Pitch_L', 'cube', (-0.9, 0, 2.6), (1.8, 3.4, 0.18), mat_roof, (-2.2, 0, 3.2), (10, 45, 40)),
+                    ('07_Roof_Pitch_R', 'cube', (0.9, 0, 2.6), (1.8, 3.4, 0.18), mat_roof, (2.2, 0, 3.4), (-15, -45, -35)),
+                    ('08_Chimney', 'cube', (0.8, 0.8, 3.2), (0.45, 0.45, 1.1), mat_brick, (1.8, 1.8, 4.5), (45, -30, 60)),
+                    ('09_Door_Frame', 'cube', (0, -1.5, 0.8), (0.8, 0.15, 1.2), mat_wood, (0, -3.8, 0.5), (60, 0, 0)),
+                    ('10_Column_L', 'cylinder', (-1.3, -1.8, 0.8), (0.15, 0.15, 1.2), mat_wood, (-3.2, -2.5, 0.9), (20, 45, 0)),
+                    ('11_Column_R', 'cylinder', (1.3, -1.8, 0.8), (0.15, 0.15, 1.2), mat_wood, (3.2, -2.5, 0.8), (-20, -45, 0)),
+                    ('12_Debris_A', 'cube', (-0.5, -0.6, 1.8), (0.35, 0.35, 0.35), mat_stone, (-3.5, -3.0, 3.0), (120, 45, 80)),
+                    ('13_Debris_B', 'cube', (0.6, -0.4, 2.0), (0.4, 0.4, 0.3), mat_walls, (3.2, -2.8, 3.5), (-90, 80, -40)),
+                    ('14_Debris_C', 'cube', (-0.4, 0.8, 2.2), (0.3, 0.3, 0.3), mat_roof, (-2.5, 3.2, 4.0), (70, -110, 50)),
+                    ('15_Debris_D', 'cube', (0.5, 0.7, 2.1), (0.35, 0.35, 0.35), mat_brick, (2.8, 3.5, 3.8), (-60, 95, -75)),
+                ]
+
+                for name, ptype, loc, sz, mat, blast_offset, rot_deg in parts:
+                    if ptype == 'cube':
+                        bpy.ops.mesh.primitive_cube_add(size=1.0, location=loc)
+                    else:
+                        bpy.ops.mesh.primitive_cylinder_add(radius=sz[0], depth=sz[2], location=loc)
+                    obj = bpy.context.active_object
+                    obj.name = name
+                    if ptype == 'cube':
+                        obj.scale = sz
+                    obj.data.materials.append(mat)
+                    obj.rotation_mode = 'XYZ'
+                    
+                    # Frame 1: Original assembled position
+                    obj.keyframe_insert(data_path='location', frame=1)
+                    obj.keyframe_insert(data_path='rotation_euler', frame=1)
+                    
+                    # Frame 60: Blasted outward along vector + tumbling rotation
+                    blast_loc = (loc[0] + blast_offset[0], loc[1] + blast_offset[1], loc[2] + blast_offset[2])
+                    obj.location = blast_loc
+                    obj.rotation_euler = (math.radians(rot_deg[0]), math.radians(rot_deg[1]), math.radians(rot_deg[2]))
+                    obj.keyframe_insert(data_path='location', frame=60)
+                    obj.keyframe_insert(data_path='rotation_euler', frame=60)
+                    
+                    # Frame 120: Reverse reassembled back to initial state
+                    obj.location = loc
+                    obj.rotation_euler = (0, 0, 0)
+                    obj.keyframe_insert(data_path='location', frame=120)
+                    obj.keyframe_insert(data_path='rotation_euler', frame=120)
+
+                klight = bpy.data.lights.new('BlastKey', type='AREA')
+                klight.energy = 950
+                kobj = bpy.data.objects.new('BlastKey', klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (5, 5, 8)
+
+                bpy.ops.export_scene.gltf(filepath=output_path, export_format='GLB', export_animations=True)
+                """.formatted(format);
+        }
+
         // 3. Tool: blender_animate_pipeline
         if ("blender_animate_pipeline".equals(normalizedTool)) {
             return """

@@ -72,6 +72,10 @@ export interface FloatingInspectorProps {
   currentColor: string;
   onSubdivide: () => void;
   onAddKeyframe: () => void;
+  onPlaceOnFloor?: () => void;
+  onCenterOrigin?: () => void;
+  onResetRotation?: () => void;
+  onResetScale?: () => void;
 }
 
 export function FloatingInspector({
@@ -86,6 +90,10 @@ export function FloatingInspector({
   currentColor,
   onSubdivide,
   onAddKeyframe,
+  onPlaceOnFloor,
+  onCenterOrigin,
+  onResetRotation,
+  onResetScale,
 }: FloatingInspectorProps) {
   const [roughness, setRoughness] = useState(currentRoughness);
   const [metalness, setMetalness] = useState(currentMetalness);
@@ -220,6 +228,48 @@ export function FloatingInspector({
           <Plus className="w-3 h-3" />
           <span>+ Keyframe (I)</span>
         </button>
+      </div>
+
+      {/* 1-Click Transform Reset Panel */}
+      <div className="space-y-1 pt-1 border-t border-[#27272a]">
+        <div className="text-[10px] text-[#71717a] font-mono uppercase flex items-center justify-between">
+          <span>Transform Reset</span>
+          <span className="text-[8px] text-[#52525b]">Quick Align</span>
+        </div>
+        <div className="grid grid-cols-2 gap-1 text-[10px] font-mono">
+          <button
+            type="button"
+            onClick={onPlaceOnFloor}
+            title="Snap minimum bounding box to floor grid (Y=0)"
+            className="py-1 px-1 bg-[#202024] hover:bg-[#2e2e34] border border-[#333338] rounded-xs text-[#a1a1aa] hover:text-[#f4f4f5] transition-colors"
+          >
+            Drop to Floor
+          </button>
+          <button
+            type="button"
+            onClick={onCenterOrigin}
+            title="Move object to X:0, Z:0 center"
+            className="py-1 px-1 bg-[#202024] hover:bg-[#2e2e34] border border-[#333338] rounded-xs text-[#a1a1aa] hover:text-[#f4f4f5] transition-colors"
+          >
+            Center Origin
+          </button>
+          <button
+            type="button"
+            onClick={onResetRotation}
+            title="Clear all rotation angles back to 0°"
+            className="py-1 px-1 bg-[#202024] hover:bg-[#2e2e34] border border-[#333338] rounded-xs text-[#a1a1aa] hover:text-[#f4f4f5] transition-colors"
+          >
+            Reset Rotation
+          </button>
+          <button
+            type="button"
+            onClick={onResetScale}
+            title="Reset scale to uniform 1.0x"
+            className="py-1 px-1 bg-[#202024] hover:bg-[#2e2e34] border border-[#333338] rounded-xs text-[#a1a1aa] hover:text-[#f4f4f5] transition-colors"
+          >
+            Reset Scale
+          </button>
+        </div>
       </div>
     </div>
   );

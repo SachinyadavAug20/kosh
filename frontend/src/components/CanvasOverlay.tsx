@@ -10,7 +10,7 @@ export interface CanvasOverlayProps {
   currentModel: THREE.Object3D | null;
   meshList: Array<{ name: string; meshRef: THREE.Mesh }>;
   onSelectMesh: (name: string) => void;
-  transformMode: "select" | "translate" | "rotate" | "scale";
+  transformMode: "all" | "select" | "translate" | "rotate" | "scale";
   liveTransform: {
     pos: [number, number, number];
     rot: [number, number, number];

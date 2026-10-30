@@ -8,6 +8,7 @@ frontend/.next/
 frontend/out/
 .next/
 out/
+*.tsbuildinfo
 
 # Maven / Java build artifacts
 target/
