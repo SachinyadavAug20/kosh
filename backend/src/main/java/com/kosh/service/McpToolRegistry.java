@@ -111,6 +111,23 @@ public class McpToolRegistry {
 
         BlenderExecutionService.BlenderRunResult runResult = blenderExecutionService.executeScript(finalScript, format);
 
+        // Self-Healing Fallback: If AI-generated script failed execution, fall back to procedural CAD generator
+        if (!runResult.isSuccess() && prompt != null && !prompt.isBlank()) {
+            log.warn("AI-generated script failed execution (exit code {}). Error: {}. Initiating procedural self-healing fallback...",
+                    runResult.getExitCode(), runResult.getErrorMessage());
+            try {
+                String fallbackScript = googleGeminiClient.generateProceduralModelScript(prompt, toolName, format);
+                BlenderExecutionService.BlenderRunResult fallbackResult = blenderExecutionService.executeScript(fallbackScript, format);
+                if (fallbackResult.isSuccess()) {
+                    log.info("Self-healing fallback succeeded for prompt: '{}'", prompt);
+                    runResult = fallbackResult;
+                    finalScript = fallbackScript;
+                }
+            } catch (Exception fallbackErr) {
+                log.error("Self-healing procedural fallback also encountered an error: {}", fallbackErr.getMessage());
+            }
+        }
+
         String assetUrl = runResult.isSuccess() ? "/api/assets/" + runResult.getAssetFileName() : null;
 
         return ToolExecutionDto.Result.builder()

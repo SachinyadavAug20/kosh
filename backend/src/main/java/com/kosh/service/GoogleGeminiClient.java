@@ -186,23 +186,30 @@ public class GoogleGeminiClient {
             Generate ONLY executable Python code. No markdown fences, no preamble, no explanations.
             
             Strict Engineering Standards:
-            1. Clean Scene Setup:
+            1. Clean Scene Setup & Essential Imports:
                import bpy, sys, math, json
+               import mathutils
+               from mathutils import Vector, Matrix, Euler, Quaternion
                bpy.ops.object.select_all(action='SELECT')
                bpy.ops.object.delete(use_global=False)
             
-            2. CLI Output Parsing:
+            2. CRITICAL SYNTAX RULES (NO ATTRIBUTE ERRORS):
+               - In Blender Python, 3D vectors and matrices are strictly in the `mathutils` module (`Vector`, `Matrix`, `Euler`).
+               - NEVER EVER use `math.vector` or `math.Vector` (Python standard `math` has NO vector attributes and crashes with AttributeError).
+               - Always use `Vector((x, y, z))` or `mathutils.Vector((x, y, z))`.
+            
+            3. CLI Output Parsing:
                argv = sys.argv
                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
             
-            3. Deep Blender Modifiers Stack:
+            4. Deep Blender Modifiers Stack:
                - Use Bevel modifiers (BEVEL) with width=0.04-0.08, segments=2-3 for chamfered industrial edges.
                - Use Subdivision Surface (SUBSURF) with levels=1-2 for organic/curved surfaces.
                - Use Boolean modifiers (BOOLEAN) for CSG union, difference, and intersection between component parts.
                - Use Mirror modifiers (MIRROR) for symmetrical modeling where appropriate.
                - Apply smooth shading (bpy.ops.object.shade_smooth) and compute vertex normals.
             
-            4. Realistic Principled BSDF Node Materials:
+            5. Realistic Principled BSDF Node Materials:
                - Setup real node trees: mat.use_nodes = True; bsdf = mat.node_tree.nodes.get("Principled BSDF")
                - Set realistic physical parameters:
                  * Metals (Steel, Aluminum, Titanium): Metallic=0.85-0.95, Roughness=0.18-0.35, Base Color=(0.7, 0.72, 0.75, 1.0)
@@ -211,12 +218,12 @@ public class GoogleGeminiClient {
                  * Subtle Accents / Displays: Principled BSDF Emission Color & Strength if needed.
                - NO glowing neon/CRT hacker effects. Use tasteful, solid workstation colors (graphite, steel, matte terracotta, industrial safety orange accents).
             
-            5. Staging & 3-Point Studio Lights:
+            6. Staging & 3-Point Studio Lights:
                - Add Sun/Area Key light (energy=1200W, location=(5, 8, 6))
                - Add Fill light (energy=500W, location=(-6, 4, -3))
                - Add Rim light (energy=700W, location=(0, -4, -6))
             
-            6. Export Pipeline:
+            7. Export Pipeline:
                %s
             """.formatted(format, getExportStatement(format));
     }
@@ -237,6 +244,59 @@ public class GoogleGeminiClient {
         String format = (exportFormat != null && exportFormat.equalsIgnoreCase("stl")) ? "stl" : "glb";
         String exportCmd = getExportStatement(format);
         String lowerPrompt = (prompt != null) ? prompt.toLowerCase() : "";
+
+        // 0. Triangle / Traingle / Triangular Prism / Wedge
+        if (lowerPrompt.contains("triangle") || lowerPrompt.contains("traingle") || lowerPrompt.contains("prism") || lowerPrompt.contains("wedge")) {
+            return """
+                import bpy
+                import sys
+                import math
+                import mathutils
+                from mathutils import Vector
+
+                bpy.ops.object.select_all(action='SELECT')
+                bpy.ops.object.delete(use_global=False)
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                # High-precision 3-sided prism / triangle
+                bpy.ops.mesh.primitive_cylinder_add(vertices=3, radius=1.8, depth=1.2, location=(0, 0, 0.6))
+                tri = bpy.context.active_object
+                tri.name = "Studio_Triangle_Prism"
+                tri.rotation_euler[2] = math.radians(90)
+
+                # Chamfered bevel modifier
+                bev = tri.modifiers.new(name="Bevel", type='BEVEL')
+                bev.width = 0.05
+                bev.segments = 3
+
+                # Studio Titanium BSDF Material
+                mat = bpy.data.materials.new(name="Machined_Titanium_Triangle")
+                mat.use_nodes = True
+                bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                if bsdf:
+                    bsdf.inputs["Base Color"].default_value = (0.78, 0.82, 0.86, 1.0)
+                    bsdf.inputs["Metallic"].default_value = 0.92
+                    bsdf.inputs["Roughness"].default_value = 0.22
+                tri.data.materials.append(mat)
+
+                # Studio 3-point lighting
+                key_light = bpy.data.lights.new(name="KeyLight", type='AREA')
+                key_light.energy = 900
+                key_obj = bpy.data.objects.new("KeyLight", key_light)
+                bpy.context.collection.objects.link(key_obj)
+                key_obj.location = (4, 4, 5)
+
+                fill_light = bpy.data.lights.new(name="FillLight", type='AREA')
+                fill_light.energy = 450
+                fill_obj = bpy.data.objects.new("FillLight", fill_light)
+                bpy.context.collection.objects.link(fill_obj)
+                fill_obj.location = (-4, -2, 3)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
 
         // 1. Pyramid / Tetrahedron (clean studio finish)
         if (lowerPrompt.contains("pyramid") || lowerPrompt.contains("tetrahedron")) {
