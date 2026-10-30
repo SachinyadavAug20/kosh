@@ -13,6 +13,9 @@ import { useTheme } from "@/context/ThemeContext";
 import { ExportFormat } from "@/types/mcp";
 import { Timeline, KeyframeMarker, InterpolationType } from "./Timeline";
 import { FloatingInspector, SwatchPreset } from "./FloatingInspector";
+import { SimplifyModifier } from "three/examples/jsm/modifiers/SimplifyModifier.js";
+import { CanvasOverlay } from "./CanvasOverlay";
+import { DccQuickTray, LightingStage } from "./DccQuickTray";
 import {
   Download,
   RotateCw,
@@ -226,6 +229,20 @@ export function Viewport3D({
   const [matEmissive, setMatEmissive] = useState<string>("#000000");
 
   // Live Transform State
+  // DCC Quick Tools & HUD Overlay State
+  const [showDimensions, setShowDimensions] = useState<boolean>(false);
+  const [isUvCheckerActive, setIsUvCheckerActive] = useState<boolean>(false);
+  const [currentLightingStage, setCurrentLightingStage] = useState<LightingStage>("studio");
+  const [simplifyRatio, setSimplifyRatio] = useState<number>(1.0);
+  const [isQuickTrayOpen, setIsQuickTrayOpen] = useState<boolean>(false);
+
+  // Lighting & UV Refs
+  const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
+  const keyLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const fillLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const rimLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const uvCheckerTextureRef = useRef<THREE.CanvasTexture | null>(null);
+
   const [liveTransform, setLiveTransform] = useState<{
     pos: [number, number, number];
     rot: [number, number, number];
@@ -358,6 +375,7 @@ export function Viewport3D({
     // F. Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
     scene.add(ambientLight);
+    ambientLightRef.current = ambientLight;
 
     const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
     keyLight.position.set(5, 10, 7);
@@ -366,14 +384,17 @@ export function Viewport3D({
     keyLight.shadow.mapSize.height = 2048;
     keyLight.shadow.bias = -0.0001;
     scene.add(keyLight);
+    keyLightRef.current = keyLight;
 
     const fillLight = new THREE.DirectionalLight(0x94a3b8, 0.7);
     fillLight.position.set(-6, 3, -5);
     scene.add(fillLight);
+    fillLightRef.current = fillLight;
 
     const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
     rimLight.position.set(0, -5, -6);
     scene.add(rimLight);
+    rimLightRef.current = rimLight;
 
     // G. Workstation Helpers (Horizon-Fade Grid & Ground Contact Shadow Catcher)
     const gridGeo = new THREE.PlaneGeometry(60, 60);
@@ -554,14 +575,21 @@ export function Viewport3D({
         container.removeChild(renderer.domElement);
       }
     };
-  }, [themeConfig.viewportBg]);
+  }, []);
 
-  // Update Scene Background Color when Theme changes
+  // Update Scene Background & Grid Colors dynamically when Theme changes (no scene rebuild)
   useEffect(() => {
     if (sceneRef.current) {
       sceneRef.current.background = new THREE.Color(themeConfig.viewportBg);
     }
-  }, [themeConfig.viewportBg]);
+    if (fadeGridRef.current && (fadeGridRef.current.material as THREE.ShaderMaterial).uniforms) {
+      const mat = fadeGridRef.current.material as THREE.ShaderMaterial;
+      if (mat.uniforms.uColorMajor && mat.uniforms.uColorMinor) {
+        mat.uniforms.uColorMajor.value.set(themeConfig.gridMajor);
+        mat.uniforms.uColorMinor.value.set(themeConfig.gridMinor);
+      }
+    }
+  }, [themeConfig.viewportBg, themeConfig.gridMajor, themeConfig.gridMinor]);
 
   // -------------------------------------------------------------
   // 2. Load 3D Asset (.glb or .stl)
@@ -1419,6 +1447,215 @@ export function Viewport3D({
     cameraRef.current.lookAt(target);
     orbitControlsRef.current.update();
   }, []);
+
+  // --- DCC Quick Tools Handlers ---
+  const selectMeshByName = useCallback((meshName: string | null) => {
+    if (!meshName) {
+      setSelectedMesh(null);
+      onMeshSelect?.(null);
+      if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.visible = false;
+      return;
+    }
+    const hit = meshList.find((m) => m.name === meshName);
+    if (hit && hit.meshRef) {
+      const hitMesh = hit.meshRef;
+      setSelectedMesh(hitMesh);
+      onMeshSelect?.(hitMesh.name);
+      setLiveTransform({
+        pos: [
+          parseFloat(hitMesh.position.x.toFixed(2)),
+          parseFloat(hitMesh.position.y.toFixed(2)),
+          parseFloat(hitMesh.position.z.toFixed(2)),
+        ],
+        rot: [
+          parseFloat(THREE.MathUtils.radToDeg(hitMesh.rotation.x).toFixed(1)),
+          parseFloat(THREE.MathUtils.radToDeg(hitMesh.rotation.y).toFixed(1)),
+          parseFloat(THREE.MathUtils.radToDeg(hitMesh.rotation.z).toFixed(1)),
+        ],
+        scale: [
+          parseFloat(hitMesh.scale.x.toFixed(2)),
+          parseFloat(hitMesh.scale.y.toFixed(2)),
+          parseFloat(hitMesh.scale.z.toFixed(2)),
+        ],
+      });
+      const mat = hitMesh.material as THREE.MeshStandardMaterial;
+      if (mat && mat.color) {
+        setMatColor(`#${mat.color.getHexString()}`);
+        if (mat.roughness !== undefined) setMatRoughness(mat.roughness);
+        if (mat.metalness !== undefined) setMatMetalness(mat.metalness);
+      }
+      if (selectionBoxHelperRef.current) {
+        selectionBoxHelperRef.current.setFromObject(hitMesh);
+        selectionBoxHelperRef.current.visible = true;
+      }
+    }
+  }, [meshList, onMeshSelect]);
+
+  const updateLightingStage = useCallback((stage: LightingStage) => {
+    setCurrentLightingStage(stage);
+    if (!ambientLightRef.current || !keyLightRef.current || !fillLightRef.current || !rimLightRef.current) return;
+    const amb = ambientLightRef.current;
+    const key = keyLightRef.current;
+    const fill = fillLightRef.current;
+    const rim = rimLightRef.current;
+
+    if (stage === "flat") {
+      amb.intensity = 2.4;
+      amb.color.set(0xffffff);
+      key.intensity = 0.0;
+      fill.intensity = 0.0;
+      rim.intensity = 0.0;
+    } else if (stage === "studio") {
+      amb.intensity = 0.6;
+      amb.color.set(0xffffff);
+      key.intensity = 2.0;
+      key.color.set(0xffffff);
+      key.position.set(5, 10, 7);
+      fill.intensity = 0.7;
+      fill.color.set(0x94a3b8);
+      fill.position.set(-6, 3, -5);
+      rim.intensity = 0.8;
+      rim.color.set(0xffffff);
+      rim.position.set(0, 5, -6);
+    } else if (stage === "rim") {
+      amb.intensity = 0.15;
+      amb.color.set(0x38bdf8);
+      key.intensity = 0.2;
+      key.color.set(0xffffff);
+      fill.intensity = 0.1;
+      fill.color.set(0x64748b);
+      rim.intensity = 3.8;
+      rim.color.set(0x38bdf8);
+      rim.position.set(0, 4, -8);
+    } else if (stage === "daylight") {
+      amb.intensity = 0.85;
+      amb.color.set(0xbae6fd);
+      key.intensity = 2.8;
+      key.color.set(0xfef08a);
+      key.position.set(8, 14, 6);
+      fill.intensity = 0.5;
+      fill.color.set(0x93c5fd);
+      fill.position.set(-6, 3, -5);
+      rim.intensity = 0.2;
+      rim.color.set(0xffffff);
+    }
+  }, []);
+
+  const handleToggleUvChecker = useCallback(() => {
+    setIsUvCheckerActive((prev) => {
+      const next = !prev;
+      if (!rootModelGroupRef.current) return next;
+
+      if (!uvCheckerTextureRef.current) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 256;
+        canvas.height = 256;
+        const ctx = canvas.getContext("2d")!;
+        const size = 32;
+        for (let y = 0; y < 256; y += size) {
+          for (let x = 0; x < 256; x += size) {
+            const isEven = ((x / size) + (y / size)) % 2 === 0;
+            ctx.fillStyle = isEven ? "#e4e4e7" : "#18181b";
+            ctx.fillRect(x, y, size, size);
+            ctx.strokeStyle = "#3f3f46";
+            ctx.strokeRect(x, y, size, size);
+          }
+        }
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(4, 4);
+        uvCheckerTextureRef.current = tex;
+      }
+
+      const checkerMat = new THREE.MeshStandardMaterial({
+        map: uvCheckerTextureRef.current,
+        roughness: 0.4,
+        metalness: 0.1,
+      });
+
+      rootModelGroupRef.current.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          if (next) {
+            if (!child.userData.originalMaterial) {
+              child.userData.originalMaterial = child.material;
+            }
+            child.material = checkerMat;
+          } else {
+            if (child.userData.originalMaterial) {
+              child.material = child.userData.originalMaterial;
+            }
+          }
+        }
+      });
+      return next;
+    });
+  }, []);
+
+  const handleSimplifyRatioChange = useCallback((ratio: number) => {
+    setSimplifyRatio(ratio);
+    if (!rootModelGroupRef.current) return;
+    const modifier = new SimplifyModifier();
+
+    let totalTris = 0;
+    let totalVerts = 0;
+
+    rootModelGroupRef.current.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.geometry) {
+        if (!child.userData.originalGeometry) {
+          child.userData.originalGeometry = child.geometry.clone();
+        }
+        const origGeo = child.userData.originalGeometry as THREE.BufferGeometry;
+        if (ratio >= 0.99) {
+          child.geometry.dispose();
+          child.geometry = origGeo.clone();
+        } else {
+          const origVerts = origGeo.attributes.position ? origGeo.attributes.position.count : 0;
+          const targetVerts = Math.max(4, Math.floor(origVerts * ratio));
+          try {
+            const simplified = modifier.modify(origGeo, targetVerts);
+            child.geometry.dispose();
+            child.geometry = simplified;
+          } catch (e) {
+            console.warn("SimplifyModifier error:", e);
+          }
+        }
+
+        const pos = child.geometry.attributes.position;
+        const idx = child.geometry.index;
+        totalTris += idx ? idx.count / 3 : pos ? pos.count / 3 : 0;
+        totalVerts += pos ? pos.count : 0;
+      }
+    });
+
+    setStats((prev) => (prev ? { ...prev, triangles: Math.round(totalTris), vertices: Math.round(totalVerts) } : prev));
+    if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+  }, []);
+
+  const handleCaptureSnapshot = useCallback((transparentBg: boolean) => {
+    if (!rendererRef.current || !sceneRef.current || !cameraRef.current) return;
+    const renderer = rendererRef.current;
+    const scene = sceneRef.current;
+    const cam = isOrtho && orthoCameraRef.current ? orthoCameraRef.current : cameraRef.current;
+
+    const prevBg = scene.background;
+    if (transparentBg) {
+      scene.background = null;
+    }
+
+    renderer.render(scene, cam);
+    const dataUrl = renderer.domElement.toDataURL("image/png");
+
+    if (transparentBg) {
+      scene.background = prevBg;
+      renderer.render(scene, cam);
+    }
+
+    const link = document.createElement("a");
+    link.download = `kosh-render-${Date.now()}.png`;
+    link.href = dataUrl;
+    link.click();
+  }, [isOrtho]);
 
   // -------------------------------------------------------------
   // 7. Comprehensive Native Blender Keyboard Events
@@ -2482,6 +2719,26 @@ export function Viewport3D({
             <Focus className="w-3.5 h-3.5" />
           </button>
 
+          {/* Projected Dimension Measurement Toggle (D) */}
+          <button
+            onClick={() => setShowDimensions(!showDimensions)}
+            title="Toggle Projected Dimension Callouts (D)"
+            className={`tool-btn space-x-1 ${showDimensions ? "active font-bold" : ""}`}
+          >
+            <Sliders className="w-3.5 h-3.5 text-[#ea580c]" />
+            <span className="text-[10px] font-mono">DIMS [D]</span>
+          </button>
+
+          {/* Quick DCC Tools Tray Toggle */}
+          <button
+            onClick={() => setIsQuickTrayOpen(!isQuickTrayOpen)}
+            title="Toggle DCC Quick Tools Tray (Decimate, UV Checker, Lighting, Snapshot)"
+            className={`tool-btn space-x-1 ${isQuickTrayOpen ? "active font-bold" : ""}`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[#ea580c]" />
+            <span className="text-[10px] font-mono">DCC TOOLS</span>
+          </button>
+
           {/* Export Modified GLB from Canvas */}
           <button
             onClick={handleExportModifiedGLB}
@@ -2665,6 +2922,21 @@ export function Viewport3D({
             <span className="font-mono text-[10px]">TIMELINE</span>
           </button>
         </div>
+
+        {/* Hardware-Accelerated 2D/3D Canvas HUD Overlay */}
+        <CanvasOverlay
+          camera={isOrtho ? orthoCameraRef.current : cameraRef.current}
+          selectedMesh={selectedMesh}
+          currentModel={rootModelGroupRef.current}
+          meshList={meshList.map((m) => ({ name: m.name, meshRef: m.meshRef }))}
+          onSelectMesh={(meshName) => selectMeshByName(meshName)}
+          transformMode={transformMode}
+          liveTransform={liveTransform}
+          axisConstraint={axisConstraint}
+          showDimensions={showDimensions}
+          onToggleDimensions={() => setShowDimensions((p) => !p)}
+          onSnapCameraView={setCameraPreset}
+        />
       </div>
 
       {/* Floating Contextual Compact Inspector (HUD) */}
@@ -2753,6 +3025,21 @@ export function Viewport3D({
         onChangeInterpolation={handleChangeInterpolation}
         explodedFactor={explodedFactor}
         onExplodedChange={handleExplodedChange}
+      />
+
+      {/* 1-Click DCC Quick Tools Tray (Decimate, UV Checker, Lighting, Snapshot) */}
+      <DccQuickTray
+        isOpen={isQuickTrayOpen}
+        onToggleOpen={() => setIsQuickTrayOpen(!isQuickTrayOpen)}
+        simplifyRatio={simplifyRatio}
+        onSimplifyRatioChange={handleSimplifyRatioChange}
+        isUvCheckerActive={isUvCheckerActive}
+        onToggleUvChecker={handleToggleUvChecker}
+        currentLightingStage={currentLightingStage}
+        onSelectLightingStage={updateLightingStage}
+        onCaptureSnapshot={handleCaptureSnapshot}
+        showDimensions={showDimensions}
+        onToggleDimensions={() => setShowDimensions((p) => !p)}
       />
 
       {/* Viewport Bottom Status Bar (Real-Time DCC Telemetry & Contextual Key Hints HUD) */}

@@ -38,6 +38,8 @@ backend/storage/
 .classpath
 .factorypath
 .settings/
+bin/
+backend/bin/
 *.swp
 *.swo
 *~

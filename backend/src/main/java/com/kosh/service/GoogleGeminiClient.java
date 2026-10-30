@@ -353,6 +353,12 @@ public class GoogleGeminiClient {
             You are a senior technical 3D artist and CAD engineer creating production-grade Blender Python (`bpy`) scripts for headless execution.
             Generate ONLY executable Python code. No markdown fences, no preamble, no explanations.
             
+            AUTONOMOUS RESEARCH & GENERATIVE SYNTHESIS PROTOCOL (MANDATORY):
+            Before generating code, apply this 3-step structured engineering method:
+            - STEP 1 (Engineering Breakdown): Decompose the object into high-density functional sub-assemblies (e.g. chassis, linkages, actuators, fasteners, housings, connectors). Every functional sub-assembly MUST be created as an individual named mesh object (e.g., `01_Base_Pedestal`, `02_Turntable_A1`).
+            - STEP 2 (Mathematical Parametrization): Compute precise pivot origins, trigonometric transforms using `mathutils.Vector`, `mathutils.Euler`, and `mathutils.Matrix`, angular limits, and concentric alignments.
+            - STEP 3 (Self-Validating BPY Code): Implement using safe, crash-proof Blender 5.x Python API. Always use `mathutils.Vector`, explicit clean materials, and proper parent/keyframe hierarchy.
+
             Strict Engineering Standards:
             1. Clean Scene Setup & Essential Imports:
                import bpy, sys, math, json, os
@@ -1110,8 +1116,8 @@ public class GoogleGeminiClient {
                 """.formatted(format);
         }
 
-        // 12. Tool: rigging_armature
-        if ("rigging_armature".equals(normalizedTool) || lowerPrompt.contains("rig") || lowerPrompt.contains("armature") || lowerPrompt.contains("robot arm")) {
+        // 12. Tool: rigging_armature or Articulated 6-Axis Industrial Robot Arm
+        if ("rigging_armature".equals(normalizedTool) || lowerPrompt.contains("rig") || lowerPrompt.contains("armature") || lowerPrompt.contains("robot") || lowerPrompt.contains("arm") || lowerPrompt.contains("axis") || lowerPrompt.contains("hydraulic")) {
             return """
                 import bpy, sys, math, os, json
                 import mathutils
@@ -1127,46 +1133,153 @@ public class GoogleGeminiClient {
                 argv = sys.argv
                 output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
 
-                bpy.ops.mesh.primitive_cylinder_add(radius=1.0, depth=0.4, location=(0, 0, 0.2))
-                base = bpy.context.active_object
-                base.name = "Arm_Turntable_Base"
+                def create_mat(name, color, metallic=0.0, roughness=0.5):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get('Principled BSDF')
+                    if bsdf:
+                        bsdf.inputs['Base Color'].default_value = color
+                        bsdf.inputs['Metallic'].default_value = metallic
+                        bsdf.inputs['Roughness'].default_value = roughness
+                    return mat
 
-                bpy.ops.mesh.primitive_cylinder_add(radius=0.25, depth=1.6, location=(0, 0, 1.2))
-                limb1 = bpy.context.active_object
-                limb1.name = "Limb_Upper"
-                limb1.rotation_mode = 'XYZ'
-                limb1.keyframe_insert(data_path="rotation_euler", frame=1)
-                limb1.rotation_euler = (math.radians(25), 0, math.radians(45))
-                limb1.keyframe_insert(data_path="rotation_euler", frame=60)
-                limb1.rotation_euler = (0, 0, 0)
-                limb1.keyframe_insert(data_path="rotation_euler", frame=120)
+                mat_orange = create_mat('Mat_RobotOrange', (0.917, 0.345, 0.047, 1.0), 0.15, 0.25)
+                mat_cast = create_mat('Mat_GraphiteCast', (0.15, 0.15, 0.16, 1.0), 0.85, 0.4)
+                mat_chrome = create_mat('Mat_PolishedChrome', (0.95, 0.95, 0.96, 1.0), 0.98, 0.08)
+                mat_brass = create_mat('Mat_BrassFittings', (0.85, 0.55, 0.08, 1.0), 0.9, 0.25)
 
-                bpy.ops.mesh.primitive_cylinder_add(radius=0.18, depth=1.4, location=(0, 0.4, 2.4))
-                limb2 = bpy.context.active_object
-                limb2.name = "Limb_Forearm"
-                limb2.rotation_mode = 'XYZ'
-                limb2.keyframe_insert(data_path="rotation_euler", frame=1)
-                limb2.rotation_euler = (-math.radians(40), 0, math.radians(90))
-                limb2.keyframe_insert(data_path="rotation_euler", frame=60)
-                limb2.rotation_euler = (0, 0, 0)
-                limb2.keyframe_insert(data_path="rotation_euler", frame=120)
+                # 1. Base Pedestal
+                bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.9, depth=0.25, location=(0, 0, 0.125))
+                base_plate = bpy.context.active_object
+                base_plate.name = "01_Base_Pedestal"
+                base_plate.data.materials.append(mat_cast)
 
-                bpy.ops.mesh.primitive_torus_add(major_radius=0.3, minor_radius=0.08, location=(0, 0.6, 3.2))
-                claw = bpy.context.active_object
-                claw.name = "End_Effector_Gripper"
+                # 2. Turntable (Axis 1)
+                bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.7, depth=0.4, location=(0, 0, 0.45))
+                turntable = bpy.context.active_object
+                turntable.name = "02_Turntable_A1"
+                turntable.data.materials.append(mat_orange)
+                turntable.rotation_mode = 'XYZ'
+                turntable.keyframe_insert(data_path="rotation_euler", frame=1)
+                turntable.rotation_euler = (0, 0, math.radians(45))
+                turntable.keyframe_insert(data_path="rotation_euler", frame=60)
+                turntable.rotation_euler = (0, 0, -math.radians(30))
+                turntable.keyframe_insert(data_path="rotation_euler", frame=90)
+                turntable.rotation_euler = (0, 0, 0)
+                turntable.keyframe_insert(data_path="rotation_euler", frame=120)
 
-                mat = bpy.data.materials.new("Mat_KukaOrange")
-                mat.use_nodes = True
-                b = mat.node_tree.nodes.get("Principled BSDF")
-                if b:
-                    b.inputs["Base Color"].default_value = (0.92, 0.35, 0.05, 1.0)
-                    b.inputs["Metallic"].default_value = 0.2
-                    b.inputs["Roughness"].default_value = 0.35
-                limb1.data.materials.append(mat)
-                limb2.data.materials.append(mat)
+                # 3. Lower Boom Arm (Axis 2)
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 1.45))
+                boom = bpy.context.active_object
+                boom.name = "03_Lower_Boom_A2"
+                boom.scale = (0.35, 0.3, 1.5)
+                boom.data.materials.append(mat_orange)
+                boom.rotation_mode = 'XYZ'
+                boom.keyframe_insert(data_path="rotation_euler", frame=1)
+                boom.rotation_euler = (math.radians(20), 0, 0)
+                boom.keyframe_insert(data_path="rotation_euler", frame=60)
+                boom.rotation_euler = (-math.radians(15), 0, 0)
+                boom.keyframe_insert(data_path="rotation_euler", frame=90)
+                boom.rotation_euler = (0, 0, 0)
+                boom.keyframe_insert(data_path="rotation_euler", frame=120)
 
+                # 4. Hydraulic Lift Cylinder (Sleeve + Piston)
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.12, depth=0.9, location=(0, -0.35, 1.05))
+                cyl_sleeve = bpy.context.active_object
+                cyl_sleeve.name = "04_Hydraulic_Sleeve"
+                cyl_sleeve.rotation_euler = (math.radians(18), 0, 0)
+                cyl_sleeve.data.materials.append(mat_cast)
+
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.07, depth=0.7, location=(0, -0.28, 1.35))
+                piston = bpy.context.active_object
+                piston.name = "04b_Hydraulic_Piston"
+                piston.rotation_euler = (math.radians(18), 0, 0)
+                piston.data.materials.append(mat_chrome)
+
+                # 5. Elbow Arm (Axis 3)
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0.1, 2.55))
+                elbow = bpy.context.active_object
+                elbow.name = "05_Elbow_Arm_A3"
+                elbow.scale = (0.28, 0.25, 1.1)
+                elbow.data.materials.append(mat_orange)
+                elbow.rotation_mode = 'XYZ'
+                elbow.keyframe_insert(data_path="rotation_euler", frame=1)
+                elbow.rotation_euler = (-math.radians(35), 0, 0)
+                elbow.keyframe_insert(data_path="rotation_euler", frame=60)
+                elbow.rotation_euler = (math.radians(25), 0, 0)
+                elbow.keyframe_insert(data_path="rotation_euler", frame=90)
+                elbow.rotation_euler = (0, 0, 0)
+                elbow.keyframe_insert(data_path="rotation_euler", frame=120)
+
+                # 6. Forearm Roll Housing (Axis 4)
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.16, depth=0.6, location=(0, 0.35, 3.25))
+                forearm = bpy.context.active_object
+                forearm.name = "06_Forearm_Roll_A4"
+                forearm.rotation_euler = (math.radians(90), 0, 0)
+                forearm.data.materials.append(mat_cast)
+                forearm.rotation_mode = 'XYZ'
+                forearm.keyframe_insert(data_path="rotation_euler", frame=1)
+                forearm.rotation_euler = (math.radians(90), 0, math.radians(60))
+                forearm.keyframe_insert(data_path="rotation_euler", frame=60)
+                forearm.rotation_euler = (math.radians(90), 0, -math.radians(60))
+                forearm.keyframe_insert(data_path="rotation_euler", frame=120)
+
+                # 7. Wrist Pitch Tilt Joint (Axis 5)
+                bpy.ops.mesh.primitive_cube_add(size=0.28, location=(0, 0.72, 3.25))
+                wrist = bpy.context.active_object
+                wrist.name = "07_Wrist_Pitch_A5"
+                wrist.data.materials.append(mat_orange)
+                wrist.rotation_mode = 'XYZ'
+                wrist.keyframe_insert(data_path="rotation_euler", frame=1)
+                wrist.rotation_euler = (math.radians(30), 0, 0)
+                wrist.keyframe_insert(data_path="rotation_euler", frame=60)
+                wrist.rotation_euler = (-math.radians(30), 0, 0)
+                wrist.keyframe_insert(data_path="rotation_euler", frame=120)
+
+                # 8. Tool Flange & Gripper (Axis 6)
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.14, depth=0.1, location=(0, 0.92, 3.25))
+                flange = bpy.context.active_object
+                flange.name = "08_Tool_Flange_A6"
+                flange.rotation_euler = (math.radians(90), 0, 0)
+                flange.data.materials.append(mat_chrome)
+
+                # Parallel Gripper body
+                bpy.ops.mesh.primitive_cube_add(size=0.22, location=(0, 1.05, 3.25))
+                grip_body = bpy.context.active_object
+                grip_body.name = "09_Gripper_Chassis"
+                grip_body.scale = (1.4, 0.6, 0.7)
+                grip_body.data.materials.append(mat_cast)
+
+                # Gripper Fingers
+                bpy.ops.mesh.primitive_cube_add(size=0.08, location=(-0.1, 1.22, 3.25))
+                finger_l = bpy.context.active_object
+                finger_l.name = "10_Gripper_Finger_L"
+                finger_l.scale = (0.5, 2.5, 0.8)
+                finger_l.data.materials.append(mat_chrome)
+                finger_l.keyframe_insert(data_path="location", frame=1)
+                finger_l.location = (-0.05, 1.22, 3.25)
+                finger_l.keyframe_insert(data_path="location", frame=60)
+                finger_l.location = (-0.14, 1.22, 3.25)
+                finger_l.keyframe_insert(data_path="location", frame=90)
+                finger_l.location = (-0.1, 1.22, 3.25)
+                finger_l.keyframe_insert(data_path="location", frame=120)
+
+                bpy.ops.mesh.primitive_cube_add(size=0.08, location=(0.1, 1.22, 3.25))
+                finger_r = bpy.context.active_object
+                finger_r.name = "11_Gripper_Finger_R"
+                finger_r.scale = (0.5, 2.5, 0.8)
+                finger_r.data.materials.append(mat_chrome)
+                finger_r.keyframe_insert(data_path="location", frame=1)
+                finger_r.location = (0.05, 1.22, 3.25)
+                finger_r.keyframe_insert(data_path="location", frame=60)
+                finger_r.location = (0.14, 1.22, 3.25)
+                finger_r.keyframe_insert(data_path="location", frame=90)
+                finger_r.location = (0.1, 1.22, 3.25)
+                finger_r.keyframe_insert(data_path="location", frame=120)
+
+                # Studio Lights
                 klight = bpy.data.lights.new("ArmKey", type='AREA')
-                klight.energy = 950
+                klight.energy = 900
                 kobj = bpy.data.objects.new("ArmKey", klight)
                 bpy.context.collection.objects.link(kobj)
                 kobj.location = (4, 4, 6)
