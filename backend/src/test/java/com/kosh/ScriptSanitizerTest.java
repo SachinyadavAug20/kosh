@@ -48,4 +48,22 @@ class ScriptSanitizerTest {
     void testSanitizeEmptyThrows() {
         assertThrows(IllegalArgumentException.class, () -> sanitizer.sanitize("   "));
     }
+
+    @Test
+    void testPatchBlenderHallucinations() {
+        String input = "direction = math.vector.Vector(look_at) - math.vector.Vector(loc)\nmat = math.Matrix.Identity(4)";
+        String patched = sanitizer.patchBlenderHallucinations(input);
+        assertTrue(patched.contains("mathutils.Vector(look_at)"));
+        assertTrue(patched.contains("mathutils.Matrix.Identity(4)"));
+        assertTrue(patched.contains("from mathutils import Vector"));
+    }
+
+    @Test
+    void testTelemetryInjectionOnExport() {
+        String input = "import bpy\nbpy.ops.export_scene.gltf(filepath=output_path, export_format='GLB')";
+        String result = sanitizer.ensureTelemetryAndSnapshot(input);
+        assertTrue(result.contains("KOSH WORKSTATION TELEMETRY"));
+        assertTrue(result.contains("json.dump"));
+        assertTrue(result.contains("bpy.ops.export_scene.gltf"));
+    }
 }

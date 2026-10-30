@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -135,11 +136,30 @@ public class BlenderExecutionService {
             long fileSize = Files.size(outputFile);
             log.info("Validated generated 3D asset: {} ({} bytes)", assetFileName, fileSize);
 
+            // Check for rendered snapshot image
+            Path snapshotFile = storagePath.resolve("kosh_" + assetId + ".png");
+            String snapshotUrl = (Files.exists(snapshotFile) && Files.size(snapshotFile) > 0)
+                    ? "/api/assets/kosh_" + assetId + ".png" : null;
+
+            // Check for scene telemetry JSON
+            Path telemetryFile = storagePath.resolve("kosh_" + assetId + ".json");
+            Map<String, Object> telemetry = null;
+            if (Files.exists(telemetryFile) && Files.size(telemetryFile) > 0) {
+                try {
+                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                    telemetry = mapper.readValue(telemetryFile.toFile(), Map.class);
+                } catch (Exception te) {
+                    log.warn("Failed to parse telemetry JSON: {}", te.getMessage());
+                }
+            }
+
             return BlenderRunResult.builder()
                     .success(exitCode == 0)
                     .assetId(assetId)
                     .assetFileName(assetFileName)
                     .assetPath(outputFile)
+                    .snapshotUrl(snapshotUrl)
+                    .telemetry(telemetry)
                     .format(ext)
                     .sizeBytes(fileSize)
                     .stdout(stdout)
@@ -194,6 +214,8 @@ public class BlenderExecutionService {
         private String assetId;
         private String assetFileName;
         private Path assetPath;
+        private String snapshotUrl;
+        private java.util.Map<String, Object> telemetry;
         private String format;
         private long sizeBytes;
         private String stdout;

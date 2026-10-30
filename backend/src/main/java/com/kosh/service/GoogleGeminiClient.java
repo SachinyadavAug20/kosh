@@ -187,43 +187,59 @@ public class GoogleGeminiClient {
             
             Strict Engineering Standards:
             1. Clean Scene Setup & Essential Imports:
-               import bpy, sys, math, json
+               import bpy, sys, math, json, os
                import mathutils
-               from mathutils import Vector, Matrix, Euler, Quaternion
-               bpy.ops.object.select_all(action='SELECT')
-               bpy.ops.object.delete(use_global=False)
+               from mathutils import Vector, Euler, Matrix, Quaternion
+               import bmesh
+
+               bpy.ops.wm.read_factory_settings(use_empty=True)
+               for col in list(bpy.data.collections):
+                   bpy.data.collections.remove(col)
+               scene = bpy.context.scene
             
-            2. CRITICAL SYNTAX RULES (NO ATTRIBUTE ERRORS):
-               - In Blender Python, 3D vectors and matrices are strictly in the `mathutils` module (`Vector`, `Matrix`, `Euler`).
+            2. CRITICAL SYNTAX & CONTEXT RULES (ZERO RUNTIME CRASHES):
+               - In Blender Python, 3D vectors and matrices are strictly in the `mathutils` module (`Vector`, `Euler`, `Matrix`, `Quaternion`).
                - NEVER EVER use `math.vector` or `math.Vector` (Python standard `math` has NO vector attributes and crashes with AttributeError).
                - Always use `Vector((x, y, z))` or `mathutils.Vector((x, y, z))`.
+               - Context Override: Ensure active object exists before applying modifiers or ops:
+                 if bpy.context.view_layer.objects.active is None and bpy.context.selected_objects:
+                     bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
             
             3. CLI Output Parsing:
                argv = sys.argv
                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
             
-            4. Deep Blender Modifiers Stack:
-               - Use Bevel modifiers (BEVEL) with width=0.04-0.08, segments=2-3 for chamfered industrial edges.
-               - Use Subdivision Surface (SUBSURF) with levels=1-2 for organic/curved surfaces.
-               - Use Boolean modifiers (BOOLEAN) for CSG union, difference, and intersection between component parts.
-               - Use Mirror modifiers (MIRROR) for symmetrical modeling where appropriate.
+            4. Geometry, Modifiers & BMesh Suite:
+               - Primitives: Cube, Cylinder, Cone, Torus, UV Sphere, Ico Sphere, Monkey (Suzanne), or custom BMesh geometry.
+               - Deep Modifiers Stack:
+                 * Bevel (BEVEL) with width=0.04-0.08, segments=2-3 for chamfered industrial edges.
+                 * Subdivision Surface (SUBSURF) with levels=1-2 for organic curved surfaces.
+                 * Boolean (BOOLEAN) for CSG union, difference, and intersection between component parts.
+                 * Mirror (MIRROR), Array (ARRAY), Solidify (SOLIDIFY), Decimate (DECIMATE), Remesh (REMESH).
+                 * Deform: Displace (DISPLACE with procedural Voronoi/Noise), Simple Deform (BEND, TWIST).
+                 * Curves & Extrusions: Bezier curves with bevel depth, 3D text.
                - Apply smooth shading (bpy.ops.object.shade_smooth) and compute vertex normals.
             
-            5. Realistic Principled BSDF Node Materials:
+            5. Realistic Principled BSDF 2.0 Materials:
                - Setup real node trees: mat.use_nodes = True; bsdf = mat.node_tree.nodes.get("Principled BSDF")
                - Set realistic physical parameters:
-                 * Metals (Steel, Aluminum, Titanium): Metallic=0.85-0.95, Roughness=0.18-0.35, Base Color=(0.7, 0.72, 0.75, 1.0)
-                 * Matte Polymers / Industrial Plastics: Metallic=0.0, Roughness=0.3-0.5, Base Color
-                 * Glass / Refraction: Transmission Weight=1.0, Roughness=0.05, IOR=1.45
-                 * Subtle Accents / Displays: Principled BSDF Emission Color & Strength if needed.
-               - NO glowing neon/CRT hacker effects. Use tasteful, solid workstation colors (graphite, steel, matte terracotta, industrial safety orange accents).
+                 * Metals (Steel, Aluminium, Titanium, Chrome): Metallic=0.85-0.95, Roughness=0.18-0.35, Base Color=(0.75, 0.78, 0.82, 1.0)
+                 * Matte Polymers / Industrial Plastics: Metallic=0.0, Roughness=0.3-0.5
+                 * Architectural (Concrete, Ceramic Tile): Metallic=0.05, Roughness=0.65-0.85
+                 * Glass / Refraction: Transmission Weight=1.0, Roughness=0.04, IOR=1.45
+                 * Procedural Node Graphs: ShaderNodeTexNoise, ShaderNodeTexVoronoi, ShaderNodeValToRGB, ShaderNodeBump
+               - Workstation Palette: Industrial charcoal, graphite, steel, safety orange (#ea580c) accents. NO neon glow effects.
             
-            6. Staging & 3-Point Studio Lights:
-               - Add Sun/Area Key light (energy=1200W, location=(5, 8, 6))
-               - Add Fill light (energy=500W, location=(-6, 4, -3))
-               - Add Rim light (energy=700W, location=(0, -4, -6))
+            6. Lighting, Environment & Studio Staging:
+               - 3-Point Studio Lights: Key light (1200W Area/Sun at (5, 8, 6)), Fill light (500W at (-6, 4, -3)), Rim light (700W at (0, -4, -6))
+               - Headless Nishita Sky: World node tree with ShaderNodeTexSky if outdoor environment requested.
             
-            7. Export Pipeline:
+            7. Animation & Camera Rigging (When Requested):
+               - Turntable spin: 360-degree rotation across 60 frames (obj.rotation_euler.z keyframes from 0 to 2*pi).
+               - Floating hover: Sine wave z-position oscillation keyframes.
+               - Camera: 50mm or 85mm focal length pointed at target using track-to constraint or Vector math.
+            
+            8. Export Pipeline:
                %s
             """.formatted(format, getExportStatement(format));
     }
@@ -248,14 +264,15 @@ public class GoogleGeminiClient {
         // 0. Triangle / Traingle / Triangular Prism / Wedge
         if (lowerPrompt.contains("triangle") || lowerPrompt.contains("traingle") || lowerPrompt.contains("prism") || lowerPrompt.contains("wedge")) {
             return """
-                import bpy
-                import sys
-                import math
+                import bpy, sys, math, os, json
                 import mathutils
-                from mathutils import Vector
+                from mathutils import Vector, Euler, Matrix, Quaternion
+                import bmesh
 
-                bpy.ops.object.select_all(action='SELECT')
-                bpy.ops.object.delete(use_global=False)
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
 
                 argv = sys.argv
                 output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
@@ -301,12 +318,15 @@ public class GoogleGeminiClient {
         // 1. Pyramid / Tetrahedron (clean studio finish)
         if (lowerPrompt.contains("pyramid") || lowerPrompt.contains("tetrahedron")) {
             return """
-                import bpy
-                import sys
-                import math
+                import bpy, sys, math, os, json
+                import mathutils
+                from mathutils import Vector, Euler, Matrix, Quaternion
+                import bmesh
 
-                bpy.ops.object.select_all(action='SELECT')
-                bpy.ops.object.delete(use_global=False)
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
 
                 argv = sys.argv
                 output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
@@ -349,12 +369,15 @@ public class GoogleGeminiClient {
         // 2. Turbine / Mechanical / CAD Flange / Gear
         if ("cad_model".equalsIgnoreCase(toolType) || lowerPrompt.contains("turbine") || lowerPrompt.contains("gear") || lowerPrompt.contains("flange") || lowerPrompt.contains("mechanical")) {
             return """
-                import bpy
-                import sys
-                import math
+                import bpy, sys, math, os, json
+                import mathutils
+                from mathutils import Vector, Euler, Matrix, Quaternion
+                import bmesh
 
-                bpy.ops.object.select_all(action='SELECT')
-                bpy.ops.object.delete(use_global=False)
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
 
                 argv = sys.argv
                 output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
@@ -425,11 +448,15 @@ public class GoogleGeminiClient {
         // 3. Spheres / Geodesic Orbs
         if (lowerPrompt.contains("sphere") || lowerPrompt.contains("orb") || lowerPrompt.contains("planet") || lowerPrompt.contains("ball")) {
             return """
-                import bpy
-                import sys
+                import bpy, sys, math, os, json
+                import mathutils
+                from mathutils import Vector, Euler, Matrix, Quaternion
+                import bmesh
 
-                bpy.ops.object.select_all(action='SELECT')
-                bpy.ops.object.delete(use_global=False)
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
 
                 argv = sys.argv
                 output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
@@ -460,11 +487,15 @@ public class GoogleGeminiClient {
 
         // 4. Default: Precision Chamfered Workstation Crate
         return """
-            import bpy
-            import sys
+            import bpy, sys, math, os, json
+            import mathutils
+            from mathutils import Vector, Euler, Matrix, Quaternion
+            import bmesh
 
-            bpy.ops.object.select_all(action='SELECT')
-            bpy.ops.object.delete(use_global=False)
+            bpy.ops.wm.read_factory_settings(use_empty=True)
+            for col in list(bpy.data.collections):
+                bpy.data.collections.remove(col)
+            scene = bpy.context.scene
 
             argv = sys.argv
             output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"

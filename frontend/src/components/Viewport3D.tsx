@@ -40,6 +40,15 @@ export type CameraView = "iso" | "front" | "top" | "right";
 interface Viewport3DProps {
   assetUrl?: string | null;
   assetName?: string | null;
+  snapshotUrl?: string | null;
+  telemetry?: {
+    triangles: number;
+    vertices: number;
+    edges: number;
+    dimensions: [number, number, number];
+    materials: string[];
+    objects: string[];
+  } | null;
   format?: "glb" | "stl";
   apiBase?: string;
   onMeshSelect?: (meshName: string) => void;
@@ -57,6 +66,8 @@ interface MeshNodeInfo {
 export function Viewport3D({
   assetUrl,
   assetName,
+  snapshotUrl,
+  telemetry,
   format = "glb",
   apiBase = "http://localhost:8080",
 }: Viewport3DProps) {
@@ -923,23 +934,49 @@ export function Viewport3D({
             <Plus className="w-3.5 h-3.5" />
           </button>
 
-          {/* Snapshot PNG */}
-          <button
-            onClick={handleRenderSnapshot}
-            title="Render Viewport Snapshot (PNG)"
-            className="tool-btn"
-          >
-            <Camera className="w-3.5 h-3.5" />
-          </button>
+          {/* Studio Rendered Snapshot PNG Download */}
+          {snapshotUrl ? (
+            <a
+              href={`${apiBase}${snapshotUrl}`}
+              download={assetName ? `${assetName.replace(/\.[^/.]+$/, "")}.png` : "snapshot.png"}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Download High-Res Studio Render (PNG)"
+              className="tool-btn text-[#ea580c] hover:text-[#f97316] flex items-center space-x-1"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              <span className="text-[10px] font-mono">PNG</span>
+            </a>
+          ) : (
+            <button
+              onClick={handleRenderSnapshot}
+              title="Render Viewport Snapshot (PNG)"
+              className="tool-btn"
+            >
+              <Camera className="w-3.5 h-3.5" />
+            </button>
+          )}
 
-          {/* Export Model */}
-          <button
-            onClick={handleExportGLB}
-            title="Export Scene as GLB"
-            className="tool-btn"
-          >
-            <Download className="w-3.5 h-3.5" />
-          </button>
+          {/* Export Model / Direct Download */}
+          {assetUrl ? (
+            <a
+              href={`${apiBase}${assetUrl}`}
+              download={assetName || `model.${format}`}
+              title={`Download Native Blender Asset (${format.toUpperCase()})`}
+              className="tool-btn flex items-center space-x-1"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="text-[10px] font-mono">{format.toUpperCase()}</span>
+            </a>
+          ) : (
+            <button
+              onClick={handleExportGLB}
+              title="Export Scene as GLB"
+              className="tool-btn"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Fullscreen */}
           <button
@@ -1182,10 +1219,20 @@ export function Viewport3D({
         )}
       </div>
 
-      {/* Viewport Bottom Status Bar (Clean metrics line) */}
+      {/* Viewport Bottom Status Bar (Real-Time DCC Telemetry HUD) */}
       <div className="flex items-center justify-between px-3 py-1 border-t border-[#27272a] bg-[#18181b] text-[11px] text-[#a1a1aa] font-mono">
-        <div className="flex items-center space-x-3">
-          {stats ? (
+        <div className="flex items-center space-x-4">
+          {telemetry ? (
+            <>
+              <span>TRIS: <strong className="text-[#f4f4f5]">{telemetry.triangles.toLocaleString()}</strong></span>
+              <span>VERTS: <strong className="text-[#f4f4f5]">{telemetry.vertices.toLocaleString()}</strong></span>
+              <span>EDGES: <strong className="text-[#f4f4f5]">{telemetry.edges.toLocaleString()}</strong></span>
+              <span>DIMS: <strong className="text-[#f4f4f5]">{telemetry.dimensions.join(" × ")}m</strong></span>
+              {telemetry.materials && telemetry.materials.length > 0 && (
+                <span className="hidden sm:inline">MATS: <strong className="text-[#f4f4f5]">{telemetry.materials.join(", ")}</strong></span>
+              )}
+            </>
+          ) : stats ? (
             <>
               <span>TRIS: <strong className="text-[#f4f4f5]">{stats.triangles.toLocaleString()}</strong></span>
               <span>VERTS: <strong className="text-[#f4f4f5]">{stats.vertices.toLocaleString()}</strong></span>
@@ -1200,7 +1247,8 @@ export function Viewport3D({
           <span>G: Move</span>
           <span>R: Rotate</span>
           <span>S: Scale</span>
-          <span>.: Focus</span>
+          <span>1/3/7: Views</span>
+          <span>5: Persp/Ortho</span>
         </div>
       </div>
     </div>

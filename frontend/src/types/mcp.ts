@@ -40,6 +40,15 @@ export interface ToolExecutionResult {
   assetId: string;
   assetName: string;
   assetUrl?: string;
+  snapshotUrl?: string;
+  telemetry?: {
+    triangles: number;
+    vertices: number;
+    edges: number;
+    dimensions: [number, number, number];
+    materials: string[];
+    objects: string[];
+  };
   format: "glb" | "stl";
   sizeBytes: number;
   script?: string;

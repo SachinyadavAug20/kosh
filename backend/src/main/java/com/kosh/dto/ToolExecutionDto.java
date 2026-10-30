@@ -34,6 +34,8 @@ public class ToolExecutionDto {
         private String assetId;
         private String assetName;
         private String assetUrl;
+        private String snapshotUrl;
+        private Map<String, Object> telemetry;
         private String format;
         private long sizeBytes;
         private String script;

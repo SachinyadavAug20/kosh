@@ -80,6 +80,8 @@ export default function Home() {
             <Viewport3D
               assetUrl={lastResult?.assetUrl}
               assetName={lastResult?.assetName}
+              snapshotUrl={lastResult?.snapshotUrl}
+              telemetry={lastResult?.telemetry}
               format={lastResult?.format || "glb"}
               apiBase={apiBase}
             />

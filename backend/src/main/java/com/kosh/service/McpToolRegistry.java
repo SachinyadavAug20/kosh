@@ -136,6 +136,8 @@ public class McpToolRegistry {
                 .assetId(runResult.getAssetId())
                 .assetName(runResult.getAssetFileName())
                 .assetUrl(assetUrl)
+                .snapshotUrl(runResult.getSnapshotUrl())
+                .telemetry(runResult.getTelemetry())
                 .format(runResult.getFormat())
                 .sizeBytes(runResult.getSizeBytes())
                 .script(finalScript)
