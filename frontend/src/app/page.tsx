@@ -5,6 +5,7 @@ import { TerminalHeader } from "@/components/TerminalHeader";
 import { CommandConsole } from "@/components/CommandConsole";
 import { CodeInspector } from "@/components/CodeInspector";
 import { Viewport3D, MeshNodeInfo } from "@/components/Viewport3D";
+import { ShortcutsModal } from "@/components/ShortcutsModal";
 import { useLocalStorageToken } from "@/hooks/useLocalStorageToken";
 import { useMcpClient } from "@/hooks/useMcpClient";
 
@@ -27,6 +28,9 @@ export default function Home() {
   const [isLeftOpen, setIsLeftOpen] = useState(true);
   const [isRightOpen, setIsRightOpen] = useState(false);
 
+  // Shortcuts Cheat Sheet Modal State
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+
   // Sub-Mesh Selection & Scene Hierarchy Synchronization
   const [selectedMeshName, setSelectedMeshName] = useState<string | null>(null);
   const [meshList, setMeshList] = useState<MeshNodeInfo[]>([]);
@@ -47,6 +51,37 @@ export default function Home() {
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  // Global Editor Panes & Shortcuts Hotkeys (T, N, F1, ?)
+  useEffect(() => {
+    const handleGlobalHotkeys = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      // F1 or ? -> Open Shortcuts Cheat Sheet
+      if (e.key === "F1" || (e.shiftKey && (e.key === "?" || e.key === "/"))) {
+        e.preventDefault();
+        setIsShortcutsOpen((prev) => !prev);
+        return;
+      }
+
+      // T -> Toggle Left Tool/Generator Panel
+      if (e.key.toLowerCase() === "t" && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        setIsLeftOpen((prev) => !prev);
+        return;
+      }
+
+      // N -> Toggle Right Inspector/Outliner Panel
+      if (e.key.toLowerCase() === "n" && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        setIsRightOpen((prev) => !prev);
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalHotkeys);
+    return () => window.removeEventListener("keydown", handleGlobalHotkeys);
   }, []);
 
   const handleExecute = (
@@ -74,11 +109,12 @@ export default function Home() {
         onToggleLeft={() => setIsLeftOpen(!isLeftOpen)}
         isRightOpen={isRightOpen}
         onToggleRight={() => setIsRightOpen(!isRightOpen)}
+        onOpenShortcuts={() => setIsShortcutsOpen(true)}
       />
 
       {/* 2. Main Workstation 3-Panel DCC Layout */}
       <div className="flex-1 flex min-h-0 min-w-0 overflow-hidden relative">
-        {/* Left Panel: Compact Tool Parameters & Generator (300px, collapsible) */}
+        {/* Left Panel: Compact Tool Parameters & Generator (300px, collapsible with T) */}
         {isLeftOpen && (
           <aside className="w-[300px] shrink-0 h-full overflow-hidden flex flex-col z-20">
             <CommandConsole
@@ -112,6 +148,7 @@ export default function Home() {
               onMeshSelect={setSelectedMeshName}
               onMeshListUpdate={setMeshList}
               externalSelectedMeshName={selectedMeshName}
+              onOpenShortcuts={() => setIsShortcutsOpen(true)}
               liveMaterialUpdate={liveMaterialUpdate}
               liveExplodedFactor={liveExplodedFactor}
               liveTurntable={liveTurntable}
@@ -125,7 +162,7 @@ export default function Home() {
           )}
         </section>
 
-        {/* Right Panel: Scene Outliner, Python Script & Build Logs (320px, collapsible) */}
+        {/* Right Panel: Scene Outliner, Python Script & Build Logs (320px, collapsible with N) */}
         {isRightOpen && (
           <aside className="w-[320px] shrink-0 h-full overflow-hidden flex flex-col z-20">
             <CodeInspector
@@ -141,6 +178,12 @@ export default function Home() {
           </aside>
         )}
       </div>
+
+      {/* 3. Blender Shortcuts Modal Overlay */}
+      <ShortcutsModal
+        isOpen={isShortcutsOpen}
+        onClose={() => setIsShortcutsOpen(false)}
+      />
     </main>
   );
 }

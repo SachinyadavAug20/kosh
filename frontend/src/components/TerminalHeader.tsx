@@ -18,6 +18,8 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Palette,
+  Keyboard,
+  HelpCircle,
 } from "lucide-react";
 
 interface TerminalHeaderProps {
@@ -31,6 +33,7 @@ interface TerminalHeaderProps {
   onToggleLeft?: () => void;
   isRightOpen?: boolean;
   onToggleRight?: () => void;
+  onOpenShortcuts?: () => void;
 }
 
 export function TerminalHeader({
@@ -44,6 +47,7 @@ export function TerminalHeader({
   onToggleLeft,
   isRightOpen = false,
   onToggleRight,
+  onOpenShortcuts,
 }: TerminalHeaderProps) {
   const { theme, setTheme } = useTheme();
   const [isKeyDrawerOpen, setIsKeyDrawerOpen] = useState(false);
@@ -168,6 +172,18 @@ export function TerminalHeader({
             <Key className="w-3 h-3 text-[#a1a1aa]" />
             <span className="font-mono text-[10px]">{token ? "KEY SET" : "NO KEY"}</span>
           </button>
+
+          {/* Blender Shortcuts Modal Trigger */}
+          {onOpenShortcuts && (
+            <button
+              onClick={onOpenShortcuts}
+              title="Blender Shortcuts Cheat Sheet (F1 or ?)"
+              className="tool-btn space-x-1 border-[#3f3f46] hover:border-[#ea580c] hover:text-[#f4f4f5] transition-colors"
+            >
+              <Keyboard className="w-3 h-3 text-[#ea580c]" />
+              <span className="font-mono text-[10px] hidden sm:inline font-semibold">? SHORTCUTS</span>
+            </button>
+          )}
 
           {/* Right Inspector Toggle */}
           {onToggleRight && (
