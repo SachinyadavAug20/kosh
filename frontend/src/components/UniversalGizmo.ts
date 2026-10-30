@@ -49,6 +49,15 @@ export class UniversalGizmo {
   private rotateGroup: THREE.Group;
   private scaleGroup: THREE.Group;
   private planesGroup: THREE.Group;
+  private scaleShaftsGroup: THREE.Group;
+
+  // Scale Handle Meshes for Dynamic Repositioning
+  private xScaleMesh: THREE.Mesh | null = null;
+  private yScaleMesh: THREE.Mesh | null = null;
+  private zScaleMesh: THREE.Mesh | null = null;
+  private xScaleHitbox: THREE.Mesh | null = null;
+  private yScaleHitbox: THREE.Mesh | null = null;
+  private zScaleHitbox: THREE.Mesh | null = null;
 
   // Meshes & Colliders
   private colliders: THREE.Mesh[] = [];
@@ -84,11 +93,13 @@ export class UniversalGizmo {
     this.rotateGroup = new THREE.Group();
     this.scaleGroup = new THREE.Group();
     this.planesGroup = new THREE.Group();
+    this.scaleShaftsGroup = new THREE.Group();
 
     this.group.add(this.translateGroup);
     this.group.add(this.rotateGroup);
     this.group.add(this.scaleGroup);
     this.group.add(this.planesGroup);
+    this.scaleGroup.add(this.scaleShaftsGroup);
 
     this.highlightMaterial = new THREE.MeshBasicMaterial({
       color: 0xfef08a,
@@ -139,6 +150,21 @@ export class UniversalGizmo {
     this.planesGroup.visible = m === "all" || m === "translate";
     this.rotateGroup.visible = m === "all" || m === "rotate";
     this.scaleGroup.visible = m === "all" || m === "scale";
+
+    // Dynamic Positioning for Scale Cubes:
+    // In "all" mode, cubes sit cleanly at 0.65 along axes (inside rotation rings at 0.85).
+    // In standalone "scale" mode, cubes extend to 1.15 with dedicated full connecting shafts.
+    const isAll = m === "all";
+    const scalePos = isAll ? 0.65 : 1.15;
+
+    if (this.xScaleMesh) this.xScaleMesh.position.set(scalePos, 0, 0);
+    if (this.xScaleHitbox) this.xScaleHitbox.position.set(scalePos, 0, 0);
+    if (this.yScaleMesh) this.yScaleMesh.position.set(0, scalePos, 0);
+    if (this.yScaleHitbox) this.yScaleHitbox.position.set(0, scalePos, 0);
+    if (this.zScaleMesh) this.zScaleMesh.position.set(0, 0, scalePos);
+    if (this.zScaleHitbox) this.zScaleHitbox.position.set(0, 0, scalePos);
+
+    this.scaleShaftsGroup.visible = m === "scale";
   }
 
   // Build the rich all-in-one geometry with thick invisible hitboxes
@@ -280,7 +306,7 @@ export class UniversalGizmo {
     // -------------------------------------------------------------
     // 3. Rotation Arc Rings (X, Y, Z)
     // -------------------------------------------------------------
-    const ringGeo = new THREE.TorusGeometry(0.85, 0.012, 12, 64);
+    const ringGeo = new THREE.TorusGeometry(0.85, 0.016, 16, 64);
     // Generous torus hitbox (tube 0.14)
     const ringHitboxGeo = new THREE.TorusGeometry(0.85, 0.14, 8, 32);
 
@@ -322,54 +348,77 @@ export class UniversalGizmo {
     this.colliders.push(zRingHitbox);
 
     // -------------------------------------------------------------
-    // 4. Scale Handles (Corner Cubes & Uniform Center Box)
+    // 4. Scale Handles (Scale Shafts, Axis Cubes & Uniform Center Box)
     // -------------------------------------------------------------
-    const scaleCubeGeo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
-    const scaleHitboxGeo = new THREE.BoxGeometry(0.26, 0.26, 0.26);
+    // Connecting shafts used in standalone "scale" mode
+    const scaleShaftGeo = new THREE.CylinderGeometry(0.015, 0.015, 1.05, 8);
+    const xShaftScale = new THREE.Mesh(scaleShaftGeo, createMat(colX));
+    xShaftScale.position.set(0.525, 0, 0);
+    xShaftScale.rotation.z = -Math.PI / 2;
+    this.scaleShaftsGroup.add(xShaftScale);
+
+    const yShaftScale = new THREE.Mesh(scaleShaftGeo, createMat(colY));
+    yShaftScale.position.set(0, 0.525, 0);
+    this.scaleShaftsGroup.add(yShaftScale);
+
+    const zShaftScale = new THREE.Mesh(scaleShaftGeo, createMat(colZ));
+    zShaftScale.position.set(0, 0, 0.525);
+    zShaftScale.rotation.x = Math.PI / 2;
+    this.scaleShaftsGroup.add(zShaftScale);
+
+    const scaleCubeGeo = new THREE.BoxGeometry(0.13, 0.13, 0.13);
+    const scaleHitboxGeo = new THREE.BoxGeometry(0.28, 0.28, 0.28);
+    const initPos = 0.65;
 
     // X Scale Cube
     const xScale = new THREE.Mesh(scaleCubeGeo, createMat(colX));
-    xScale.position.set(1.35, 0, 0);
+    xScale.position.set(initPos, 0, 0);
     this.scaleGroup.add(xScale);
     this.visualHandles.set("scale-x", xScale);
     this.recordMaterials(xScale);
+    this.xScaleMesh = xScale;
 
     const xScaleHitbox = new THREE.Mesh(scaleHitboxGeo, createColliderMat());
-    xScaleHitbox.position.set(1.35, 0, 0);
+    xScaleHitbox.position.set(initPos, 0, 0);
     xScaleHitbox.userData = { handle: "scale-x" };
     this.scaleGroup.add(xScaleHitbox);
     this.colliders.push(xScaleHitbox);
+    this.xScaleHitbox = xScaleHitbox;
 
     // Y Scale Cube
     const yScale = new THREE.Mesh(scaleCubeGeo, createMat(colY));
-    yScale.position.set(0, 1.35, 0);
+    yScale.position.set(0, initPos, 0);
     this.scaleGroup.add(yScale);
     this.visualHandles.set("scale-y", yScale);
     this.recordMaterials(yScale);
+    this.yScaleMesh = yScale;
 
     const yScaleHitbox = new THREE.Mesh(scaleHitboxGeo, createColliderMat());
-    yScaleHitbox.position.set(0, 1.35, 0);
+    yScaleHitbox.position.set(0, initPos, 0);
     yScaleHitbox.userData = { handle: "scale-y" };
     this.scaleGroup.add(yScaleHitbox);
     this.colliders.push(yScaleHitbox);
+    this.yScaleHitbox = yScaleHitbox;
 
     // Z Scale Cube
     const zScale = new THREE.Mesh(scaleCubeGeo, createMat(colZ));
-    zScale.position.set(0, 0, 1.35);
+    zScale.position.set(0, 0, initPos);
     this.scaleGroup.add(zScale);
     this.visualHandles.set("scale-z", zScale);
     this.recordMaterials(zScale);
+    this.zScaleMesh = zScale;
 
     const zScaleHitbox = new THREE.Mesh(scaleHitboxGeo, createColliderMat());
-    zScaleHitbox.position.set(0, 0, 1.35);
+    zScaleHitbox.position.set(0, 0, initPos);
     zScaleHitbox.userData = { handle: "scale-z" };
     this.scaleGroup.add(zScaleHitbox);
     this.colliders.push(zScaleHitbox);
+    this.zScaleHitbox = zScaleHitbox;
 
-    // Uniform Center Cube
-    const centerGeo = new THREE.BoxGeometry(0.16, 0.16, 0.16);
-    const centerHitboxGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-    const centerCube = new THREE.Mesh(centerGeo, createMat(0xf4f4f5, 0.65));
+    // Uniform Center Cube (Chamfered look, Zinc White)
+    const centerGeo = new THREE.BoxGeometry(0.18, 0.18, 0.18);
+    const centerHitboxGeo = new THREE.BoxGeometry(0.32, 0.32, 0.32);
+    const centerCube = new THREE.Mesh(centerGeo, createMat(0xf4f4f5, 0.75));
     this.scaleGroup.add(centerCube);
     this.visualHandles.set("scale-xyz", centerCube);
     this.recordMaterials(centerCube);
@@ -382,8 +431,11 @@ export class UniversalGizmo {
 
   private recordMaterials(obj: THREE.Object3D) {
     obj.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.material) {
-        this.originalMaterials.set(child, child.material);
+      if (child instanceof THREE.Mesh) {
+        child.renderOrder = 99999;
+        if (child.material) {
+          this.originalMaterials.set(child, child.material);
+        }
       }
     });
   }

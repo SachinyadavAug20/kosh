@@ -15,6 +15,7 @@ import { Timeline, KeyframeMarker, InterpolationType } from "./Timeline";
 import { FloatingInspector, SwatchPreset } from "./FloatingInspector";
 import { SimplifyModifier } from "three/examples/jsm/modifiers/SimplifyModifier.js";
 import { CanvasOverlay } from "./CanvasOverlay";
+import { ViewportNavigationGizmo } from "./ViewportNavigationGizmo";
 import { DccQuickTray, LightingStage } from "./DccQuickTray";
 import { UniversalGizmo, GizmoMode, DragBadgeInfo } from "./UniversalGizmo";
 import {
@@ -145,6 +146,7 @@ export function Viewport3D({
   const [isExportMenuOpen, setIsExportMenuOpen] = useState<boolean>(false);
   const [lastAddedPrimitive, setLastAddedPrimitive] = useState<{ type: string; mesh: THREE.Mesh; radius?: number; depth?: number; segments?: number } | null>(null);
   const [transformMode, setTransformMode] = useState<TransformMode>("all");
+  const [isModalTransforming, setIsModalTransforming] = useState<boolean>(false);
   const [liveDragBadge, setLiveDragBadge] = useState<DragBadgeInfo | null>(null);
   const universalGizmoRef = useRef<UniversalGizmo | null>(null);
   const [axisConstraint, setAxisConstraint] = useState<AxisConstraint>("none");
@@ -654,8 +656,13 @@ export function Viewport3D({
     scene.add(contactShadow);
     contactShadowRef.current = contactShadow;
 
-    const axes = new THREE.AxesHelper(2.5);
+    const axes = new THREE.AxesHelper(1.6);
     axes.position.set(0, 0.001, 0);
+    if (axes.material instanceof THREE.Material) {
+      axes.material.transparent = true;
+      axes.material.opacity = 0.45;
+      axes.material.depthWrite = false;
+    }
     scene.add(axes);
     axesHelperRef.current = axes;
 
@@ -1421,7 +1428,9 @@ export function Viewport3D({
       });
       if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
     }
-    setTransformMode("select");
+    setIsModalTransforming(false);
+    setTypedNumericBuffer("");
+    setTransformMode("all");
     setAxisConstraint("none");
     setIsTrackball(false);
     preTransformSnapshotRef.current = null;
@@ -1429,7 +1438,9 @@ export function Viewport3D({
 
   // Confirm Active Transformation (Left-Click or Enter)
   const handleConfirmTransform = useCallback(() => {
-    setTransformMode("select");
+    setIsModalTransforming(false);
+    setTypedNumericBuffer("");
+    setTransformMode("all");
     setAxisConstraint("none");
     setIsTrackball(false);
     preTransformSnapshotRef.current = null;
@@ -2196,58 +2207,70 @@ export function Viewport3D({
       if (e.key.toLowerCase() === "q" && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         setTransformMode("all");
+        setIsModalTransforming(false);
         setAxisConstraint("none");
         return;
       }
       if (e.key.toLowerCase() === "v" && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         setTransformMode("select");
+        setIsModalTransforming(false);
         setAxisConstraint("none");
         return;
       }
       if (e.key.toLowerCase() === "w" && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         setTransformMode("translate");
+        setIsModalTransforming(false);
         setAxisConstraint("none");
         return;
       }
       if (e.key.toLowerCase() === "e" && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         setTransformMode("rotate");
+        setIsModalTransforming(false);
         setAxisConstraint("none");
         return;
       }
 
-      // Transform Modals: G, R, S
+      // Transform Modals: G, R, S (Only if mesh is selected)
       if (e.key.toLowerCase() === "g" && !e.ctrlKey) {
         e.preventDefault();
-        setTransformMode("translate");
-        setAxisConstraint("none");
-        setIsTrackball(false);
+        if (selectedMesh) {
+          setIsModalTransforming(true);
+          setTransformMode("translate");
+          setAxisConstraint("none");
+          setIsTrackball(false);
+        }
         return;
       }
 
       if (e.key.toLowerCase() === "r" && !e.ctrlKey) {
         e.preventDefault();
-        const now = Date.now();
-        if (transformMode === "rotate" && now - lastRPressTimeRef.current < 450) {
-          // Double-tap R: Trackball rotation
-          setIsTrackball((prev) => !prev);
-        } else {
-          setTransformMode("rotate");
-          setAxisConstraint("none");
-          setIsTrackball(false);
+        if (selectedMesh) {
+          const now = Date.now();
+          if (transformMode === "rotate" && now - lastRPressTimeRef.current < 450) {
+            // Double-tap R: Trackball rotation
+            setIsTrackball((prev) => !prev);
+          } else {
+            setIsModalTransforming(true);
+            setTransformMode("rotate");
+            setAxisConstraint("none");
+            setIsTrackball(false);
+          }
+          lastRPressTimeRef.current = now;
         }
-        lastRPressTimeRef.current = now;
         return;
       }
 
       if (e.key.toLowerCase() === "s" && !e.ctrlKey) {
         e.preventDefault();
-        setTransformMode("scale");
-        setAxisConstraint("none");
-        setIsTrackball(false);
-        return;
+        if (selectedMesh) {
+          setIsModalTransforming(true);
+          setTransformMode("scale");
+          setAxisConstraint("none");
+          setIsTrackball(false);
+        }
       }
 
       // Selection: A (Select All) / Alt + A or Double A (Deselect)
@@ -2938,6 +2961,7 @@ export function Viewport3D({
             <button
               onClick={() => {
                 setTransformMode("all");
+                setIsModalTransforming(false);
                 setAxisConstraint("none");
               }}
               title="All-In-One Universal Gizmo (Q) — Move, Rotate & Scale simultaneously"
@@ -2951,6 +2975,7 @@ export function Viewport3D({
             <button
               onClick={() => {
                 setTransformMode("select");
+                setIsModalTransforming(false);
                 setAxisConstraint("none");
               }}
               title="Select Only (V) — Pure raycast click without gizmo"
@@ -2964,6 +2989,7 @@ export function Viewport3D({
             <button
               onClick={() => {
                 setTransformMode("translate");
+                setIsModalTransforming(false);
                 setAxisConstraint("none");
               }}
               title="Move / Translate (W / G)"
@@ -2977,6 +3003,7 @@ export function Viewport3D({
             <button
               onClick={() => {
                 setTransformMode("rotate");
+                setIsModalTransforming(false);
                 setAxisConstraint("none");
               }}
               title="Rotate (E / R)"
@@ -2990,6 +3017,7 @@ export function Viewport3D({
             <button
               onClick={() => {
                 setTransformMode("scale");
+                setIsModalTransforming(false);
                 setAxisConstraint("none");
               }}
               title="Scale (R / S)"
@@ -3383,7 +3411,15 @@ export function Viewport3D({
           axisConstraint={axisConstraint}
           showDimensions={showDimensions}
           onToggleDimensions={() => setShowDimensions((p) => !p)}
-          onSnapCameraView={setCameraPreset}
+        />
+
+        {/* AAA Viewport Navigation Gizmo (Interactive 3D Depth-Projected Orientation Widget) */}
+        <ViewportNavigationGizmo
+          camera={isOrtho ? orthoCameraRef.current : cameraRef.current}
+          orbitControls={orbitControlsRef.current}
+          onSnapView={setCameraPreset}
+          isOrtho={isOrtho}
+          onToggleOrtho={() => setIsOrtho(!isOrtho)}
         />
       </div>
 
@@ -3415,11 +3451,19 @@ export function Viewport3D({
         onResetScale={handleResetScale}
       />
 
-      {/* Floating Transform Numeric Input Pill (While G, R, S active) */}
-      {transformMode !== "select" && (
+      {/* Floating Transform Numeric Input Pill (Only active while G, R, S modal active or typing numeric input) */}
+      {((isModalTransforming && selectedMesh) || typedNumericBuffer !== "") && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 flex items-center space-x-2 bg-[#18181b]/95 border border-[#ea580c] px-3 py-1.5 rounded-sm shadow-xl font-mono text-xs text-[#f4f4f5]">
           <span className="font-bold text-[#ea580c] uppercase">
-            {transformMode === "translate" ? "G: TRANSLATE" : transformMode === "rotate" ? (isTrackball ? "R: TRACKBALL" : "R: ROTATE") : "S: SCALE"}
+            {transformMode === "translate"
+              ? "G: TRANSLATE"
+              : transformMode === "rotate"
+              ? isTrackball
+                ? "R: TRACKBALL"
+                : "R: ROTATE"
+              : transformMode === "scale"
+              ? "S: SCALE"
+              : "TRANSFORM"}
           </span>
           <span className="text-[#3f3f46]">|</span>
           {transformMode === "translate" && (

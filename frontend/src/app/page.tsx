@@ -97,6 +97,7 @@ export default function Home() {
     // Check if user came from Fork in Kosh Studio (/share/[id])
     try {
       const forked = localStorage.getItem("kosh_forked_scene");
+      let restored = false;
       if (forked) {
         const parsed = JSON.parse(forked);
         localStorage.removeItem("kosh_forked_scene");
@@ -113,12 +114,36 @@ export default function Home() {
             executionTimeMs: 0,
             success: true,
           });
+          restored = true;
         }
       }
+
+      // If no forked scene restored, auto-load featured starter model so viewport is alive immediately
+      if (!restored) {
+        fetch(`${apiBase}/api/shares/feat_turbine`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data && data.assetUrl) {
+              setCustomLoadedResult({
+                toolName: "cad_model",
+                assetId: data.id,
+                assetUrl: `${apiBase}${data.assetUrl}`,
+                assetName: data.assetName || "feat_turbine.glb",
+                script: data.script,
+                format: "glb",
+                sizeBytes: 0,
+                exitCode: 0,
+                executionTimeMs: 0,
+                success: true,
+              });
+            }
+          })
+          .catch((err) => console.log("Default model auto-load standby:", err));
+      }
     } catch (e) {
-      console.warn("Failed to restore forked scene:", e);
+      console.warn("Failed to restore or load scene:", e);
     }
-  }, []);
+  }, [apiBase]);
 
   // Global Editor Panes & Shortcuts Hotkeys (T, N, F1, ?)
   useEffect(() => {

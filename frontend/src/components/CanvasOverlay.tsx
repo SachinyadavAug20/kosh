@@ -19,7 +19,7 @@ export interface CanvasOverlayProps {
   axisConstraint: "none" | "x" | "y" | "z" | "shift-x" | "shift-y" | "shift-z";
   showDimensions: boolean;
   onToggleDimensions: () => void;
-  onSnapCameraView: (view: CameraView) => void;
+  onSnapCameraView?: (view: CameraView) => void;
 }
 
 export function CanvasOverlay({
@@ -288,57 +288,6 @@ export function CanvasOverlay({
         ctx.setLineDash([]);
       }
 
-      // -----------------------------------------------------------
-      // 4. Dynamic Camera Orientation Compass (Top-Right Gizmo)
-      // -----------------------------------------------------------
-      const compassX = width - 42;
-      const compassY = 42;
-      const compassR = 24;
-
-      // Base disc
-      ctx.beginPath();
-      ctx.arc(compassX, compassY, compassR, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(24, 24, 27, 0.75)";
-      ctx.strokeStyle = "#3f3f46";
-      ctx.lineWidth = 1;
-      ctx.setLineDash([]);
-      ctx.fill();
-      ctx.stroke();
-
-      // Camera inverse matrix orientation projection
-      const m = camera.matrixWorldInverse;
-      const vX = new THREE.Vector3(1, 0, 0).applyMatrix4(m);
-      const vY = new THREE.Vector3(0, 1, 0).applyMatrix4(m);
-      const vZ = new THREE.Vector3(0, 0, 1).applyMatrix4(m);
-
-      const drawCompassAxis = (dir: THREE.Vector3, label: string, color: string) => {
-        const endX = compassX + dir.x * 18;
-        const endY = compassY - dir.y * 18; // Canvas Y is inverted
-
-        ctx.strokeStyle = color;
-        ctx.fillStyle = color;
-        ctx.lineWidth = 1.5;
-
-        ctx.beginPath();
-        ctx.moveTo(compassX, compassY);
-        ctx.lineTo(endX, endY);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(endX, endY, 4, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.font = "bold 8px sans-serif";
-        ctx.fillStyle = "#ffffff";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(label, endX, endY);
-      };
-
-      drawCompassAxis(vX, "X", "#ef4444"); // Red X
-      drawCompassAxis(vY, "Y", "#22c55e"); // Green Y
-      drawCompassAxis(vZ, "Z", "#38bdf8"); // Blue Z
-
       ctx.restore();
     };
 
@@ -362,20 +311,6 @@ export function CanvasOverlay({
     if (!rect) return;
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-
-    // Check if clicked the Top-Right Camera Compass to snap view
-    const compassX = rect.width - 42;
-    const compassY = 42;
-    const dist = Math.hypot(x - compassX, y - compassY);
-    if (dist <= 26) {
-      // Snap camera based on click quad
-      if (Math.abs(x - compassX) > Math.abs(y - compassY)) {
-        onSnapCameraView(x > compassX ? "right" : "left");
-      } else {
-        onSnapCameraView(y < compassY ? "top" : "front");
-      }
-      return;
-    }
 
     if (isMarqueeMode) {
       setIsDraggingMarquee(true);
