@@ -15,7 +15,6 @@ import { Timeline, KeyframeMarker, InterpolationType } from "./Timeline";
 import { FloatingInspector, SwatchPreset } from "./FloatingInspector";
 import { SimplifyModifier } from "three/examples/jsm/modifiers/SimplifyModifier.js";
 import { CanvasOverlay, SelectionTool } from "./CanvasOverlay";
-import { ViewportNavigationGizmo } from "./ViewportNavigationGizmo";
 import { DccQuickTray, LightingStage } from "./DccQuickTray";
 import { UniversalGizmo, GizmoMode, DragBadgeInfo } from "./UniversalGizmo";
 import {
@@ -442,23 +441,25 @@ export function Viewport3D({
     scale: THREE.Vector3;
   } | null>(null);
 
-  // Persistent Undo / Redo Stack Engine (Task 10)
-  interface UndoTransformAction {
-    type: "transform";
-    targetName: string;
-    prev: { position: THREE.Vector3; rotation: THREE.Euler; scale: THREE.Vector3 };
-    next: { position: THREE.Vector3; rotation: THREE.Euler; scale: THREE.Vector3 };
-  }
-  interface UndoMaterialAction {
-    type: "material";
-    targetName: string;
-    prevMaterial: THREE.Material;
-    nextMaterial: THREE.Material;
-  }
-  type UndoAction = UndoTransformAction | UndoMaterialAction;
+  // Snapshot of all selected object transforms taken at UniversalGizmo drag-start
+  type TransformSnapshot = {
+    obj: THREE.Object3D;
+    position: THREE.Vector3;
+    rotation: THREE.Euler;
+    scale: THREE.Vector3;
+  };
+  const gizmoSnapshotRef = useRef<TransformSnapshot[] | null>(null);
 
-  const undoStackRef = useRef<UndoAction[]>([]);
-  const redoStackRef = useRef<UndoAction[]>([]);
+  // Command-pattern undo: each entry captures its own undo/redo closures so it
+  // can restore any kind of scene mutation (transform, add, delete, material).
+  interface UndoCommand {
+    label: string;
+    undo: () => void;
+    redo: () => void;
+  }
+
+  const undoStackRef = useRef<UndoCommand[]>([]);
+  const redoStackRef = useRef<UndoCommand[]>([]);
   const [undoToast, setUndoToast] = useState<string | null>(null);
 
   const showUndoToast = useCallback((msg: string) => {
@@ -468,82 +469,58 @@ export function Viewport3D({
     }, 2000);
   }, []);
 
-  const pushUndo = useCallback((action: UndoAction) => {
-    undoStackRef.current.push(action);
+  const pushUndo = useCallback((command: UndoCommand) => {
+    undoStackRef.current.push(command);
+    if (undoStackRef.current.length > 100) {
+      undoStackRef.current.shift();
+    }
     redoStackRef.current = [];
   }, []);
 
   const handleUndo = useCallback(() => {
-    const action = undoStackRef.current.pop();
-    if (!action) {
+    const command = undoStackRef.current.pop();
+    if (!command) {
       showUndoToast("Nothing to undo");
       return;
     }
-
-    if (action.type === "transform") {
-      let target: THREE.Object3D | undefined;
-      currentModelRef.current?.traverse((child) => {
-        if (child.name === action.targetName) target = child;
-      });
-      if (!target && currentModelRef.current?.name === action.targetName) {
-        target = currentModelRef.current;
-      }
-      if (target) {
-        target.position.copy(action.prev.position);
-        target.rotation.copy(action.prev.rotation);
-        target.scale.copy(action.prev.scale);
-        target.updateMatrixWorld();
-        redoStackRef.current.push(action);
-        showUndoToast(`Undo: Transform ${action.targetName}`);
-      }
-    } else if (action.type === "material") {
-      let target: THREE.Mesh | undefined;
-      currentModelRef.current?.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.name === action.targetName) target = child;
-      });
-      if (target) {
-        target.material = action.prevMaterial;
-        redoStackRef.current.push(action);
-        showUndoToast(`Undo: Material on ${action.targetName}`);
-      }
-    }
+    command.undo();
+    redoStackRef.current.push(command);
+    showUndoToast(`Undo: ${command.label}`);
   }, [showUndoToast]);
 
   const handleRedo = useCallback(() => {
-    const action = redoStackRef.current.pop();
-    if (!action) {
+    const command = redoStackRef.current.pop();
+    if (!command) {
       showUndoToast("Nothing to redo");
       return;
     }
-
-    if (action.type === "transform") {
-      let target: THREE.Object3D | undefined;
-      currentModelRef.current?.traverse((child) => {
-        if (child.name === action.targetName) target = child;
-      });
-      if (!target && currentModelRef.current?.name === action.targetName) {
-        target = currentModelRef.current;
-      }
-      if (target) {
-        target.position.copy(action.next.position);
-        target.rotation.copy(action.next.rotation);
-        target.scale.copy(action.next.scale);
-        target.updateMatrixWorld();
-        undoStackRef.current.push(action);
-        showUndoToast(`Redo: Transform ${action.targetName}`);
-      }
-    } else if (action.type === "material") {
-      let target: THREE.Mesh | undefined;
-      currentModelRef.current?.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.name === action.targetName) target = child;
-      });
-      if (target) {
-        target.material = action.nextMaterial;
-        undoStackRef.current.push(action);
-        showUndoToast(`Redo: Material on ${action.targetName}`);
-      }
-    }
+    command.redo();
+    undoStackRef.current.push(command);
+    showUndoToast(`Redo: ${command.label}`);
   }, [showUndoToast]);
+
+  // Helper: snapshot transform of a set of objects, returns restore fn.
+  const snapshotTransforms = useCallback((objects: THREE.Object3D[]) => {
+    return objects.map((obj) => ({
+      obj,
+      position: obj.position.clone(),
+      rotation: obj.rotation.clone(),
+      scale: obj.scale.clone(),
+    }));
+  }, []);
+
+  const applyTransforms = useCallback(
+    (snap: ReturnType<typeof snapshotTransforms>) => {
+      for (const s of snap) {
+        s.obj.position.copy(s.position);
+        s.obj.rotation.copy(s.rotation);
+        s.obj.scale.copy(s.scale);
+        s.obj.updateMatrixWorld();
+      }
+      updateSelectionHelpers();
+    },
+    [updateSelectionHelpers]
+  );
 
   // Double tap R tracking
   const lastRPressTimeRef = useRef<number>(0);
@@ -736,19 +713,22 @@ export function Viewport3D({
             !prev.rotation.equals(obj.rotation) ||
             !prev.scale.equals(obj.scale)
           ) {
+            const before: TransformSnapshot = {
+              obj,
+              position: prev.position.clone(),
+              rotation: prev.rotation.clone(),
+              scale: prev.scale.clone(),
+            };
+            const after: TransformSnapshot = {
+              obj,
+              position: obj.position.clone(),
+              rotation: obj.rotation.clone(),
+              scale: obj.scale.clone(),
+            };
             pushUndo({
-              type: "transform",
-              targetName: obj.name,
-              prev: {
-                position: prev.position.clone(),
-                rotation: prev.rotation.clone(),
-                scale: prev.scale.clone(),
-              },
-              next: {
-                position: obj.position.clone(),
-                rotation: obj.rotation.clone(),
-                scale: obj.scale.clone(),
-              },
+              label: `Transform ${obj.name || "object"}`,
+              undo: () => applyTransforms([before]),
+              redo: () => applyTransforms([after]),
             });
           }
         }
@@ -792,6 +772,12 @@ export function Viewport3D({
       isCtrlHeld: false,
       onDragStart: () => {
         orbit.enabled = false;
+        // Snapshot all affected objects (primary + secondary) for undo
+        const primary = universalGizmo.getTarget();
+        const all = [primary, ...universalGizmo.getSecondaryTargets()].filter(
+          Boolean
+        ) as THREE.Object3D[];
+        gizmoSnapshotRef.current = snapshotTransforms(all);
       },
       onDragMove: (badge) => {
         setLiveDragBadge(badge);
@@ -799,6 +785,29 @@ export function Viewport3D({
       onDragEnd: () => {
         orbit.enabled = true;
         setLiveDragBadge(null);
+        // Record undo command for this transform
+        const before = gizmoSnapshotRef.current;
+        if (before && before.length > 0) {
+          const after = snapshotTransforms(before.map((s) => s.obj));
+          const changed = before.some(
+            (s, i) =>
+              !s.position.equals(after[i].position) ||
+              !s.rotation.equals(after[i].rotation) ||
+              !s.scale.equals(after[i].scale)
+          );
+          if (changed) {
+            const label =
+              before.length === 1
+                ? `Transform ${before[0].obj.name || "object"}`
+                : `Transform ${before.length} objects`;
+            pushUndo({
+              label,
+              undo: () => applyTransforms(before),
+              redo: () => applyTransforms(after),
+            });
+          }
+        }
+        gizmoSnapshotRef.current = null;
       },
       onObjectChange: () => {
         const obj = universalGizmo.getTarget();
@@ -1346,6 +1355,16 @@ export function Viewport3D({
 
       setMeshList(detectedMeshes);
       onMeshListUpdate?.(detectedMeshes);
+
+      // Auto-select the first detected mesh so the gizmo/inspector are never empty
+      if (detectedMeshes.length > 0) {
+        const first = detectedMeshes[0].meshRef;
+        setSelectedMeshes([first]);
+        onMeshSelect?.(first.name);
+      } else {
+        setSelectedMeshes([]);
+        onMeshSelect?.(null);
+      }
 
       setStats({
         triangles: telemetry?.triangles ?? Math.round(totalTris),
@@ -2241,17 +2260,59 @@ export function Viewport3D({
 
   const handleUpdateSelectedMaterial = useCallback((rough: number, metal: number, color?: string) => {
     if (!selectedMesh) return;
+    const mat = selectedMesh.material as THREE.MeshStandardMaterial;
+    if (!(mat instanceof THREE.MeshStandardMaterial)) return;
+
+    const prev = {
+      roughness: mat.roughness,
+      metalness: mat.metalness,
+      color: mat.color.getHexString(),
+    };
+    const next = {
+      roughness: rough,
+      metalness: metal,
+      color: color ? color.replace("#", "") : prev.color,
+    };
+    if (
+      prev.roughness === next.roughness &&
+      prev.metalness === next.metalness &&
+      prev.color === next.color
+    ) {
+      return;
+    }
+
     setMatRoughness(rough);
     setMatMetalness(metal);
     if (color) setMatColor(color);
 
-    if (selectedMesh.material instanceof THREE.MeshStandardMaterial) {
-      selectedMesh.material.roughness = rough;
-      selectedMesh.material.metalness = metal;
-      if (color) selectedMesh.material.color.set(color);
-      selectedMesh.material.needsUpdate = true;
-    }
-  }, [selectedMesh]);
+    mat.roughness = rough;
+    mat.metalness = metal;
+    if (color) mat.color.set(color);
+    mat.needsUpdate = true;
+
+    const mesh = selectedMesh;
+    pushUndo({
+      label: `Material ${mesh.name || "mesh"}`,
+      undo: () => {
+        mat.roughness = prev.roughness;
+        mat.metalness = prev.metalness;
+        mat.color.set(`#${prev.color}`);
+        mat.needsUpdate = true;
+        setMatRoughness(prev.roughness);
+        setMatMetalness(prev.metalness);
+        setMatColor(`#${prev.color}`);
+      },
+      redo: () => {
+        mat.roughness = next.roughness;
+        mat.metalness = next.metalness;
+        mat.color.set(`#${next.color}`);
+        mat.needsUpdate = true;
+        setMatRoughness(next.roughness);
+        setMatMetalness(next.metalness);
+        setMatColor(`#${next.color}`);
+      },
+    });
+  }, [selectedMesh, pushUndo]);
 
   const handleSubdivide = useCallback(() => {
     if (!selectedMesh) return;
@@ -2333,6 +2394,25 @@ export function Viewport3D({
     if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
   };
 
+  const refreshMeshList = useCallback(() => {
+    if (!rootModelGroupRef.current) return;
+    const list: MeshNodeInfo[] = [];
+    rootModelGroupRef.current.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.name && !child.name.includes("Helper")) {
+        list.push({
+          id: child.uuid,
+          name: child.name,
+          triangles: child.geometry.index ? child.geometry.index.count / 3 : child.geometry.attributes.position.count / 3,
+          vertices: child.geometry.attributes.position.count,
+          visible: child.visible,
+          meshRef: child,
+        });
+      }
+    });
+    setMeshList(list);
+    onMeshListUpdate?.(list);
+  }, [onMeshListUpdate]);
+
   // Duplicate Selected Sub-Meshes (Shift + D)
   const handleDuplicate = useCallback(() => {
     const targets = selectedMeshes.length > 0 ? selectedMeshes : (selectedMesh ? [selectedMesh] : []);
@@ -2365,12 +2445,30 @@ export function Viewport3D({
     }
 
     const updatedList = [...meshList, ...newItems];
+    const prevList = meshList;
     setMeshList(updatedList);
     onMeshListUpdate?.(updatedList);
     setSelectedMeshes(newClones);
     onMeshSelect?.(newClones[newClones.length - 1].name);
+
+    pushUndo({
+      label: `Duplicate ${newClones.length} mesh${newClones.length > 1 ? "es" : ""}`,
+      undo: () => {
+        for (const c of newClones) c.removeFromParent();
+        setMeshList(prevList);
+        onMeshListUpdate?.(prevList);
+        setSelectedMeshes([]);
+        refreshMeshList();
+      },
+      redo: () => {
+        for (const c of newClones) c.parent?.add(c) || currentModelRef.current?.add(c);
+        setMeshList(updatedList);
+        onMeshListUpdate?.(updatedList);
+        refreshMeshList();
+      },
+    });
     showUndoToast(`Duplicated ${newClones.length} mesh${newClones.length > 1 ? "es" : ""}`);
-  }, [selectedMeshes, selectedMesh, meshList, onMeshListUpdate, onMeshSelect, showUndoToast]);
+  }, [selectedMeshes, selectedMesh, meshList, onMeshListUpdate, onMeshSelect, showUndoToast, pushUndo, refreshMeshList]);
 
   // Delete Selected Sub-Meshes (X or Delete)
   const handleDelete = useCallback(() => {
@@ -2388,7 +2486,9 @@ export function Viewport3D({
     }
 
     const targetNames = new Set(targets.map((t) => t.name));
+    const removed: { obj: THREE.Object3D; parent: THREE.Object3D | null }[] = [];
     for (const target of targets) {
+      removed.push({ obj: target, parent: target.parent });
       target.removeFromParent();
       if (currentModelRef.current === target) {
         currentModelRef.current = null;
@@ -2396,12 +2496,33 @@ export function Viewport3D({
     }
 
     const newMeshList = meshList.filter((m) => !targetNames.has(m.name));
+    const prevMeshList = meshList;
     setMeshList(newMeshList);
     onMeshListUpdate?.(newMeshList);
     setSelectedMeshes([]);
     onMeshSelect?.(null);
+
+    pushUndo({
+      label: `Delete ${targets.length} mesh${targets.length > 1 ? "es" : ""}`,
+      undo: () => {
+        for (const r of removed) {
+          r.parent?.add(r.obj);
+        }
+        setMeshList(prevMeshList);
+        onMeshListUpdate?.(prevMeshList);
+        refreshMeshList();
+      },
+      redo: () => {
+        for (const r of removed) {
+          r.obj.removeFromParent();
+        }
+        setMeshList(newMeshList);
+        onMeshListUpdate?.(newMeshList);
+        refreshMeshList();
+      },
+    });
     showUndoToast(`Deleted ${targets.length} mesh${targets.length > 1 ? "es" : ""}`);
-  }, [selectedMeshes, selectedMesh, meshList, onMeshListUpdate, onMeshSelect, showUndoToast]);
+  }, [selectedMeshes, selectedMesh, meshList, onMeshListUpdate, onMeshSelect, showUndoToast, pushUndo, refreshMeshList]);
 
   // Standard Camera Presets (Front, Back, Top, Bottom, Right, Left, Iso)
   const setCameraPreset = useCallback((preset: CameraView) => {
@@ -3198,24 +3319,6 @@ export function Viewport3D({
   // -------------------------------------------------------------
   // Instant Procedural Model Synthesis & CAD Prompt Execution
   // -------------------------------------------------------------
-  const refreshMeshList = useCallback(() => {
-    if (!rootModelGroupRef.current) return;
-    const list: MeshNodeInfo[] = [];
-    rootModelGroupRef.current.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.name && !child.name.includes("Helper")) {
-        list.push({
-          id: child.uuid,
-          name: child.name,
-          triangles: child.geometry.index ? child.geometry.index.count / 3 : child.geometry.attributes.position.count / 3,
-          vertices: child.geometry.attributes.position.count,
-          visible: child.visible,
-          meshRef: child,
-        });
-      }
-    });
-    setMeshList(list);
-    onMeshListUpdate?.(list);
-  }, [onMeshListUpdate]);
 
   const handleClearCanvas = useCallback(() => {
     if (transformControlsRef.current) {
@@ -3228,20 +3331,13 @@ export function Viewport3D({
     if (selectionBoxHelperRef.current) {
       selectionBoxHelperRef.current.visible = false;
     }
+    const clearedChildren: THREE.Object3D[] = [];
+    const prevMeshList = meshList;
     if (rootModelGroupRef.current) {
       while (rootModelGroupRef.current.children.length > 0) {
         const child = rootModelGroupRef.current.children[0];
         rootModelGroupRef.current.remove(child);
-        child.traverse((sub) => {
-          if (sub instanceof THREE.Mesh) {
-            sub.geometry?.dispose();
-            if (Array.isArray(sub.material)) {
-              sub.material.forEach((m) => m.dispose());
-            } else {
-              sub.material?.dispose();
-            }
-          }
-        });
+        clearedChildren.push(child);
       }
     }
     currentModelRef.current = null;
@@ -3249,11 +3345,29 @@ export function Viewport3D({
     onMeshSelect?.(null);
     setMeshList([]);
     setLastAddedPrimitive(null);
+
+    pushUndo({
+      label: "Clear Canvas",
+      undo: () => {
+        for (const c of clearedChildren) rootModelGroupRef.current?.add(c);
+        currentModelRef.current = clearedChildren[0] || null;
+        setMeshList(prevMeshList);
+        onMeshListUpdate?.(prevMeshList);
+        refreshMeshList();
+      },
+      redo: () => {
+        for (const c of clearedChildren) c.removeFromParent();
+        currentModelRef.current = null;
+        setMeshList([]);
+        onMeshListUpdate?.([]);
+        refreshMeshList();
+      },
+    });
     showUndoToast("Clear Canvas");
-  }, [onMeshSelect, showUndoToast]);
+  }, [onMeshSelect, showUndoToast, meshList, onMeshListUpdate, pushUndo, refreshMeshList]);
 
   const handleGenerateModelFromPrompt = useCallback(
-    (promptText: string, format: ExportFormat = "glb") => {
+    (promptText: string, _format: ExportFormat = "glb") => {
       if (!sceneRef.current) return;
       setIsLoadingModel(true);
 
@@ -3268,23 +3382,19 @@ export function Viewport3D({
         selectionBoxHelperRef.current.visible = false;
       }
 
-      // 1. Instant interactive procedural CAD preview in the scene (0ms)
+      // Snapshot current scene for undo
+      const prevChildren: THREE.Object3D[] = rootModelGroupRef.current
+        ? [...rootModelGroupRef.current.children]
+        : [];
+      const prevMeshList = meshList;
+
+      // Instant procedural CAD generation (0ms) — full multi-mesh named model
       try {
         const proceduralMesh = generateProceduralModelFromPrompt(promptText);
         if (proceduralMesh && rootModelGroupRef.current) {
+          // Clear prior children WITHOUT disposing (kept alive for undo)
           while (rootModelGroupRef.current.children.length > 0) {
-            const child = rootModelGroupRef.current.children[0];
-            rootModelGroupRef.current.remove(child);
-            child.traverse((sub) => {
-              if (sub instanceof THREE.Mesh) {
-                sub.geometry?.dispose();
-                if (Array.isArray(sub.material)) {
-                  sub.material.forEach((m) => m.dispose());
-                } else {
-                  sub.material?.dispose();
-                }
-              }
-            });
+            rootModelGroupRef.current.remove(rootModelGroupRef.current.children[0]);
           }
 
           rootModelGroupRef.current.add(proceduralMesh);
@@ -3302,6 +3412,7 @@ export function Viewport3D({
             });
           }
 
+          refreshMeshList();
           if (firstMesh) {
             setSelectedMesh(firstMesh);
             onMeshSelect?.(firstMesh.name);
@@ -3309,22 +3420,39 @@ export function Viewport3D({
             setSelectedMesh(null);
             onMeshSelect?.(null);
           }
-
-          refreshMeshList();
           handleFocus();
           setIsLoadingModel(false);
+
+          const nextChildren: THREE.Object3D[] = [...rootModelGroupRef.current.children];
+          const nextModel = proceduralMesh;
+          pushUndo({
+            label: `Generate "${promptText.slice(0, 20)}"`,
+            undo: () => {
+              if (!rootModelGroupRef.current) return;
+              for (const c of nextChildren) c.removeFromParent();
+              for (const c of prevChildren) rootModelGroupRef.current.add(c);
+              currentModelRef.current = prevChildren[0] || null;
+              refreshMeshList();
+              setSelectedMeshes([]);
+              onMeshSelect?.(null);
+            },
+            redo: () => {
+              if (!rootModelGroupRef.current) return;
+              for (const c of prevChildren) c.removeFromParent();
+              rootModelGroupRef.current.add(nextModel);
+              currentModelRef.current = nextModel;
+              refreshMeshList();
+            },
+          });
+
           showUndoToast(`Generated: ${promptText.slice(0, 24)}...`);
         }
       } catch (err) {
-        console.warn("Procedural instant preview fallback:", err);
-      }
-
-      // 2. Call backend tool to generate high quality model / blender pipeline
-      if (onExecuteTool) {
-        onExecuteTool("cad_model", { prompt: promptText, format } as any);
+        console.warn("Procedural generation failed:", err);
+        setIsLoadingModel(false);
       }
     },
-    [onExecuteTool, refreshMeshList, handleFocus, onMeshSelect, showUndoToast]
+    [refreshMeshList, handleFocus, onMeshSelect, showUndoToast, meshList, pushUndo]
   );
 
   // -------------------------------------------------------------
@@ -4287,15 +4415,6 @@ export function Viewport3D({
                         onToggleDimensions={() => setShowDimensions((p) => !p)}
                       />
 
-                      {/* AAA Viewport Navigation Gizmo (Interactive 3D Depth-Projected Orientation Widget) */}
-                      <ViewportNavigationGizmo
-                        camera={isOrtho ? orthoCameraRef.current : cameraRef.current}
-                        orbitControls={orbitControlsRef.current}
-                        onSnapView={setCameraPreset}
-                        isOrtho={isOrtho}
-                        onToggleOrtho={() => setIsOrtho(!isOrtho)}
-                      />
-
                       {/* Floating Transform Numeric Input Pill */}
                       {((isModalTransforming && selectedMesh) || typedNumericBuffer !== "") && (
                         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center space-x-2 bg-[#18181b]/95 border border-[#ea580c] px-3 py-1.5 rounded-sm shadow-xl font-mono text-xs text-[#f4f4f5]">
@@ -4346,7 +4465,7 @@ export function Viewport3D({
                       {/* Sleek Floating CAD Command Prompt Bar (Bottom-Center) */}
                       <ModelPromptBar
                         onGenerate={handleGenerateModelFromPrompt}
-                        isLoading={isLoading || isLoadingModel}
+                        isLoading={isLoadingModel}
                         token={token}
                         onOpenKeyModal={() => setIsKeyModalOpen(true)}
                       />

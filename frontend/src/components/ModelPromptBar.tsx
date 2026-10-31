@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Sparkles,
   Key,
@@ -29,11 +29,7 @@ export const PRESET_CAD_CHIPS = [
   { label: "Coffee Mug", prompt: "A ceramic coffee mug with smooth curved handle, rounded lip, and glossy ceramic finish" },
 ];
 
-const SYNTHESIS_STEPS = [
-  "1/3 Decomposing CAD primitives...",
-  "2/3 Synthesizing CSG mesh operations...",
-  "3/3 Spawning geometry at 3D Cursor...",
-];
+const SYNTHESIS_STEPS = ["Generating geometry..."];
 
 export function ModelPromptBar({
   onGenerate,
@@ -45,19 +41,6 @@ export function ModelPromptBar({
   const [prompt, setPrompt] = useState<string>("");
   const [format, setFormat] = useState<ExportFormat>("glb");
   const [isFormatOpen, setIsFormatOpen] = useState<boolean>(false);
-  const [stepIndex, setStepIndex] = useState<number>(0);
-
-  // Cycle step indicator while loading
-  useEffect(() => {
-    if (!isLoading) {
-      setStepIndex(0);
-      return;
-    }
-    const interval = setInterval(() => {
-      setStepIndex((prev) => (prev + 1) % SYNTHESIS_STEPS.length);
-    }, 1200);
-    return () => clearInterval(interval);
-  }, [isLoading]);
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -81,7 +64,7 @@ export function ModelPromptBar({
           <div className="flex items-center space-x-2 px-3 py-1 bg-[#141416] border border-[#ea580c] text-white text-[10px] rounded shadow-2xl animate-pulse">
             <Loader2 className="w-3 h-3 text-[#ea580c] animate-spin" />
             <span className="font-bold text-[#ea580c]">
-              {activeStep || SYNTHESIS_STEPS[stepIndex]}
+              {activeStep || SYNTHESIS_STEPS[0]}
             </span>
           </div>
         </div>

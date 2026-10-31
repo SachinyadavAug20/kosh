@@ -149,6 +149,10 @@ export class UniversalGizmo {
     return this.targetObject;
   }
 
+  public getSecondaryTargets(): THREE.Object3D[] {
+    return this.secondaryTargets.slice();
+  }
+
   public updateVisibility() {
     if (!this.targetObject || this.options.mode === "select") {
       this.group.visible = false;
