@@ -89,8 +89,8 @@ interface BlenderTopBarProps {
   onFocus: () => void;
 
   // Workspace Presets
-  workspacePreset?: "default" | "animation" | "modeling" | "scripting";
-  onSelectWorkspacePreset?: (preset: "default" | "animation" | "modeling" | "scripting") => void;
+  workspacePreset?: "default" | "modeling" | "animation" | "director" | "render" | "scripting";
+  onSelectWorkspacePreset?: (preset: "default" | "modeling" | "animation" | "director" | "render" | "scripting") => void;
 
   // Viewport Overlays HUD
   showGrid?: boolean;
@@ -349,9 +349,10 @@ export function BlenderTopBar({
           <div className="hidden lg:flex items-center space-x-0.5 ml-2 border-l border-[#27272a] pl-2 font-mono text-[11px]">
             {[
               { id: "default", label: "Layout" },
-              { id: "animation", label: "Animation" },
               { id: "modeling", label: "Modeling" },
-              { id: "scripting", label: "Scripting" },
+              { id: "animation", label: "Animation" },
+              { id: "director", label: "Director AI" },
+              { id: "render", label: "Render" },
             ].map((p) => {
               const isActive = workspacePreset === p.id;
               return (

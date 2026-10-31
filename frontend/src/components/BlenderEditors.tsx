@@ -864,3 +864,266 @@ export function ScriptingEditor({
     </div>
   );
 }
+
+// -------------------------------------------------------------
+// 4. Director AI Studio Editor (Prompt Console, Script Breakdown)
+// -------------------------------------------------------------
+export interface DirectorEditorProps {
+  sceneDescriptor?: any;
+  onGeneratePrompt?: (prompt: string) => void;
+  onOpenExportModal?: () => void;
+  onResetScene?: () => void;
+  isGenerating?: boolean;
+}
+
+export function DirectorEditor({
+  sceneDescriptor,
+  onGeneratePrompt,
+  onOpenExportModal,
+  onResetScene,
+  isGenerating = false,
+}: DirectorEditorProps) {
+  const [promptInput, setPromptInput] = useState<string>(
+    sceneDescriptor?.prompt || "A courier runs through a rain-soaked cyberpunk alley, stops at a neon door, and looks back"
+  );
+
+  const presets = [
+    { label: "🌃 Cyberpunk Alley", prompt: "A courier runs through a rain-soaked cyberpunk alley, stops at a neon door, and looks back" },
+    { label: "🌅 Sunset Cabin", prompt: "A traveler walks through a pine forest towards a warm cabin at golden hour sunset" },
+    { label: "🌌 Starry Ruins", prompt: "An adventurer discovers ancient ruins under a starry night sky with glowing campfire" },
+    { label: "🏜️ Desert Expedition", prompt: "A low-poly robotic scout jogs across sunny sand dunes exploring an outpost" },
+  ];
+
+  return (
+    <div className="flex flex-col h-full w-full bg-[#18181b] p-3 space-y-3 select-none overflow-y-auto custom-scrollbar text-xs">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-2 border-b border-[#27272a]">
+        <div className="flex items-center space-x-2">
+          <Sparkles className="w-4 h-4 text-[#ea580c]" />
+          <span className="font-mono text-xs font-bold text-white uppercase tracking-wider">
+            DIRECTOR AI STUDIO
+          </span>
+        </div>
+        {sceneDescriptor && (
+          <span className="px-1.5 py-0.5 rounded bg-[#ea580c]/20 border border-[#ea580c]/40 text-[#ea580c] font-mono text-[10px]">
+            ACTIVE SCENE
+          </span>
+        )}
+      </div>
+
+      {/* Prompt Console */}
+      <div className="space-y-1.5">
+        <label className="text-[10px] font-mono text-[#a1a1aa] uppercase">
+          Narrative Script / Scene Prompt
+        </label>
+        <textarea
+          value={promptInput}
+          onChange={(e) => setPromptInput(e.target.value)}
+          rows={3}
+          className="w-full bg-[#141416] border border-[#27272a] rounded p-2 text-xs text-white placeholder-[#52525b] focus:outline-none focus:border-[#ea580c] resize-none"
+          placeholder="Describe your 3D animation scene..."
+        />
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => onGeneratePrompt?.(promptInput)}
+            disabled={isGenerating || !promptInput.trim()}
+            className="flex-1 py-1.5 bg-[#ea580c] hover:bg-[#f97316] disabled:opacity-50 text-white rounded font-mono text-[11px] font-bold flex items-center justify-center space-x-1.5 shadow-md transition-colors"
+          >
+            <span>{isGenerating ? "Synthesizing Scene..." : "Generate Scene 🪄"}</span>
+          </button>
+          {onOpenExportModal && (
+            <button
+              type="button"
+              onClick={onOpenExportModal}
+              className="px-3 py-1.5 bg-[#27272a] hover:bg-[#3f3f46] text-[#f4f4f5] rounded font-mono text-[11px] font-medium transition-colors"
+            >
+              Export 🎬
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Preset Chips */}
+      <div className="space-y-1">
+        <span className="text-[10px] font-mono text-[#71717a] uppercase">Storyboards</span>
+        <div className="grid grid-cols-2 gap-1.5">
+          {presets.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => {
+                setPromptInput(p.prompt);
+                onGeneratePrompt?.(p.prompt);
+              }}
+              className="p-1.5 rounded bg-[#141416] border border-[#27272a] hover:border-[#ea580c]/60 text-left text-[10px] text-[#d4d4d8] truncate transition-colors"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Script Breakdown / Scene Graph */}
+      {sceneDescriptor && (
+        <div className="space-y-2 pt-2 border-t border-[#27272a]">
+          <span className="text-[10px] font-mono text-[#a1a1aa] uppercase font-bold">
+            Scene Breakdown
+          </span>
+
+          <div className="bg-[#141416] border border-[#27272a] rounded p-2 space-y-1.5 font-mono text-[10px]">
+            <div className="flex justify-between text-[#71717a]">
+              <span>Duration</span>
+              <span className="text-[#f4f4f5]">
+                {sceneDescriptor.meta?.durationFrames || sceneDescriptor.durationFrames || 180} frames ({sceneDescriptor.meta?.fps || 30} FPS)
+              </span>
+            </div>
+            <div className="flex justify-between text-[#71717a]">
+              <span>Environment</span>
+              <span className="text-[#ea580c] uppercase">
+                {sceneDescriptor.environment?.preset || "Procedural"}
+              </span>
+            </div>
+            <div className="flex justify-between text-[#71717a]">
+              <span>Ground</span>
+              <span className="text-[#f4f4f5]">
+                {sceneDescriptor.environment?.ground?.type || "terrain"}
+              </span>
+            </div>
+            <div className="flex justify-between text-[#71717a]">
+              <span>Props Count</span>
+              <span className="text-[#f4f4f5]">
+                {sceneDescriptor.props?.length || sceneDescriptor.entities?.length || 0}
+              </span>
+            </div>
+            <div className="flex justify-between text-[#71717a]">
+              <span>Actors</span>
+              <span className="text-emerald-400">
+                {sceneDescriptor.actors?.map((a: any) => a.name).join(", ") || "None"}
+              </span>
+            </div>
+          </div>
+
+          {onResetScene && (
+            <button
+              type="button"
+              onClick={onResetScene}
+              className="w-full py-1 text-center text-[10px] font-mono text-[#71717a] hover:text-red-400 transition-colors"
+            >
+              Clear Narrative Scene
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// 5. MCP Live Console Editor (Real-Time JSON-RPC Tool Calls)
+// -------------------------------------------------------------
+export interface McpConsoleEditorProps {
+  onExecuteTool?: (toolName: string, params: Record<string, any>) => void;
+  isLoading?: boolean;
+}
+
+export function McpConsoleEditor({
+  onExecuteTool,
+  isLoading = false,
+}: McpConsoleEditorProps) {
+  const [selectedTool, setSelectedTool] = useState<string>("blender_eval");
+  const [jsonParams, setJsonParams] = useState<string>(
+    JSON.stringify({ code: "import bpy\nbpy.ops.mesh.primitive_cube_add(size=2.0)" }, null, 2)
+  );
+  const [logs, setLogs] = useState<Array<{ time: string; tool: string; status: string }>>([
+    { time: "10:30:12", tool: "mcp/health_check", status: "200 OK" },
+    { time: "10:30:15", tool: "blender_eval", status: "SUCCESS (Mesh Added)" },
+  ]);
+
+  const tools = [
+    { id: "blender_eval", label: "blender_eval (Python)" },
+    { id: "openscad_render", label: "openscad_render (CSG)" },
+    { id: "svg_extrude", label: "svg_extrude (Path)" },
+    { id: "audio_motion_bake", label: "audio_motion_bake (FFT)" },
+  ];
+
+  const handleRun = () => {
+    try {
+      const parsed = JSON.parse(jsonParams);
+      onExecuteTool?.(selectedTool, parsed);
+      setLogs((prev) => [
+        { time: new Date().toLocaleTimeString(), tool: selectedTool, status: "DISPATCHED" },
+        ...prev,
+      ]);
+    } catch (e: any) {
+      alert("Invalid JSON parameters: " + e.message);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full w-full bg-[#18181b] p-3 space-y-3 select-none overflow-hidden text-xs font-mono">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-2 border-b border-[#27272a]">
+        <div className="flex items-center space-x-2">
+          <Code2 className="w-4 h-4 text-sky-400" />
+          <span className="text-xs font-bold text-white uppercase tracking-wider">
+            MCP LIVE TOOL CONSOLE
+          </span>
+        </div>
+        <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px]">
+          JSON-RPC CONNECTED
+        </span>
+      </div>
+
+      {/* Tool Selector */}
+      <div className="space-y-1">
+        <label className="text-[10px] text-[#71717a] uppercase">Registered Endpoint</label>
+        <select
+          value={selectedTool}
+          onChange={(e) => setSelectedTool(e.target.value)}
+          className="w-full bg-[#141416] border border-[#27272a] rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-[#ea580c]"
+        >
+          {tools.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* JSON Payload Input */}
+      <div className="flex-1 flex flex-col space-y-1 min-h-0">
+        <label className="text-[10px] text-[#71717a] uppercase">Input Payload (JSON)</label>
+        <textarea
+          value={jsonParams}
+          onChange={(e) => setJsonParams(e.target.value)}
+          className="flex-1 w-full bg-[#141416] border border-[#27272a] rounded p-2 text-[11px] text-[#e4e4e7] focus:outline-none focus:border-[#ea580c] resize-none custom-scrollbar"
+          spellCheck={false}
+        />
+        <button
+          type="button"
+          onClick={handleRun}
+          disabled={isLoading}
+          className="py-1.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white rounded font-bold text-[11px] flex items-center justify-center space-x-1 transition-colors"
+        >
+          <span>{isLoading ? "Executing Call..." : "Dispatch Tool Call"}</span>
+        </button>
+      </div>
+
+      {/* Live Request Log */}
+      <div className="h-28 flex flex-col space-y-1 shrink-0 pt-2 border-t border-[#27272a]">
+        <span className="text-[10px] text-[#71717a] uppercase">Transmission Stream</span>
+        <div className="flex-1 bg-[#141416] border border-[#27272a] rounded p-1.5 overflow-y-auto text-[9px] space-y-0.5 custom-scrollbar">
+          {logs.map((l, i) => (
+            <div key={i} className="flex justify-between items-center text-[#a1a1aa]">
+              <span className="text-zinc-500">{l.time}</span>
+              <span className="text-sky-300 font-bold">{l.tool}</span>
+              <span className="text-emerald-400">{l.status}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+

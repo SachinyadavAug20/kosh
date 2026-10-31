@@ -27,7 +27,20 @@ import { BlenderLeftToolbar } from "./BlenderLeftToolbar";
 import { BlenderNPanel } from "./BlenderNPanel";
 import { BlenderTimeline } from "./BlenderTimeline";
 import { BlenderWorkspace, WorkspacePreset, LeafNode } from "./BlenderWorkspace";
-import { OutlinerEditor, PropertiesEditor, ScriptingEditor } from "./BlenderEditors";
+import { OutlinerEditor, PropertiesEditor, ScriptingEditor, DirectorEditor, McpConsoleEditor } from "./BlenderEditors";
+import { AspectRatioFramer, FramingMode } from "./narrative/AspectRatioFramer";
+import { VideoExportModal } from "./narrative/VideoExportModal";
+import { DirectorPromptBar } from "./narrative/DirectorPromptBar";
+import { NarrativeSceneDescriptor } from "../lib/narrative/NarrativeSceneSchema";
+import { parseNarrativePrompt } from "../lib/narrative/NarrativePromptParser";
+import {
+  createSkyboxGradient,
+  createLowPolySkyDome,
+  createLowPolyTerrain,
+  instantiateLowPolyEntity,
+} from "../lib/narrative/LowPolyProceduralLibrary";
+import { LowPolyCharacter } from "../lib/narrative/LowPolyCharacterRig";
+import { DirectorCameraRig } from "../lib/narrative/DirectorCameraRig";
 import {
   Download,
   RotateCw,
@@ -245,6 +258,13 @@ export function Viewport3D({
   const [isLooping, setIsLooping] = useState<boolean>(true);
   const [hoverActive, setHoverActive] = useState<boolean>(false);
   const [explodedFactor, setExplodedFactor] = useState<number>(0.0);
+
+  // Narrative Scene Director & Video Export State
+  const [narrativeDescriptor, setNarrativeDescriptor] = useState<NarrativeSceneDescriptor | null>(null);
+  const [narrativeFramingMode, setNarrativeFramingMode] = useState<FramingMode>("16:9");
+  const [isVideoExportModalOpen, setIsVideoExportModalOpen] = useState<boolean>(false);
+  const [isGeneratingNarrative, setIsGeneratingNarrative] = useState<boolean>(false);
+  const [isDirectorCameraActive, setIsDirectorCameraActive] = useState<boolean>(true);
 
   // Blender DCC Panel & Hierarchy States
   const [isTOpen, setIsTOpen] = useState<boolean>(true);
@@ -499,6 +519,15 @@ export function Viewport3D({
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
   const actionRef = useRef<THREE.AnimationAction[]>([]);
 
+  // Narrative Scene & Character Animation Refs
+  const narrativeRootGroupRef = useRef<THREE.Group | null>(null);
+  const narrativeCharacterRef = useRef<LowPolyCharacter | null>(null);
+  const directorCameraRigRef = useRef<DirectorCameraRig | null>(null);
+  const isDirectorCameraActiveRef = useRef<boolean>(true);
+  const isPlayingRef = useRef<boolean>(false);
+  const currentFrameRef = useRef<number>(0);
+  const narrativeTotalFramesRef = useRef<number>(180);
+
   // Raycaster & Mouse Click Tracking (to distinguish click vs orbit drag)
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const pointerDownPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -558,6 +587,10 @@ export function Viewport3D({
     orbit.target.set(0, 0.7, 0);
     orbit.maxDistance = 100;
     orbit.minDistance = 0.5;
+    orbit.addEventListener("start", () => {
+      isDirectorCameraActiveRef.current = false;
+      setIsDirectorCameraActive(false);
+    });
     orbitControlsRef.current = orbit;
 
     // E. TransformControls
@@ -875,13 +908,27 @@ export function Viewport3D({
       }
 
       // Timeline playback frame increment (in Loop Scrub mode)
-      if (isPlaying && turntableMode === "loop") {
+      if (isPlaying && turntableMode === "loop" && !narrativeCharacterRef.current) {
         setCurrentFrame((prev) => {
           if (prev >= totalFrames) {
             return isLooping ? 0 : totalFrames;
           }
           return prev + 1;
         });
+      }
+
+      // Narrative Scene & Character Kinematics Playback
+      if (isPlayingRef.current && narrativeCharacterRef.current) {
+        const totalF = narrativeTotalFramesRef.current || 180;
+        currentFrameRef.current = (currentFrameRef.current + 1) % totalF;
+        setCurrentFrame(currentFrameRef.current);
+
+        const progress = currentFrameRef.current / totalF;
+        narrativeCharacterRef.current.updateAtProgress(progress, totalF / 30);
+
+        if (directorCameraRigRef.current && isDirectorCameraActiveRef.current) {
+          directorCameraRigRef.current.updateAtFrame(currentFrameRef.current, totalF);
+        }
       }
 
       orbit.update();
@@ -928,6 +975,15 @@ export function Viewport3D({
       }
     };
   }, []);
+
+  // Synchronize playback refs with React states
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  useEffect(() => {
+    currentFrameRef.current = currentFrame;
+  }, [currentFrame]);
 
   // Viewport Overlays Reactive Sync
   useEffect(() => {
@@ -2823,6 +2879,168 @@ export function Viewport3D({
   };
 
   // -------------------------------------------------------------
+  // Narrative Scene Synthesis & Procedural Assembly
+  // -------------------------------------------------------------
+  const handleGenerateNarrativeScene = useCallback((promptText: string) => {
+    if (!sceneRef.current) return;
+    setIsGeneratingNarrative(true);
+
+    try {
+      const descriptor = parseNarrativePrompt(promptText);
+      setNarrativeDescriptor(descriptor);
+      const totalF = descriptor.meta?.durationFrames || descriptor.durationFrames || 180;
+      setTotalFrames(totalF);
+      narrativeTotalFramesRef.current = totalF;
+      setCurrentFrame(0);
+      currentFrameRef.current = 0;
+
+      // 1. Clear prior narrative scene group
+      if (narrativeRootGroupRef.current) {
+        sceneRef.current.remove(narrativeRootGroupRef.current);
+        narrativeRootGroupRef.current.traverse((child) => {
+          if ((child as any).geometry) (child as any).geometry.dispose();
+          if ((child as any).material) {
+            if (Array.isArray((child as any).material)) {
+              (child as any).material.forEach((m: any) => m.dispose());
+            } else {
+              (child as any).material.dispose();
+            }
+          }
+        });
+        narrativeRootGroupRef.current = null;
+      }
+
+      // 2. Create new Narrative Root
+      const narrativeRoot = new THREE.Group();
+      narrativeRoot.name = "NarrativeSceneRoot";
+      sceneRef.current.add(narrativeRoot);
+      narrativeRootGroupRef.current = narrativeRoot;
+
+      // 3. Environment & Atmosphere
+      const skyGradient = descriptor.environment.skyboxGradient || ["#312e81", "#f97316"];
+      const sky = createSkyboxGradient(skyGradient[0], skyGradient[1]);
+      narrativeRoot.add(sky);
+
+      const groundType = descriptor.environment.ground?.type || "grass";
+      const groundSize = descriptor.environment.ground?.size || [60, 60];
+      const terrain = createLowPolyTerrain(groundType as any, groundSize[0], groundSize[1]);
+      narrativeRoot.add(terrain);
+
+      // Sun Directional Light
+      const sunDesc = descriptor.environment.sunLight;
+      const dirLight = new THREE.DirectionalLight(
+        new THREE.Color(sunDesc.color),
+        sunDesc.intensity
+      );
+      dirLight.position.set(sunDesc.position[0], sunDesc.position[1], sunDesc.position[2]);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.width = 2048;
+      dirLight.shadow.mapSize.height = 2048;
+      dirLight.shadow.camera.near = 0.5;
+      dirLight.shadow.camera.far = 120;
+      dirLight.shadow.camera.left = -25;
+      dirLight.shadow.camera.right = 25;
+      dirLight.shadow.camera.top = 25;
+      dirLight.shadow.camera.bottom = -25;
+      dirLight.shadow.bias = -0.0005;
+      narrativeRoot.add(dirLight);
+
+      // Ambient Fill
+      const ambDesc = descriptor.environment.ambientLight;
+      const ambLight = new THREE.AmbientLight(
+        new THREE.Color(ambDesc.color),
+        ambDesc.intensity
+      );
+      narrativeRoot.add(ambLight);
+
+      // Fog
+      sceneRef.current.fog = new THREE.FogExp2(
+        new THREE.Color(skyGradient[1]),
+        descriptor.environment.fogDensity
+      );
+
+      // 4. Props / Architecture / Props
+      const propsList = descriptor.props || [];
+      for (const p of propsList) {
+        const propObj = instantiateLowPolyEntity(p.type);
+        propObj.position.set(p.transform.position[0], p.transform.position[1], p.transform.position[2]);
+        if (p.transform.scale) {
+          propObj.scale.set(p.transform.scale[0], p.transform.scale[1], p.transform.scale[2]);
+        }
+        if (p.transform.rotation) {
+          propObj.rotation.set(p.transform.rotation[0], p.transform.rotation[1], p.transform.rotation[2]);
+        }
+        narrativeRoot.add(propObj);
+      }
+
+      // 5. Hero Character & Spline Kinematics
+      if (descriptor.actors && descriptor.actors.length > 0) {
+        const heroActor = descriptor.actors[0];
+        const character = new LowPolyCharacter(heroActor);
+        narrativeRoot.add(character.group);
+        narrativeCharacterRef.current = character;
+        character.updateAtProgress(0, totalF / 30);
+      } else {
+        narrativeCharacterRef.current = null;
+      }
+
+      // 6. Camera Rig & Shot Choreography
+      if (cameraRef.current) {
+        const camDesc = descriptor.cameras?.[0] || { keyframes: [] };
+        const cameraRig = new DirectorCameraRig(cameraRef.current, camDesc);
+        cameraRig.setTargetActor(narrativeCharacterRef.current);
+        cameraRig.setSceneCenter(new THREE.Vector3(0, 0, 0));
+        directorCameraRigRef.current = cameraRig;
+        cameraRig.updateAtFrame(0, totalF);
+
+        isDirectorCameraActiveRef.current = true;
+        setIsDirectorCameraActive(true);
+
+        if (orbitControlsRef.current) {
+          const frameState = cameraRig.evaluateFrame(0, totalF);
+          orbitControlsRef.current.target.copy(frameState.target);
+          orbitControlsRef.current.update();
+        }
+      }
+
+      // 7. Auto Play
+      isPlayingRef.current = true;
+      setIsPlaying(true);
+    } catch (err) {
+      console.error("Failed to generate narrative scene:", err);
+    } finally {
+      setIsGeneratingNarrative(false);
+    }
+  }, []);
+
+  const handleResetNarrativeScene = useCallback(() => {
+    if (narrativeRootGroupRef.current && sceneRef.current) {
+      sceneRef.current.remove(narrativeRootGroupRef.current);
+      narrativeRootGroupRef.current.traverse((child) => {
+        if ((child as any).geometry) (child as any).geometry.dispose();
+        if ((child as any).material) {
+          if (Array.isArray((child as any).material)) {
+            (child as any).material.forEach((m: any) => m.dispose());
+          } else {
+            (child as any).material.dispose();
+          }
+        }
+      });
+      narrativeRootGroupRef.current = null;
+    }
+    if (sceneRef.current) {
+      sceneRef.current.fog = null;
+    }
+    narrativeCharacterRef.current = null;
+    directorCameraRigRef.current = null;
+    setNarrativeDescriptor(null);
+    setIsPlaying(false);
+    isPlayingRef.current = false;
+    setCurrentFrame(0);
+    currentFrameRef.current = 0;
+  }, []);
+
+  // -------------------------------------------------------------
   // In-Viewport Digital Sculpting Stroke Handler
   // -------------------------------------------------------------
   const handleSculptStroke = (intersectPoint: THREE.Vector3, intersectNormal: THREE.Vector3, isSmooth: boolean) => {
@@ -3612,6 +3830,32 @@ export function Viewport3D({
                           )}
                         </div>
                       )}
+
+                      {/* Aspect Ratio Framing Letterbox Matte */}
+                      <AspectRatioFramer
+                        mode={narrativeFramingMode}
+                        containerRef={containerRef}
+                      />
+
+                      {/* Floating Narrative Scene Director HUD */}
+                      <DirectorPromptBar
+                        onGenerate={handleGenerateNarrativeScene}
+                        framingMode={narrativeFramingMode}
+                        onSetFramingMode={setNarrativeFramingMode}
+                        onOpenExportModal={() => setIsVideoExportModalOpen(true)}
+                        hasActiveScene={narrativeDescriptor !== null}
+                        isPlaying={isPlaying}
+                        onTogglePlay={() => {
+                          const nextPlay = !isPlaying;
+                          setIsPlaying(nextPlay);
+                          isPlayingRef.current = nextPlay;
+                        }}
+                        currentFrame={currentFrame}
+                        totalFrames={totalFrames}
+                        onScrubFrame={handleSeekFrame}
+                        onResetScene={handleResetNarrativeScene}
+                        isGenerating={isGeneratingNarrative}
+                      />
                     </div>
 
                     {/* N-Panel Right Properties Strip (Drawer collapsible with N) */}
@@ -3722,6 +3966,31 @@ export function Viewport3D({
                     stderr={stderr}
                   />
                 );
+
+              case "director":
+                return (
+                  <DirectorEditor
+                    sceneDescriptor={narrativeDescriptor}
+                    onGeneratePrompt={handleGenerateNarrativeScene}
+                    onOpenExportModal={() => setIsVideoExportModalOpen(true)}
+                    onResetScene={handleResetNarrativeScene}
+                    isGenerating={isGeneratingNarrative}
+                  />
+                );
+
+              case "mcp_console":
+                return (
+                  <McpConsoleEditor
+                    onExecuteTool={(toolName, params) => {
+                      if (toolName === "blender_eval" && params.code) {
+                        onExecuteRawScript?.(params.code);
+                      } else if (onExecuteTool) {
+                        onExecuteTool(toolName, { format: "glb", ...params } as any);
+                      }
+                    }}
+                    isLoading={isLoading}
+                  />
+                );
             }
           }}
         />
@@ -3796,6 +4065,16 @@ export function Viewport3D({
           </div>
         )}
       </div>
+
+      {/* Narrative Video Deterministic Export Modal */}
+      <VideoExportModal
+        isOpen={isVideoExportModalOpen}
+        onClose={() => setIsVideoExportModalOpen(false)}
+        sceneDescriptor={narrativeDescriptor}
+        scene={sceneRef.current}
+        character={narrativeCharacterRef.current}
+        cameraRig={directorCameraRigRef.current}
+      />
     </div>
   );
 }

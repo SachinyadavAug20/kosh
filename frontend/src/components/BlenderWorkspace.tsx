@@ -23,9 +23,9 @@ import {
   Sparkles,
 } from "lucide-react";
 
-export type EditorType = "viewport" | "timeline" | "outliner" | "properties" | "script";
+export type EditorType = "viewport" | "timeline" | "director" | "outliner" | "properties" | "mcp_console" | "script";
 export type SplitDirection = "horizontal" | "vertical"; // horizontal = left/right columns, vertical = top/bottom rows
-export type WorkspacePreset = "default" | "animation" | "modeling" | "scripting";
+export type WorkspacePreset = "default" | "modeling" | "animation" | "director" | "render" | "scripting";
 
 export interface SplitNode {
   id: string;
@@ -205,6 +205,55 @@ export const PRESETS: Record<WorkspacePreset, WorkspaceNode> = {
       editorType: "script",
     },
   },
+
+  // 5. Director AI Studio Preset: Viewport + Timeline Left, Director AI Studio Right
+  director: {
+    id: "root_director",
+    type: "split",
+    direction: "horizontal",
+    ratio: 0.7,
+    first: {
+      id: "split_dir_vp_tl",
+      type: "split",
+      direction: "vertical",
+      ratio: 0.78,
+      first: {
+        id: "leaf_vp_director",
+        type: "leaf",
+        editorType: "viewport",
+        subView: "persp",
+      },
+      second: {
+        id: "leaf_tl_director",
+        type: "leaf",
+        editorType: "timeline",
+      },
+    },
+    second: {
+      id: "leaf_dir_studio",
+      type: "leaf",
+      editorType: "director",
+    },
+  },
+
+  // 6. Render Preset: Viewport Left (Aspect Framed), Properties & Render Stack Right
+  render: {
+    id: "root_render",
+    type: "split",
+    direction: "horizontal",
+    ratio: 0.76,
+    first: {
+      id: "leaf_vp_render",
+      type: "leaf",
+      editorType: "viewport",
+      subView: "persp",
+    },
+    second: {
+      id: "leaf_prop_render",
+      type: "leaf",
+      editorType: "properties",
+    },
+  },
 };
 
 // Tree Helper: Deep Clone
@@ -318,12 +367,16 @@ function AreaHeader({
         return { label: "3D Viewport", icon: <Box className="w-3.5 h-3.5 text-[#ea580c]" /> };
       case "timeline":
         return { label: "Timeline / Dope Sheet", icon: <Film className="w-3.5 h-3.5 text-amber-400" /> };
+      case "director":
+        return { label: "Director AI Studio", icon: <Sparkles className="w-3.5 h-3.5 text-orange-400" /> };
       case "outliner":
-        return { label: "Outliner", icon: <Layers className="w-3.5 h-3.5 text-cyan-400" /> };
+        return { label: "Outliner / Graph", icon: <Layers className="w-3.5 h-3.5 text-cyan-400" /> };
       case "properties":
-        return { label: "Properties", icon: <Sliders className="w-3.5 h-3.5 text-emerald-400" /> };
+        return { label: "Properties & CAD", icon: <Sliders className="w-3.5 h-3.5 text-emerald-400" /> };
+      case "mcp_console":
+        return { label: "MCP Live Console", icon: <Code2 className="w-3.5 h-3.5 text-sky-400" /> };
       case "script":
-        return { label: "Script / MCP Console", icon: <Code2 className="w-3.5 h-3.5 text-sky-400" /> };
+        return { label: "Python Scripting IDE", icon: <Code2 className="w-3.5 h-3.5 text-indigo-400" /> };
     }
   };
 
@@ -346,8 +399,8 @@ function AreaHeader({
           </button>
 
           {isTypeDropdownOpen && (
-            <div className="absolute top-7 left-0 w-44 bg-[#18181b] border border-[#3f3f46] shadow-2xl rounded-sm p-1 z-50 space-y-0.5">
-              {(["viewport", "timeline", "outliner", "properties", "script"] as const).map((t) => {
+            <div className="absolute top-7 left-0 w-48 bg-[#18181b] border border-[#3f3f46] shadow-2xl rounded-sm p-1 z-50 space-y-0.5">
+              {(["viewport", "timeline", "director", "outliner", "properties", "mcp_console", "script"] as const).map((t) => {
                 const meta = getEditorMeta(t);
                 const isActive = leaf.editorType === t;
                 return (
