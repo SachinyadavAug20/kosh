@@ -10,7 +10,7 @@ import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import { OBJExporter } from "three/examples/jsm/exporters/OBJExporter.js";
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
 import { useTheme } from "@/context/ThemeContext";
-import { ExportFormat } from "@/types/mcp";
+import { ExportFormat, BackendHealth, McpToolDefinition } from "@/types/mcp";
 import { Timeline, KeyframeMarker, InterpolationType } from "./Timeline";
 import { FloatingInspector, SwatchPreset } from "./FloatingInspector";
 import { SimplifyModifier } from "three/examples/jsm/modifiers/SimplifyModifier.js";
@@ -18,6 +18,16 @@ import { CanvasOverlay } from "./CanvasOverlay";
 import { ViewportNavigationGizmo } from "./ViewportNavigationGizmo";
 import { DccQuickTray, LightingStage } from "./DccQuickTray";
 import { UniversalGizmo, GizmoMode, DragBadgeInfo } from "./UniversalGizmo";
+import {
+  BlenderTopBar,
+  TransformOrientation,
+  PivotPoint,
+} from "./BlenderTopBar";
+import { BlenderLeftToolbar } from "./BlenderLeftToolbar";
+import { BlenderNPanel } from "./BlenderNPanel";
+import { BlenderTimeline } from "./BlenderTimeline";
+import { BlenderWorkspace, WorkspacePreset, LeafNode } from "./BlenderWorkspace";
+import { OutlinerEditor, PropertiesEditor, ScriptingEditor } from "./BlenderEditors";
 import {
   Download,
   RotateCw,
@@ -58,6 +68,8 @@ import {
   Circle,
   Camera as CameraIcon,
   Lightbulb,
+  Component,
+  Paintbrush,
 } from "lucide-react";
 
 export type ShadingMode = "solid" | "material" | "wireframe" | "normals";
@@ -111,6 +123,27 @@ export interface Viewport3DProps {
   liveExplodedFactor?: number;
   liveTurntable?: boolean;
   liveHover?: boolean;
+
+  // Blender DCC Unified Workspace Props
+  health?: BackendHealth | null;
+  isHealthChecking?: boolean;
+  onRefreshHealth?: () => void;
+  token?: string;
+  onSaveToken?: (token: string) => void;
+  onClearToken?: () => void;
+  onOpenPasteBpy?: () => void;
+  onOpenShare?: () => void;
+  onOpenShowcase?: () => void;
+  tools?: McpToolDefinition[];
+  isLoading?: boolean;
+  onExecuteTool?: (
+    toolName: string,
+    args: { prompt?: string; script?: string; format: ExportFormat; previousScript?: string }
+  ) => void;
+  onExecuteRawScript?: (script: string) => void;
+  script?: string | null;
+  stdout?: string | null;
+  stderr?: string | null;
 }
 
 export function Viewport3D({
@@ -123,11 +156,27 @@ export function Viewport3D({
   onMeshSelect,
   onMeshListUpdate,
   externalSelectedMeshName,
-  onOpenShortcuts,
+  onOpenShortcuts = () => {},
   liveMaterialUpdate,
   liveExplodedFactor,
   liveTurntable,
   liveHover,
+  health = null,
+  isHealthChecking = false,
+  onRefreshHealth = () => {},
+  token = "",
+  onSaveToken = () => {},
+  onClearToken = () => {},
+  onOpenPasteBpy = () => {},
+  onOpenShare = () => {},
+  onOpenShowcase = () => {},
+  tools = [],
+  isLoading = false,
+  onExecuteTool = () => {},
+  onExecuteRawScript = () => {},
+  script = null,
+  stdout = null,
+  stderr = null,
 }: Viewport3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { theme, config: themeConfig } = useTheme();
@@ -171,6 +220,20 @@ export function Viewport3D({
   const [isCtrlHeld, setIsCtrlHeld] = useState<boolean>(false);
   const [isShiftHeld, setIsShiftHeld] = useState<boolean>(false);
 
+  // Workspace Preset & Viewport Overlays HUD
+  const [workspacePreset, setWorkspacePreset] = useState<WorkspacePreset>("default");
+  const [showCursor, setShowCursor] = useState<boolean>(true);
+  const [showWireframeOverlay, setShowWireframeOverlay] = useState<boolean>(false);
+  const [showNormals, setShowNormals] = useState<boolean>(false);
+
+  // Tab Mode Switcher Pie Menu State
+  const [isTabPieMenuOpen, setIsTabPieMenuOpen] = useState<boolean>(false);
+
+  // Shift + A Contextual Quick-Add Menu State
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState<boolean>(false);
+  const [quickAddPos, setQuickAddPos] = useState<{ x: number; y: number }>({ x: 300, y: 300 });
+  const latestMousePosRef = useRef<{ x: number; y: number }>({ x: 400, y: 300 });
+
   // Z Shading Pie Menu State
   const [isPieMenuOpen, setIsPieMenuOpen] = useState<boolean>(false);
 
@@ -182,6 +245,24 @@ export function Viewport3D({
   const [isLooping, setIsLooping] = useState<boolean>(true);
   const [hoverActive, setHoverActive] = useState<boolean>(false);
   const [explodedFactor, setExplodedFactor] = useState<number>(0.0);
+
+  // Blender DCC Panel & Hierarchy States
+  const [isTOpen, setIsTOpen] = useState<boolean>(true);
+  const [isNOpen, setIsNOpen] = useState<boolean>(false);
+  const [lockedMeshes, setLockedMeshes] = useState<Set<string>>(new Set());
+  const [transformOrientation, setTransformOrientation] = useState<TransformOrientation>("global");
+  const [pivotPoint, setPivotPoint] = useState<PivotPoint>("median");
+  const [isProportionalEditing, setIsProportionalEditing] = useState<boolean>(false);
+  const [selectedTransform, setSelectedTransform] = useState<{
+    position: { x: number; y: number; z: number };
+    rotation: { x: number; y: number; z: number };
+    scale: { x: number; y: number; z: number };
+  }>({
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+  });
+
 
   // Modern Dope Sheet Timeline State
   const [turntableMode, setTurntableMode] = useState<"loop" | "infinite">("loop");
@@ -213,6 +294,47 @@ export function Viewport3D({
 
   const [meshList, setMeshList] = useState<MeshNodeInfo[]>([]);
   const [selectedMesh, setSelectedMesh] = useState<THREE.Mesh | null>(null);
+
+  const handleToggleMeshLock = useCallback((meshName: string) => {
+    setLockedMeshes((prev) => {
+      const next = new Set(prev);
+      if (next.has(meshName)) next.delete(meshName);
+      else next.add(meshName);
+      return next;
+    });
+  }, []);
+
+  const handleToggleMeshVisibility = useCallback((meshName: string) => {
+    setMeshList((prevList) =>
+      prevList.map((m) => {
+        if (m.name === meshName) {
+          const nextVis = !m.visible;
+          if (m.meshRef) {
+            m.meshRef.visible = nextVis;
+          }
+          return { ...m, visible: nextVis };
+        }
+        return m;
+      })
+    );
+  }, []);
+
+  const handleUpdateTransform = useCallback(
+    (pos: [number, number, number], rot: [number, number, number], scl: [number, number, number]) => {
+      if (!selectedMesh) return;
+      selectedMesh.position.set(pos[0], pos[1], pos[2]);
+      selectedMesh.rotation.set((rot[0] * Math.PI) / 180, (rot[1] * Math.PI) / 180, (rot[2] * Math.PI) / 180);
+      selectedMesh.scale.set(scl[0], scl[1], scl[2]);
+      if (universalGizmoRef.current) universalGizmoRef.current.update();
+      if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+      setSelectedTransform({
+        position: { x: pos[0], y: pos[1], z: pos[2] },
+        rotation: { x: rot[0], y: rot[1], z: rot[2] },
+        scale: { x: scl[0], y: scl[1], z: scl[2] },
+      });
+    },
+    [selectedMesh]
+  );
 
   // Pre-Transform Snapshot for RMB / Esc Cancel
   const preTransformSnapshotRef = useRef<{
@@ -372,6 +494,8 @@ export function Viewport3D({
   const axesHelperRef = useRef<THREE.AxesHelper | null>(null);
   const selectionBoxHelperRef = useRef<THREE.BoxHelper | null>(null);
   const sculptRingRef = useRef<THREE.Mesh | null>(null);
+  const cursor3DRef = useRef<THREE.Group | null>(null);
+  const normalsGroupRef = useRef<THREE.Group | null>(null);
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
   const actionRef = useRef<THREE.AnimationAction[]>([]);
 
@@ -689,6 +813,43 @@ export function Viewport3D({
     scene.add(ringMesh);
     sculptRingRef.current = ringMesh;
 
+    // 3D Cursor Helper (Iconic Blender Red/White Target Ring & Crosshairs)
+    const cursor3D = new THREE.Group();
+    cursor3D.name = "blender_3d_cursor";
+    const cursorRingGeo = new THREE.RingGeometry(0.18, 0.20, 32);
+    const cursorRingMat = new THREE.MeshBasicMaterial({
+      color: 0xd97706,
+      side: THREE.DoubleSide,
+      depthTest: false,
+      transparent: true,
+      opacity: 0.9,
+    });
+    const cursorRing = new THREE.Mesh(cursorRingGeo, cursorRingMat);
+    cursorRing.rotation.x = -Math.PI / 2;
+    cursor3D.add(cursorRing);
+
+    const crosshairGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-0.35, 0, 0), new THREE.Vector3(0.35, 0, 0),
+      new THREE.Vector3(0, -0.35, 0), new THREE.Vector3(0, 0.35, 0),
+      new THREE.Vector3(0, 0, -0.35), new THREE.Vector3(0, 0, 0.35),
+    ]);
+    const crosshairMat = new THREE.LineBasicMaterial({
+      color: 0xf4f4f5,
+      depthTest: false,
+      transparent: true,
+      opacity: 0.85,
+    });
+    const crosshair = new THREE.LineSegments(crosshairGeo, crosshairMat);
+    cursor3D.add(crosshair);
+    cursor3D.position.set(0, 0, 0);
+    scene.add(cursor3D);
+    cursor3DRef.current = cursor3D;
+
+    // Normals Group Helper
+    const normalsGroup = new THREE.Group();
+    scene.add(normalsGroup);
+    normalsGroupRef.current = normalsGroup;
+
     // J. Render Loop
     let animationFrameId: number;
     let clock = new THREE.Clock();
@@ -731,7 +892,7 @@ export function Viewport3D({
     };
     animate();
 
-    // K. Resize Listener
+    // K. Resize Listener & ResizeObserver (for smooth split pane resizing)
     const handleResize = () => {
       if (!container) return;
       const w = container.clientWidth;
@@ -751,8 +912,11 @@ export function Viewport3D({
       renderer.setSize(w, h);
     };
     window.addEventListener("resize", handleResize);
+    const ro = new ResizeObserver(() => handleResize());
+    ro.observe(container);
 
     return () => {
+      ro.disconnect();
       window.removeEventListener("resize", handleResize);
       cancelAnimationFrame(animationFrameId);
       orbit.dispose();
@@ -764,6 +928,79 @@ export function Viewport3D({
       }
     };
   }, []);
+
+  // Viewport Overlays Reactive Sync
+  useEffect(() => {
+    if (fadeGridRef.current) fadeGridRef.current.visible = showGrid;
+    if (contactShadowRef.current) contactShadowRef.current.visible = showGrid && currentModelRef.current !== null;
+  }, [showGrid]);
+
+  useEffect(() => {
+    if (axesHelperRef.current) axesHelperRef.current.visible = showAxes;
+  }, [showAxes]);
+
+  useEffect(() => {
+    if (cursor3DRef.current) cursor3DRef.current.visible = showCursor;
+  }, [showCursor]);
+
+  useEffect(() => {
+    if (!wireOverlayGroupRef.current) return;
+    while (wireOverlayGroupRef.current.children.length > 0) {
+      wireOverlayGroupRef.current.remove(wireOverlayGroupRef.current.children[0]);
+    }
+    if (showWireframeOverlay && currentModelRef.current) {
+      currentModelRef.current.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.geometry) {
+          const wireGeo = new THREE.WireframeGeometry(child.geometry);
+          const wireMat = new THREE.LineBasicMaterial({
+            color: 0x38bdf8,
+            transparent: true,
+            opacity: 0.45,
+            depthTest: true,
+          });
+          const wireLines = new THREE.LineSegments(wireGeo, wireMat);
+          wireLines.matrixAutoUpdate = false;
+          wireLines.matrix.copy(child.matrixWorld);
+          wireOverlayGroupRef.current?.add(wireLines);
+        }
+      });
+    }
+  }, [showWireframeOverlay, meshList]);
+
+  useEffect(() => {
+    if (!normalsGroupRef.current) return;
+    while (normalsGroupRef.current.children.length > 0) {
+      normalsGroupRef.current.remove(normalsGroupRef.current.children[0]);
+    }
+    if (showNormals && currentModelRef.current) {
+      currentModelRef.current.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.geometry) {
+          const geom = child.geometry;
+          const posAttr = geom.getAttribute("position");
+          const normAttr = geom.getAttribute("normal");
+          if (posAttr && normAttr) {
+            const linePoints: THREE.Vector3[] = [];
+            const count = Math.min(posAttr.count, 1500);
+            for (let i = 0; i < count; i += 2) {
+              const p = new THREE.Vector3(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
+              const n = new THREE.Vector3(normAttr.getX(i), normAttr.getY(i), normAttr.getZ(i)).multiplyScalar(0.1);
+              p.applyMatrix4(child.matrixWorld);
+              const nEnd = p.clone().add(n);
+              linePoints.push(p, nEnd);
+            }
+            const normGeo = new THREE.BufferGeometry().setFromPoints(linePoints);
+            const normMat = new THREE.LineBasicMaterial({
+              color: 0x06b6d4,
+              transparent: true,
+              opacity: 0.65,
+            });
+            const normLines = new THREE.LineSegments(normGeo, normMat);
+            normalsGroupRef.current?.add(normLines);
+          }
+        }
+      });
+    }
+  }, [showNormals, meshList]);
 
   // Update Scene Background & Grid Colors dynamically when Theme changes (no scene rebuild)
   useEffect(() => {
@@ -1030,6 +1267,7 @@ export function Viewport3D({
   // 4. Raycasting & Sub-Mesh Selection (Click vs Orbit Drag & Universal Gizmo)
   // -------------------------------------------------------------
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    latestMousePosRef.current = { x: e.clientX, y: e.clientY };
     if (!containerRef.current || !cameraRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -2092,6 +2330,14 @@ export function Viewport3D({
           setIsPieMenuOpen(false);
           return;
         }
+        if (isTabPieMenuOpen) {
+          setIsTabPieMenuOpen(false);
+          return;
+        }
+        if (isQuickAddOpen) {
+          setIsQuickAddOpen(false);
+          return;
+        }
         if (isSnapPopoverOpen) {
           setIsSnapPopoverOpen(false);
           return;
@@ -2103,6 +2349,42 @@ export function Viewport3D({
           onMeshSelect?.(null);
         }
         return;
+      }
+
+      // Tab -> Mode Switcher Pie Menu (Object, Edit, Sculpt, Paint, Weight)
+      if (e.key === "Tab" && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        setIsTabPieMenuOpen((prev) => !prev);
+        return;
+      }
+
+      // If Tab Pie Menu is open, pressing 1/2/3/4/5 sets mode
+      if (isTabPieMenuOpen) {
+        if (e.key === "1") {
+          setInteractionMode("object");
+          setIsTabPieMenuOpen(false);
+          return;
+        }
+        if (e.key === "2") {
+          setInteractionMode("edit");
+          setIsTabPieMenuOpen(false);
+          return;
+        }
+        if (e.key === "3") {
+          setInteractionMode("sculpt");
+          setIsTabPieMenuOpen(false);
+          return;
+        }
+        if (e.key === "4") {
+          setInteractionMode("paint");
+          setIsTabPieMenuOpen(false);
+          return;
+        }
+        if (e.key === "5") {
+          setInteractionMode("weight");
+          setIsTabPieMenuOpen(false);
+          return;
+        }
       }
 
       // Z Pie Menu Hotkey & Numbers
@@ -2273,8 +2555,19 @@ export function Viewport3D({
         }
       }
 
+      // Shift + A -> Contextual Quick-Add Parametric Menu
+      if (e.shiftKey && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        const rect = containerRef.current?.getBoundingClientRect();
+        const px = rect ? Math.max(20, Math.min(rect.width - 220, latestMousePosRef.current.x - rect.left)) : 200;
+        const py = rect ? Math.max(20, Math.min(rect.height - 280, latestMousePosRef.current.y - rect.top)) : 200;
+        setQuickAddPos({ x: px, y: py });
+        setIsQuickAddOpen((prev) => !prev);
+        return;
+      }
+
       // Selection: A (Select All) / Alt + A or Double A (Deselect)
-      if (e.key.toLowerCase() === "a" && !e.ctrlKey) {
+      if (e.key.toLowerCase() === "a" && !e.ctrlKey && !e.shiftKey) {
         e.preventDefault();
         if (e.altKey) {
           setSelectedMesh(null);
@@ -2370,6 +2663,20 @@ export function Viewport3D({
       if (e.key === "0" || e.code === "Numpad0") {
         e.preventDefault();
         setCameraPreset("iso");
+        return;
+      }
+
+      // T -> Toggle T-Shelf Left Toolbar
+      if (e.key.toLowerCase() === "t" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        setIsTOpen((prev) => !prev);
+        return;
+      }
+
+      // N -> Toggle N-Panel Right Properties Strip
+      if (e.key.toLowerCase() === "n" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        setIsNOpen((prev) => !prev);
         return;
       }
 
@@ -2819,405 +3126,64 @@ export function Viewport3D({
         if (orbitControlsRef.current) orbitControlsRef.current.enabled = true;
       }}
     >
-      {/* Top DCC Control Strip */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#3f3f46] bg-[#18181b] z-20">
-        {/* Left: Mode Switcher, Add Menu & Shading */}
-        <div className="flex items-center space-x-1">
-          {/* 1. Blender Interaction Mode Switcher */}
-          <div className="flex items-center bg-[#1f1f23] border border-[#ea580c]/50 p-0.5 rounded-sm">
-            {(["object", "edit", "sculpt", "paint", "weight"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setInteractionMode(m)}
-                className={`px-1.5 py-0.5 text-[9px] font-mono capitalize rounded-sm transition-colors ${
-                  interactionMode === m
-                    ? "bg-[#ea580c] text-white font-bold"
-                    : "text-[#a1a1aa] hover:text-[#f4f4f5]"
-                }`}
-              >
-                {m === "object" ? "Object" : m === "edit" ? "Edit" : m === "sculpt" ? "Sculpt" : m === "paint" ? "Paint" : "Weight"}
-              </button>
-            ))}
-          </div>
-
-          {/* 2. Parametric Primitives Insertion Menu (Shift + A) */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setIsAddMenuOpen(!isAddMenuOpen)}
-              className={`tool-btn space-x-1 ${isAddMenuOpen ? "active bg-[#ea580c] text-white" : ""}`}
-              title="Add Parametric Primitives (Shift + A)"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span className="font-mono text-[10px]">Add</span>
-            </button>
-
-            {isAddMenuOpen && (
-              <div className="absolute top-7 left-0 w-44 bg-[#1f1f23] border border-[#52525b] rounded-sm shadow-xl p-1 z-50 text-[10px] space-y-1">
-                <div className="text-[9px] font-mono uppercase text-[#71717a] px-1.5 py-0.5 border-b border-[#3f3f46]">
-                  Mesh Primitives
-                </div>
-                <div className="grid grid-cols-2 gap-0.5">
-                  {[
-                    { id: "cube", label: "Cube" },
-                    { id: "cylinder", label: "Cylinder" },
-                    { id: "uv_sphere", label: "UV Sphere" },
-                    { id: "ico_sphere", label: "Ico Sphere" },
-                    { id: "cone", label: "Cone" },
-                    { id: "torus", label: "Torus" },
-                    { id: "plane", label: "Plane" },
-                    { id: "grid", label: "Grid" },
-                    { id: "suzanne", label: "Suzanne" },
-                  ].map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => handleAddPrimitive(p.id)}
-                      className="px-1.5 py-1 text-left hover:bg-[#27272a] rounded-sm font-mono truncate text-[#f4f4f5]"
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="text-[9px] font-mono uppercase text-[#71717a] px-1.5 py-0.5 border-b border-[#3f3f46] pt-1">
-                  Lighting & Cameras
-                </div>
-                <div className="grid grid-cols-2 gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => handleAddPrimitive("light_point")}
-                    className="px-1.5 py-1 text-left hover:bg-[#27272a] rounded-sm font-mono text-[#f4f4f5]"
-                  >
-                    Point Light
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAddPrimitive("light_sun")}
-                    className="px-1.5 py-1 text-left hover:bg-[#27272a] rounded-sm font-mono text-[#f4f4f5]"
-                  >
-                    Sun Light
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 3. Shading & Matcaps */}
-          <div className="flex items-center bg-[#1f1f23] border border-[#3f3f46] p-0.5 rounded-sm">
-            {(["solid", "material", "wireframe", "normals"] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setShadingMode(mode)}
-                className={`px-2 py-0.5 text-[10px] uppercase font-mono rounded-sm transition-colors ${
-                  shadingMode === mode ? "bg-[#3f3f46] text-[#f4f4f5] font-semibold" : "text-[#a1a1aa] hover:text-[#f4f4f5]"
-                }`}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-
-          {shadingMode === "solid" && (
-            <div className="flex items-center bg-[#1f1f23] border border-[#3f3f46] p-0.5 rounded-sm">
-              {(["studio", "clay", "redwax", "chrome", "obsidian"] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setMatcap(m)}
-                  className={`px-1.5 py-0.5 text-[10px] capitalize rounded-sm ${
-                    matcap === m ? "bg-[#3f3f46] text-[#f4f4f5] font-bold" : "text-[#71717a] hover:text-[#a1a1aa]"
-                  }`}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* X-Ray Toggle Button */}
-          <button
-            onClick={toggleXRay}
-            title="Toggle X-Ray Transparency (Alt + Z)"
-            className={`tool-btn ${isXRay ? "active text-[#ea580c]" : ""}`}
-          >
-            <Eye className="w-3.5 h-3.5" />
-            <span className="text-[10px] font-mono hidden md:inline">X-RAY</span>
-          </button>
-
-          {/* Active Selected Mesh Chip */}
-          {selectedMesh && (
-            <div className="flex items-center space-x-1 px-2 py-0.5 bg-[#27272a] border border-[#ea580c] rounded-sm text-[10px] text-[#f4f4f5]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#ea580c]" />
-              <span className="font-mono font-semibold max-w-[120px] truncate">{selectedMesh.name}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Right: Gizmos, Snapping, Overlays, Direct Downloads */}
-        <div className="flex items-center space-x-1">
-          {/* Primary Tool Segmented Pill (Q: All, V: Select, W: Move, E: Rotate, R: Scale) */}
-          <div className="flex items-center bg-[#18181b] border border-[#333338] p-0.5 rounded-sm space-x-0.5 font-mono text-[10px]">
-            <button
-              onClick={() => {
-                setTransformMode("all");
-                setIsModalTransforming(false);
-                setAxisConstraint("none");
-              }}
-              title="All-In-One Universal Gizmo (Q) — Move, Rotate & Scale simultaneously"
-              className={`px-2 py-1 rounded-xs flex items-center space-x-1 transition-colors ${
-                transformMode === "all" ? "bg-[#ea580c] text-white font-bold" : "text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a]"
-              }`}
-            >
-              <Sparkles className="w-3 h-3 text-[#ea580c] group-hover:text-white" />
-              <span>All (Q)</span>
-            </button>
-            <button
-              onClick={() => {
-                setTransformMode("select");
-                setIsModalTransforming(false);
-                setAxisConstraint("none");
-              }}
-              title="Select Only (V) — Pure raycast click without gizmo"
-              className={`px-2 py-1 rounded-xs flex items-center space-x-1 transition-colors ${
-                transformMode === "select" ? "bg-[#333338] text-[#f4f4f5] font-bold" : "text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a]"
-              }`}
-            >
-              <Crosshair className="w-3 h-3" />
-              <span>Select (V)</span>
-            </button>
-            <button
-              onClick={() => {
-                setTransformMode("translate");
-                setIsModalTransforming(false);
-                setAxisConstraint("none");
-              }}
-              title="Move / Translate (W / G)"
-              className={`px-2 py-1 rounded-xs flex items-center space-x-1 transition-colors ${
-                transformMode === "translate" ? "bg-[#ea580c] text-white font-bold" : "text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a]"
-              }`}
-            >
-              <Move className="w-3 h-3" />
-              <span>Move (W)</span>
-            </button>
-            <button
-              onClick={() => {
-                setTransformMode("rotate");
-                setIsModalTransforming(false);
-                setAxisConstraint("none");
-              }}
-              title="Rotate (E / R)"
-              className={`px-2 py-1 rounded-xs flex items-center space-x-1 transition-colors ${
-                transformMode === "rotate" ? "bg-[#ea580c] text-white font-bold" : "text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a]"
-              }`}
-            >
-              <RotateCw className="w-3 h-3" />
-              <span>Rotate (E)</span>
-            </button>
-            <button
-              onClick={() => {
-                setTransformMode("scale");
-                setIsModalTransforming(false);
-                setAxisConstraint("none");
-              }}
-              title="Scale (R / S)"
-              className={`px-2 py-1 rounded-xs flex items-center space-x-1 transition-colors ${
-                transformMode === "scale" ? "bg-[#ea580c] text-white font-bold" : "text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a]"
-              }`}
-            >
-              <Scale className="w-3 h-3" />
-              <span>Scale (R)</span>
-            </button>
-          </div>
-
-          {/* Simple Magnet Toggle (Prominent beginner button) */}
-          <div className="relative">
-            <div className="flex items-center bg-[#18181b] border border-[#333338] rounded-sm p-0.5 font-mono text-[10px]">
-              <button
-                type="button"
-                onClick={() => setSnapEnabled(!snapEnabled)}
-                title={`Magnet Snap (Ctrl inverts) | Status: ${snapEnabled ? "SNAPPED (ON)" : "FREE (OFF)"}`}
-                className={`px-2 py-1 rounded-xs flex items-center space-x-1.5 transition-colors ${
-                  snapEnabled ? "bg-[#ea580c] text-white font-bold" : "text-[#a1a1aa] hover:text-[#f4f4f5]"
-                }`}
-              >
-                <Magnet className="w-3 h-3" />
-                <span>{snapEnabled ? "SNAP ON" : "FREE"}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsSnapPopoverOpen(!isSnapPopoverOpen)}
-                title="Snap Settings (Shift + Tab)"
-                className="px-1 py-1 text-[#a1a1aa] hover:text-[#f4f4f5]"
-              >
-                <ChevronDown className="w-3 h-3" />
-              </button>
-            </div>
-
-            {/* Snap Settings Dropdown */}
-            {isSnapPopoverOpen && (
-              <div className="absolute right-0 mt-1 w-56 bg-[#18181b] border border-[#3f3f46] shadow-2xl p-2.5 z-40 rounded-sm text-xs space-y-2.5">
-                <div className="flex items-center justify-between pb-1.5 border-b border-[#27272a]">
-                  <span className="font-semibold text-[11px] text-[#f4f4f5] flex items-center">
-                    <Magnet className="w-3 h-3 mr-1 text-[#ea580c]" />
-                    Snapping Controls
-                  </span>
-                  <span className="text-[9px] font-mono text-[#71717a]">Shift+Tab</span>
-                </div>
-
-                {/* Snap To Element */}
-                <div>
-                  <div className="text-[10px] text-[#71717a] uppercase mb-1">Snap To</div>
-                  <div className="grid grid-cols-2 gap-1">
-                    {(["increment", "vertex", "edge", "face"] as SnapElement[]).map((el) => (
-                      <button
-                        key={el}
-                        type="button"
-                        onClick={() => setSnapTo(el)}
-                        className={`px-1.5 py-1 text-[10px] font-mono capitalize rounded-sm border text-left transition-colors ${
-                          snapTo === el
-                            ? "bg-[#27272a] border-[#ea580c] text-[#f4f4f5] font-bold"
-                            : "bg-[#1f1f23] border-[#3f3f46] text-[#a1a1aa] hover:text-[#f4f4f5]"
-                        }`}
-                      >
-                        {el}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Grid Unit */}
-                <div>
-                  <div className="text-[10px] text-[#71717a] uppercase mb-1">Grid Snap Unit</div>
-                  <div className="grid grid-cols-4 gap-1">
-                    {[0.01, 0.1, 0.5, 1.0].map((u) => (
-                      <button
-                        key={u}
-                        type="button"
-                        onClick={() => setGridSnapUnit(u)}
-                        className={`py-1 text-[10px] font-mono text-center rounded-sm border transition-colors ${
-                          gridSnapUnit === u
-                            ? "bg-[#3f3f46] border-[#52525b] text-white font-bold"
-                            : "bg-[#1f1f23] border-[#3f3f46] text-[#a1a1aa]"
-                        }`}
-                      >
-                        {u}m
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Rotation Snap Step */}
-                <div>
-                  <div className="text-[10px] text-[#71717a] uppercase mb-1">Rotation Angle Step</div>
-                  <div className="grid grid-cols-4 gap-1">
-                    {[5, 15, 45, 90].map((deg) => (
-                      <button
-                        key={deg}
-                        type="button"
-                        onClick={() => setRotationSnapStep(deg)}
-                        className={`py-1 text-[10px] font-mono text-center rounded-sm border transition-colors ${
-                          rotationSnapStep === deg
-                            ? "bg-[#3f3f46] border-[#52525b] text-white font-bold"
-                            : "bg-[#1f1f23] border-[#3f3f46] text-[#a1a1aa]"
-                        }`}
-                      >
-                        {deg}°
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Camera Presets Menu */}
-          <div className="flex items-center bg-[#1f1f23] border border-[#3f3f46] p-0.5 rounded-sm space-x-0.5">
-            <button
-              onClick={() => setCameraPreset("front")}
-              title="Front View (Numpad 1)"
-              className="px-1.5 py-0.5 text-[10px] font-mono text-[#a1a1aa] hover:text-[#f4f4f5]"
-            >
-              FRONT
-            </button>
-            <button
-              onClick={() => setCameraPreset("right")}
-              title="Right View (Numpad 3)"
-              className="px-1.5 py-0.5 text-[10px] font-mono text-[#a1a1aa] hover:text-[#f4f4f5]"
-            >
-              RIGHT
-            </button>
-            <button
-              onClick={() => setCameraPreset("top")}
-              title="Top View (Numpad 7)"
-              className="px-1.5 py-0.5 text-[10px] font-mono text-[#a1a1aa] hover:text-[#f4f4f5]"
-            >
-              TOP
-            </button>
-          </div>
-
-          {/* Perspective / Ortho Toggle (5) */}
-          <button
-            onClick={() => setIsOrtho(!isOrtho)}
-            title="Toggle Perspective / Orthographic Projection (Numpad 5)"
-            className={`tool-btn ${isOrtho ? "active font-bold" : ""}`}
-          >
-            <Compass className="w-3.5 h-3.5" />
-            <span className="text-[10px] font-mono">{isOrtho ? "ORTHO" : "PERSP"}</span>
-          </button>
-
-          {/* Frame / Focus (F / Period) */}
-          <button onClick={handleFocus} title="Frame Selected / Center Camera (F or Period .)" className="tool-btn">
-            <Focus className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Projected Dimension Measurement Toggle (D) */}
-          <button
-            onClick={() => setShowDimensions(!showDimensions)}
-            title="Toggle Projected Dimension Callouts (D)"
-            className={`tool-btn space-x-1 ${showDimensions ? "active font-bold" : ""}`}
-          >
-            <Sliders className="w-3.5 h-3.5 text-[#ea580c]" />
-            <span className="text-[10px] font-mono">DIMS [D]</span>
-          </button>
-
-          {/* Quick DCC Tools Tray Toggle */}
-          <button
-            onClick={() => setIsQuickTrayOpen(!isQuickTrayOpen)}
-            title="Toggle DCC Quick Tools Tray (Decimate, UV Checker, Lighting, Snapshot)"
-            className={`tool-btn space-x-1 ${isQuickTrayOpen ? "active font-bold" : ""}`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-[#ea580c]" />
-            <span className="text-[10px] font-mono">DCC TOOLS</span>
-          </button>
-
-          {/* Export Modified GLB from Canvas */}
-          <button
-            onClick={handleExportModifiedGLB}
-            title="Export Modified GLB (with your live material edits and transforms)"
-            className="tool-btn space-x-1 border-[#3f3f46] bg-[#27272a] hover:border-[#ea580c] text-[#f4f4f5]"
-          >
-            <Download className="w-3.5 h-3.5 text-[#ea580c]" />
-            <span className="text-[10px] font-mono font-semibold hidden md:inline">EXPORT MODIFIED</span>
-          </button>
-
-          {/* Raw Download */}
-          {assetUrl && (
-            <button onClick={handleDownloadOriginal} title="Download Raw Server Asset" className="tool-btn p-1">
-              <Download className="w-3.5 h-3.5 text-[#a1a1aa]" />
-            </button>
-          )}
-
-          {/* Fullscreen */}
-          <button
-            onClick={() => setIsFullscreen(!isFullscreen)}
-            title="Toggle Fullscreen"
-            className="tool-btn p-1"
-          >
-            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-          </button>
-        </div>
-      </div>
+      {/* 1. Blender DCC Zero-Text Top Header */}
+      <BlenderTopBar
+        health={health}
+        isHealthChecking={isHealthChecking}
+        onRefreshHealth={onRefreshHealth}
+        token={token}
+        onSaveToken={onSaveToken}
+        onClearToken={onClearToken}
+        isTOpen={isTOpen}
+        onToggleTPanel={() => setIsTOpen(!isTOpen)}
+        isNOpen={isNOpen}
+        onToggleNPanel={() => setIsNOpen(!isNOpen)}
+        onOpenShortcuts={onOpenShortcuts || (() => {})}
+        onOpenPasteBpy={onOpenPasteBpy || (() => {})}
+        onOpenShare={onOpenShare || (() => {})}
+        onOpenShowcase={onOpenShowcase || (() => {})}
+        interactionMode={interactionMode}
+        onSetInteractionMode={setInteractionMode}
+        shadingMode={shadingMode}
+        onSetShadingMode={setShadingMode}
+        matcap={matcap}
+        onSetMatcap={setMatcap}
+        isXRay={isXRay}
+        onToggleXRay={toggleXRay}
+        showDimensions={showDimensions}
+        onToggleDimensions={() => setShowDimensions(!showDimensions)}
+        snapEnabled={snapEnabled}
+        onToggleSnap={() => setSnapEnabled(!snapEnabled)}
+        snapTo={snapTo}
+        onSetSnapTo={setSnapTo}
+        gridSnapUnit={gridSnapUnit}
+        onSetGridSnapUnit={setGridSnapUnit}
+        rotationSnapStep={rotationSnapStep}
+        onSetRotationSnapStep={setRotationSnapStep}
+        isProportionalEditing={isProportionalEditing}
+        onToggleProportionalEditing={() => setIsProportionalEditing(!isProportionalEditing)}
+        transformOrientation={transformOrientation}
+        onSetTransformOrientation={setTransformOrientation}
+        pivotPoint={pivotPoint}
+        onSetPivotPoint={setPivotPoint}
+        onAddPrimitive={handleAddPrimitive}
+        selectedMeshName={selectedMesh?.name || null}
+        isOrtho={isOrtho}
+        onToggleOrtho={() => setIsOrtho(!isOrtho)}
+        onFocus={handleFocus}
+        workspacePreset={workspacePreset}
+        onSelectWorkspacePreset={setWorkspacePreset}
+        showGrid={showGrid}
+        onToggleGrid={() => setShowGrid(!showGrid)}
+        showAxes={showAxes}
+        onToggleAxes={() => setShowAxes(!showAxes)}
+        showCursor={showCursor}
+        onToggleCursor={() => setShowCursor(!showCursor)}
+        showWireframeOverlay={showWireframeOverlay}
+        onToggleWireframeOverlay={() => setShowWireframeOverlay(!showWireframeOverlay)}
+        showNormals={showNormals}
+        onToggleNormals={() => setShowNormals(!showNormals)}
+      />
 
       {/* Persistent Undo / Redo Floating Toast */}
       {undoToast && (
@@ -3227,316 +3193,539 @@ export function Viewport3D({
         </div>
       )}
 
-      {/* Main 3D Canvas Viewport */}
-      <div
-        ref={containerRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onDoubleClick={handleDoubleClick}
-        className="flex-1 w-full h-full relative overflow-hidden outline-none cursor-grab active:cursor-grabbing"
-      >
-        {/* Friendly Live Numeric Dragging Badge (Attached to Mouse) */}
-        {liveDragBadge && (
-          <div
-            className="pointer-events-none fixed z-50 px-2 py-1 rounded bg-[#18181b]/95 border border-[#ea580c] text-white font-mono text-[11px] shadow-2xl flex items-center space-x-1.5 backdrop-blur-xs transform -translate-x-1/2 -translate-y-full mb-2"
-            style={{
-              left: `${liveDragBadge.x}px`,
-              top: `${liveDragBadge.y - 12}px`,
-            }}
-          >
-            <span className="font-bold text-[#ea580c] uppercase">{liveDragBadge.type}</span>
-            <span className="text-[#52525b]">|</span>
-            <span className="font-bold text-[#f4f4f5]">{liveDragBadge.text}</span>
-          </div>
-        )}
-        {/* Loading Spinner Overlay */}
-        {isLoadingModel && (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#141416]/80 text-[#f4f4f5]">
-            <div className="w-6 h-6 border-2 border-[#ea580c] border-t-transparent rounded-full animate-spin mb-2" />
-            <span className="font-mono text-xs text-[#a1a1aa]">PARSING 3D CAD GEOMETRY...</span>
-          </div>
-        )}
+      {/* 2. Blender Modular Dockable Window System (Split-Pane Binary Tree Engine) */}
+      <div className="flex-1 flex min-h-0 min-w-0 w-full h-full relative overflow-hidden">
+        <BlenderWorkspace
+          preset={workspacePreset}
+          onPresetChange={setWorkspacePreset}
+          onCameraPreset={setCameraPreset}
+          onAddPrimitive={handleAddPrimitive}
+          onFocus={handleFocus}
+          onRunScript={() => script && onExecuteRawScript?.(script)}
+          renderLeafContent={(leaf) => {
+            switch (leaf.editorType) {
+              case "viewport":
+                if (leaf.subView && leaf.subView !== "persp") {
+                  return (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-[#141416] p-4 text-center font-mono select-none relative">
+                      <div className="absolute top-2 left-2 px-2 py-0.5 bg-[#202024] border border-[#ea580c]/40 text-[#ea580c] rounded text-[10px] uppercase font-bold tracking-wider">
+                        {leaf.subView} Orthographic
+                      </div>
+                      <Compass className="w-8 h-8 text-[#52525b] mb-2 animate-pulse" />
+                      <div className="text-xs text-[#a1a1aa] mb-1 font-bold uppercase">
+                        {leaf.subView} ORTHO VIEW
+                      </div>
+                      <p className="text-[10px] text-[#71717a] max-w-xs mb-3">
+                        Synchronized CAD projection plane for precision alignment.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCameraPreset(leaf.subView as any);
+                          setIsOrtho(true);
+                        }}
+                        className="px-3 py-1 bg-[#202024] hover:bg-[#ea580c] border border-[#3f3f46] hover:border-[#ea580c] text-white rounded text-[11px] font-mono transition-colors"
+                      >
+                        Orient Main Camera to {leaf.subView.toUpperCase()}
+                      </button>
+                    </div>
+                  );
+                }
 
-        {/* Shading Radial Pie Menu Overlay (Z Hotkey) */}
-        {isPieMenuOpen && (
-          <div
-            className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-[1px]"
-            onClick={() => setIsPieMenuOpen(false)}
-          >
-            <div
-              className="relative w-64 h-64 rounded-full border border-[#52525b] bg-[#18181b]/95 p-3 flex items-center justify-center shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Center dismiss */}
-              <div className="flex flex-col items-center justify-center text-center">
-                <span className="text-[11px] font-mono font-bold text-[#ea580c] uppercase">{shadingMode}</span>
-                <span className="text-[9px] text-[#71717a] font-mono mt-0.5">SHADING PIE</span>
-              </div>
+                return (
+                  <div className="flex-1 flex min-h-0 min-w-0 w-full h-full relative overflow-hidden">
+                    {/* T-Shelf Left Toolbar (44px, collapsible with T) */}
+                    <BlenderLeftToolbar
+                      isOpen={isTOpen}
+                      transformMode={transformMode}
+                      onSetTransformMode={setTransformMode}
+                      onAddPrimitive={handleAddPrimitive}
+                      tools={tools}
+                      isLoading={isLoading}
+                      onExecuteTool={onExecuteTool}
+                      hasToken={!!token}
+                    />
 
-              {/* Top: 8 - Material Preview */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShadingMode("material");
-                  setIsPieMenuOpen(false);
-                }}
-                className={`absolute top-2 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-sm border text-[11px] font-mono flex items-center space-x-1 transition-colors ${
-                  shadingMode === "material"
-                    ? "bg-[#ea580c] text-white border-[#ea580c]"
-                    : "bg-[#27272a] text-[#f4f4f5] border-[#3f3f46] hover:bg-[#3f3f46]"
-                }`}
-              >
-                <Palette className="w-3 h-3 text-[#f4f4f5]" />
-                <span>8: Material</span>
-              </button>
+                    {/* 100% Three.js Canvas Container */}
+                    <div
+                      ref={containerRef}
+                      onPointerDown={handlePointerDown}
+                      onPointerMove={handlePointerMove}
+                      onPointerUp={handlePointerUp}
+                      onDoubleClick={handleDoubleClick}
+                      className="flex-1 w-full h-full relative overflow-hidden outline-none cursor-grab active:cursor-grabbing"
+                    >
+                      {/* Friendly Live Numeric Dragging Badge (Attached to Mouse) */}
+                      {liveDragBadge && (
+                        <div
+                          className="pointer-events-none fixed z-50 px-2 py-1 rounded bg-[#18181b]/95 border border-[#ea580c] text-white font-mono text-[11px] shadow-2xl flex items-center space-x-1.5 backdrop-blur-xs transform -translate-x-1/2 -translate-y-full mb-2"
+                          style={{
+                            left: `${liveDragBadge.x}px`,
+                            top: `${liveDragBadge.y - 12}px`,
+                          }}
+                        >
+                          <span className="font-bold text-[#ea580c] uppercase">{liveDragBadge.type}</span>
+                          <span className="text-[#52525b]">|</span>
+                          <span className="font-bold text-[#f4f4f5]">{liveDragBadge.text}</span>
+                        </div>
+                      )}
 
-              {/* Left: 4 - Wireframe */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShadingMode("wireframe");
-                  setIsPieMenuOpen(false);
-                }}
-                className={`absolute left-2 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-sm border text-[11px] font-mono flex items-center space-x-1 transition-colors ${
-                  shadingMode === "wireframe"
-                    ? "bg-[#ea580c] text-white border-[#ea580c]"
-                    : "bg-[#27272a] text-[#f4f4f5] border-[#3f3f46] hover:bg-[#3f3f46]"
-                }`}
-              >
-                <Grid className="w-3 h-3 text-[#f4f4f5]" />
-                <span>4: Wireframe</span>
-              </button>
+                      {/* Loading Spinner Overlay */}
+                      {isLoadingModel && (
+                        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#141416]/80 text-[#f4f4f5]">
+                          <div className="w-6 h-6 border-2 border-[#ea580c] border-t-transparent rounded-full animate-spin mb-2" />
+                          <span className="font-mono text-xs text-[#a1a1aa]">PARSING 3D CAD GEOMETRY...</span>
+                        </div>
+                      )}
 
-              {/* Right: 6 - Solid */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShadingMode("solid");
-                  setIsPieMenuOpen(false);
-                }}
-                className={`absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-sm border text-[11px] font-mono flex items-center space-x-1 transition-colors ${
-                  shadingMode === "solid"
-                    ? "bg-[#ea580c] text-white border-[#ea580c]"
-                    : "bg-[#27272a] text-[#f4f4f5] border-[#3f3f46] hover:bg-[#3f3f46]"
-                }`}
-              >
-                <Box className="w-3 h-3 text-[#f4f4f5]" />
-                <span>6: Solid</span>
-              </button>
+                      {/* Shading Radial Pie Menu Overlay (Z Hotkey) */}
+                      {isPieMenuOpen && (
+                        <div
+                          className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-[1px]"
+                          onClick={() => setIsPieMenuOpen(false)}
+                        >
+                          <div
+                            className="relative w-64 h-64 rounded-full border border-[#52525b] bg-[#18181b]/95 p-3 flex items-center justify-center shadow-2xl"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex flex-col items-center justify-center text-center">
+                              <span className="text-[11px] font-mono font-bold text-[#ea580c] uppercase">{shadingMode}</span>
+                              <span className="text-[9px] text-[#71717a] font-mono mt-0.5">SHADING PIE</span>
+                            </div>
 
-              {/* Bottom: 2 - Rendered / Normals */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShadingMode("normals");
-                  setIsPieMenuOpen(false);
-                }}
-                className={`absolute bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-sm border text-[11px] font-mono flex items-center space-x-1 transition-colors ${
-                  shadingMode === "normals"
-                    ? "bg-[#ea580c] text-white border-[#ea580c]"
-                    : "bg-[#27272a] text-[#f4f4f5] border-[#3f3f46] hover:bg-[#3f3f46]"
-                }`}
-              >
-                <Sun className="w-3 h-3 text-[#f4f4f5]" />
-                <span>2: Normals</span>
-              </button>
-            </div>
-          </div>
-        )}
+                            {/* Top: 8 - Material Preview */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShadingMode("material");
+                                setIsPieMenuOpen(false);
+                              }}
+                              className={`absolute top-2 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-sm border text-[11px] font-mono flex items-center space-x-1 transition-colors ${
+                                shadingMode === "material"
+                                  ? "bg-[#ea580c] text-white border-[#ea580c]"
+                                  : "bg-[#27272a] text-[#f4f4f5] border-[#3f3f46] hover:bg-[#3f3f46]"
+                              }`}
+                            >
+                              <Palette className="w-3 h-3 text-[#f4f4f5]" />
+                              <span>8: Material</span>
+                            </button>
 
-        
-        {/* Bottom-Left Parametric Operator Adjustment Popup */}
-        {lastAddedPrimitive && (
-          <div className="absolute bottom-10 left-3 bg-[#1f1f23] border border-[#ea580c]/60 rounded-sm shadow-2xl p-2 w-52 z-30 text-xs space-y-1.5">
-            <div className="flex items-center justify-between border-b border-[#3f3f46] pb-1">
-              <span className="font-mono text-[10px] uppercase font-bold text-[#f4f4f5]">
-                {lastAddedPrimitive.type.toUpperCase()} PARAMETERS
-              </span>
-              <button
-                type="button"
-                onClick={() => setLastAddedPrimitive(null)}
-                className="text-[#71717a] hover:text-[#f4f4f5]"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-            <div className="space-y-1 text-[10px]">
-              <div className="flex justify-between text-[#a1a1aa]">
-                <span>Scale Size</span>
-                <span className="font-mono text-[#ea580c]">{lastAddedPrimitive.mesh.scale.x.toFixed(2)}x</span>
-              </div>
-              <input
-                type="range"
-                min="0.2"
-                max="3.0"
-                step="0.1"
-                defaultValue="1.0"
-                onChange={(e) => {
-                  const s = parseFloat(e.target.value);
-                  lastAddedPrimitive.mesh.scale.set(s, s, s);
-                  if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
-                }}
-                className="w-full accent-[#ea580c]"
-              />
-            </div>
-            <p className="text-[8px] text-[#71717a] font-mono leading-tight">
-              Interactive parametric adjustments update geometry buffer in real time.
-            </p>
-          </div>
-        )}
+                            {/* Left: 4 - Wireframe */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShadingMode("wireframe");
+                                setIsPieMenuOpen(false);
+                              }}
+                              className={`absolute left-2 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-sm border text-[11px] font-mono flex items-center space-x-1 transition-colors ${
+                                shadingMode === "wireframe"
+                                  ? "bg-[#ea580c] text-white border-[#ea580c]"
+                                  : "bg-[#27272a] text-[#f4f4f5] border-[#3f3f46] hover:bg-[#3f3f46]"
+                              }`}
+                            >
+                              <Grid className="w-3 h-3 text-[#f4f4f5]" />
+                              <span>4: Wireframe</span>
+                            </button>
 
-        {/* Floating Quick Action Overlay Strip */}
-        <div className="absolute top-3 left-3 z-20 flex flex-col space-y-1.5">
-          {/* Quick Timeline Button */}
-          <button
-            onClick={() => setIsTimelineOpen(!isTimelineOpen)}
-            className={`tool-btn shadow-md space-x-1.5 ${isTimelineOpen ? "active" : ""}`}
-            title="Toggle Timeline & Procedural Exploded View"
-          >
-            <Film className="w-3.5 h-3.5 text-[#ea580c]" />
-            <span className="font-mono text-[10px]">TIMELINE</span>
-          </button>
-        </div>
+                            {/* Right: 6 - Solid */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShadingMode("solid");
+                                setIsPieMenuOpen(false);
+                              }}
+                              className={`absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-sm border text-[11px] font-mono flex items-center space-x-1 transition-colors ${
+                                shadingMode === "solid"
+                                  ? "bg-[#ea580c] text-white border-[#ea580c]"
+                                  : "bg-[#27272a] text-[#f4f4f5] border-[#3f3f46] hover:bg-[#3f3f46]"
+                              }`}
+                            >
+                              <Box className="w-3 h-3 text-[#f4f4f5]" />
+                              <span>6: Solid</span>
+                            </button>
 
-        {/* Hardware-Accelerated 2D/3D Canvas HUD Overlay */}
-        <CanvasOverlay
-          camera={isOrtho ? orthoCameraRef.current : cameraRef.current}
-          selectedMesh={selectedMesh}
-          currentModel={rootModelGroupRef.current}
-          meshList={meshList.map((m) => ({ name: m.name, meshRef: m.meshRef }))}
-          onSelectMesh={(meshName) => selectMeshByName(meshName)}
-          transformMode={transformMode}
-          liveTransform={liveTransform}
-          axisConstraint={axisConstraint}
-          showDimensions={showDimensions}
-          onToggleDimensions={() => setShowDimensions((p) => !p)}
-        />
+                            {/* Bottom: 2 - Rendered / Normals */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShadingMode("normals");
+                                setIsPieMenuOpen(false);
+                              }}
+                              className={`absolute bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-sm border text-[11px] font-mono flex items-center space-x-1 transition-colors ${
+                                shadingMode === "normals"
+                                  ? "bg-[#ea580c] text-white border-[#ea580c]"
+                                  : "bg-[#27272a] text-[#f4f4f5] border-[#3f3f46] hover:bg-[#3f3f46]"
+                              }`}
+                            >
+                              <Sun className="w-3 h-3 text-[#f4f4f5]" />
+                              <span>2: Normals</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
-        {/* AAA Viewport Navigation Gizmo (Interactive 3D Depth-Projected Orientation Widget) */}
-        <ViewportNavigationGizmo
-          camera={isOrtho ? orthoCameraRef.current : cameraRef.current}
-          orbitControls={orbitControlsRef.current}
-          onSnapView={setCameraPreset}
-          isOrtho={isOrtho}
-          onToggleOrtho={() => setIsOrtho(!isOrtho)}
+                      {/* Mode Switcher Radial Pie Menu Overlay (Tab Hotkey) */}
+                      {isTabPieMenuOpen && (
+                        <div
+                          className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-[1px]"
+                          onClick={() => setIsTabPieMenuOpen(false)}
+                        >
+                          <div
+                            className="relative w-64 h-64 rounded-full border border-[#52525b] bg-[#18181b]/95 p-3 flex items-center justify-center shadow-2xl"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {/* Center: Object Mode (1) */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setInteractionMode("object");
+                                setIsTabPieMenuOpen(false);
+                              }}
+                              className={`flex flex-col items-center justify-center p-2 rounded-full border transition-colors ${
+                                interactionMode === "object"
+                                  ? "bg-[#ea580c] text-white border-[#ea580c]"
+                                  : "bg-[#27272a] text-[#f4f4f5] border-[#3f3f46] hover:bg-[#3f3f46]"
+                              }`}
+                            >
+                              <Box className="w-4 h-4" />
+                              <span className="text-[10px] font-mono font-bold mt-0.5">1: OBJECT</span>
+                            </button>
+
+                            {/* Top: Edit Mode (Tab or 2) */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setInteractionMode("edit");
+                                setIsTabPieMenuOpen(false);
+                              }}
+                              className={`absolute top-2 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-sm border text-[11px] font-mono flex items-center space-x-1 transition-colors ${
+                                interactionMode === "edit"
+                                  ? "bg-[#ea580c] text-white border-[#ea580c]"
+                                  : "bg-[#27272a] text-[#f4f4f5] border-[#3f3f46] hover:bg-[#3f3f46]"
+                              }`}
+                            >
+                              <Component className="w-3 h-3 text-emerald-400" />
+                              <span>Tab: Edit</span>
+                            </button>
+
+                            {/* Left: Sculpt Mode (3) */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setInteractionMode("sculpt");
+                                setIsTabPieMenuOpen(false);
+                              }}
+                              className={`absolute left-2 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-sm border text-[11px] font-mono flex items-center space-x-1 transition-colors ${
+                                interactionMode === "sculpt"
+                                  ? "bg-[#ea580c] text-white border-[#ea580c]"
+                                  : "bg-[#27272a] text-[#f4f4f5] border-[#3f3f46] hover:bg-[#3f3f46]"
+                              }`}
+                            >
+                              <Brush className="w-3 h-3 text-sky-400" />
+                              <span>3: Sculpt</span>
+                            </button>
+
+                            {/* Right: Vertex Paint Mode (4) */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setInteractionMode("paint");
+                                setIsTabPieMenuOpen(false);
+                              }}
+                              className={`absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-sm border text-[11px] font-mono flex items-center space-x-1 transition-colors ${
+                                interactionMode === "paint"
+                                  ? "bg-[#ea580c] text-white border-[#ea580c]"
+                                  : "bg-[#27272a] text-[#f4f4f5] border-[#3f3f46] hover:bg-[#3f3f46]"
+                              }`}
+                            >
+                              <Paintbrush className="w-3 h-3 text-amber-400" />
+                              <span>4: Paint</span>
+                            </button>
+
+                            {/* Bottom: Weight Paint Mode (5) */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setInteractionMode("weight");
+                                setIsTabPieMenuOpen(false);
+                              }}
+                              className={`absolute bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-sm border text-[11px] font-mono flex items-center space-x-1 transition-colors ${
+                                interactionMode === "weight"
+                                  ? "bg-[#ea580c] text-white border-[#ea580c]"
+                                  : "bg-[#27272a] text-[#f4f4f5] border-[#3f3f46] hover:bg-[#3f3f46]"
+                              }`}
+                            >
+                              <Scale className="w-3 h-3 text-violet-400" />
+                              <span>5: Weight</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Shift + A Contextual Quick-Add Menu Popup */}
+                      {isQuickAddOpen && (
+                        <div
+                          className="fixed inset-0 z-50 select-none"
+                          onClick={() => setIsQuickAddOpen(false)}
+                        >
+                          <div
+                            style={{ left: `${quickAddPos.x}px`, top: `${quickAddPos.y}px` }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute w-48 bg-[#18181b]/98 border border-[#3f3f46] shadow-2xl rounded-sm p-1 text-[11px] font-mono space-y-0.5 animate-in fade-in zoom-in-95 duration-100"
+                          >
+                            <div className="flex items-center justify-between px-2 py-1 border-b border-[#27272a] text-[9px] uppercase font-bold text-[#71717a]">
+                              <span>Add Primitive</span>
+                              <span className="text-[#ea580c]">Shift + A</span>
+                            </div>
+                            {[
+                              { type: "cube", label: "Cube", icon: <Box className="w-3.5 h-3.5 text-[#ea580c]" /> },
+                              { type: "uv_sphere", label: "UV Sphere", icon: <Circle className="w-3.5 h-3.5 text-sky-400" /> },
+                              { type: "cylinder", label: "Cylinder", icon: <Layers className="w-3.5 h-3.5 text-emerald-400" /> },
+                              { type: "cone", label: "Cone", icon: <Compass className="w-3.5 h-3.5 text-amber-400" /> },
+                              { type: "torus", label: "Torus", icon: <Circle className="w-3.5 h-3.5 text-pink-400" /> },
+                              { type: "plane", label: "Plane", icon: <Square className="w-3.5 h-3.5 text-blue-400" /> },
+                              { type: "suzanne", label: "Monkey (Suzanne)", icon: <Sparkles className="w-3.5 h-3.5 text-orange-400" /> },
+                            ].map((p) => (
+                              <button
+                                key={p.type}
+                                type="button"
+                                onClick={() => {
+                                  handleAddPrimitive(p.type);
+                                  setIsQuickAddOpen(false);
+                                }}
+                                className="w-full flex items-center space-x-2 px-2 py-1 rounded-xs text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#f4f4f5] transition-colors"
+                              >
+                                {p.icon}
+                                <span>{p.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Bottom-Left Parametric Operator Adjustment Popup */}
+                      {lastAddedPrimitive && (
+                        <div className="absolute bottom-10 left-3 bg-[#1f1f23] border border-[#ea580c]/60 rounded-sm shadow-2xl p-2 w-52 z-30 text-xs space-y-1.5">
+                          <div className="flex items-center justify-between border-b border-[#3f3f46] pb-1">
+                            <span className="font-mono text-[10px] uppercase font-bold text-[#f4f4f5]">
+                              {lastAddedPrimitive.type.toUpperCase()} PARAMETERS
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setLastAddedPrimitive(null)}
+                              className="text-[#71717a] hover:text-[#f4f4f5]"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <div className="space-y-1 text-[10px]">
+                            <div className="flex justify-between text-[#a1a1aa]">
+                              <span>Scale Size</span>
+                              <span className="font-mono text-[#ea580c]">{lastAddedPrimitive.mesh.scale.x.toFixed(2)}x</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.2"
+                              max="3.0"
+                              step="0.1"
+                              defaultValue="1.0"
+                              onChange={(e) => {
+                                const s = parseFloat(e.target.value);
+                                lastAddedPrimitive.mesh.scale.set(s, s, s);
+                                if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+                              }}
+                              className="w-full accent-[#ea580c]"
+                            />
+                          </div>
+                          <p className="text-[8px] text-[#71717a] font-mono leading-tight">
+                            Interactive parametric adjustments update geometry buffer in real time.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Hardware-Accelerated 2D/3D Canvas HUD Overlay */}
+                      <CanvasOverlay
+                        camera={isOrtho ? orthoCameraRef.current : cameraRef.current}
+                        selectedMesh={selectedMesh}
+                        currentModel={rootModelGroupRef.current}
+                        meshList={meshList.map((m) => ({ name: m.name, meshRef: m.meshRef }))}
+                        onSelectMesh={(meshName) => selectMeshByName(meshName)}
+                        transformMode={transformMode}
+                        liveTransform={liveTransform}
+                        axisConstraint={axisConstraint}
+                        showDimensions={showDimensions}
+                        onToggleDimensions={() => setShowDimensions((p) => !p)}
+                      />
+
+                      {/* AAA Viewport Navigation Gizmo (Interactive 3D Depth-Projected Orientation Widget) */}
+                      <ViewportNavigationGizmo
+                        camera={isOrtho ? orthoCameraRef.current : cameraRef.current}
+                        orbitControls={orbitControlsRef.current}
+                        onSnapView={setCameraPreset}
+                        isOrtho={isOrtho}
+                        onToggleOrtho={() => setIsOrtho(!isOrtho)}
+                      />
+
+                      {/* Floating Transform Numeric Input Pill */}
+                      {((isModalTransforming && selectedMesh) || typedNumericBuffer !== "") && (
+                        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center space-x-2 bg-[#18181b]/95 border border-[#ea580c] px-3 py-1.5 rounded-sm shadow-xl font-mono text-xs text-[#f4f4f5]">
+                          <span className="font-bold text-[#ea580c] uppercase">
+                            {transformMode === "translate"
+                              ? "G: TRANSLATE"
+                              : transformMode === "rotate"
+                              ? isTrackball
+                                ? "R: TRACKBALL"
+                                : "R: ROTATE"
+                              : transformMode === "scale"
+                              ? "S: SCALE"
+                              : "TRANSFORM"}
+                          </span>
+                          <span className="text-[#3f3f46]">|</span>
+                          {transformMode === "translate" && (
+                            <span>
+                              X: {liveTransform.pos[0].toFixed(2)}m  Y: {liveTransform.pos[1].toFixed(2)}m  Z: {liveTransform.pos[2].toFixed(2)}m
+                            </span>
+                          )}
+                          {transformMode === "rotate" && (
+                            <span>
+                              X: {liveTransform.rot[0].toFixed(1)}°  Y: {liveTransform.rot[1].toFixed(1)}°  Z: {liveTransform.rot[2].toFixed(1)}°
+                            </span>
+                          )}
+                          {transformMode === "scale" && (
+                            <span>
+                              X: {liveTransform.scale[0].toFixed(2)}x  Y: {liveTransform.scale[1].toFixed(2)}x  Z: {liveTransform.scale[2].toFixed(2)}x
+                            </span>
+                          )}
+                          {axisConstraint !== "none" && (
+                            <span className="px-1 py-0.2 bg-[#ea580c]/20 text-[#ea580c] text-[10px] uppercase font-bold rounded">
+                              [{axisConstraint}]
+                            </span>
+                          )}
+                          {typedNumericBuffer ? (
+                            <span className="px-1.5 py-0.5 bg-[#ea580c] text-white rounded font-bold">
+                              VAL: {typedNumericBuffer} (Enter)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-[#71717a]">
+                              (Type numbers, Enter to commit, Esc to cancel)
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* N-Panel Right Properties Strip (Drawer collapsible with N) */}
+                    <BlenderNPanel
+                      isOpen={isNOpen}
+                      onToggleOpen={() => setIsNOpen(!isNOpen)}
+                      selectedMeshName={selectedMesh?.name || null}
+                      meshList={meshList}
+                      onSelectMesh={(name) => selectMeshByName(name)}
+                      onToggleMeshVisibility={handleToggleMeshVisibility}
+                      lockedMeshes={lockedMeshes}
+                      onToggleMeshLock={handleToggleMeshLock}
+                      transform={selectedTransform}
+                      onUpdateTransform={handleUpdateTransform}
+                      onPlaceOnFloor={handlePlaceOnFloor}
+                      onCenterOrigin={handleCenterToOrigin}
+                      onResetRotation={handleResetRotation}
+                      onResetScale={handleResetScale}
+                      simplifyRatio={simplifyRatio}
+                      onDecimate={handleSimplifyRatioChange}
+                      onSubdivide={handleSubdivide}
+                      isWireframe={shadingMode === "wireframe"}
+                      onToggleWireframe={() => setShadingMode(shadingMode === "wireframe" ? "solid" : "wireframe")}
+                      currentRoughness={matRoughness}
+                      currentMetalness={matMetalness}
+                      currentColor={matColor}
+                      onUpdateMaterial={handleUpdateSelectedMaterial}
+                      script={script}
+                      assetUrl={assetUrl}
+                      onExecuteScript={onExecuteRawScript}
+                      isLoading={isLoading}
+                      stdout={stdout}
+                      stderr={stderr}
+                    />
+                  </div>
+                );
+
+              case "timeline":
+                return (
+                  <BlenderTimeline
+                    isOpen={true}
+                    onToggleOpen={() => {}}
+                    isPlaying={isPlaying}
+                    onTogglePlay={() => setIsPlaying(!isPlaying)}
+                    onRewind={() => handleSeekFrame(0)}
+                    currentFrame={currentFrame}
+                    totalFrames={totalFrames}
+                    onSeekFrame={handleSeekFrame}
+                    isLooping={isLooping}
+                    onToggleLoop={() => setIsLooping(!isLooping)}
+                    turntableMode={turntableMode}
+                    onToggleTurntableMode={setTurntableMode}
+                    keyframes={keyframes}
+                    onAddKeyframe={handleAddKeyframe}
+                    onMoveKeyframe={handleMoveKeyframe}
+                    onDeleteKeyframe={handleDeleteKeyframe}
+                    activeObjectName={selectedMesh?.name}
+                    interpolation={interpolation}
+                    onChangeInterpolation={handleChangeInterpolation}
+                    explodedFactor={explodedFactor}
+                    onExplodedChange={handleExplodedChange}
+                  />
+                );
+
+              case "outliner":
+                return (
+                  <OutlinerEditor
+                    meshList={meshList}
+                    selectedMeshName={selectedMesh?.name || null}
+                    onSelectMesh={(name) => selectMeshByName(name)}
+                    onToggleMeshVisibility={handleToggleMeshVisibility}
+                    lockedMeshes={lockedMeshes}
+                    onToggleMeshLock={handleToggleMeshLock}
+                  />
+                );
+
+              case "properties":
+                return (
+                  <PropertiesEditor
+                    selectedMeshName={selectedMesh?.name || null}
+                    onSelectMesh={(name) => selectMeshByName(name)}
+                    transform={selectedTransform}
+                    onUpdateTransform={handleUpdateTransform}
+                    onPlaceOnFloor={handlePlaceOnFloor}
+                    onCenterOrigin={handleCenterToOrigin}
+                    onResetRotation={handleResetRotation}
+                    onResetScale={handleResetScale}
+                    simplifyRatio={simplifyRatio}
+                    onDecimate={handleSimplifyRatioChange}
+                    onSubdivide={handleSubdivide}
+                    isWireframe={shadingMode === "wireframe"}
+                    onToggleWireframe={() => setShadingMode(shadingMode === "wireframe" ? "solid" : "wireframe")}
+                    currentRoughness={matRoughness}
+                    currentMetalness={matMetalness}
+                    currentColor={matColor}
+                    onUpdateMaterial={handleUpdateSelectedMaterial}
+                  />
+                );
+
+              case "script":
+                return (
+                  <ScriptingEditor
+                    script={script}
+                    assetUrl={assetUrl}
+                    onExecuteScript={onExecuteRawScript}
+                    isLoading={isLoading}
+                    stdout={stdout}
+                    stderr={stderr}
+                  />
+                );
+            }
+          }}
         />
       </div>
-
-      {/* Floating Contextual Compact Inspector (HUD) */}
-      <FloatingInspector
-        selectedMeshName={selectedMesh?.name || null}
-        triangles={
-          selectedMesh?.geometry?.index
-            ? selectedMesh.geometry.index.count / 3
-            : selectedMesh?.geometry?.attributes?.position
-            ? selectedMesh.geometry.attributes.position.count / 3
-            : 0
-        }
-        onClose={() => {
-          setSelectedMesh(null);
-          onMeshSelect?.(null);
-        }}
-        onFocus={handleFocus}
-        onApplySwatch={handleApplySwatch}
-        onUpdateMaterial={handleUpdateSelectedMaterial}
-        currentRoughness={matRoughness}
-        currentMetalness={matMetalness}
-        currentColor={matColor}
-        onSubdivide={handleSubdivide}
-        onAddKeyframe={() => handleAddKeyframe(currentFrame)}
-        onPlaceOnFloor={handlePlaceOnFloor}
-        onCenterOrigin={handleCenterToOrigin}
-        onResetRotation={handleResetRotation}
-        onResetScale={handleResetScale}
-      />
-
-      {/* Floating Transform Numeric Input Pill (Only active while G, R, S modal active or typing numeric input) */}
-      {((isModalTransforming && selectedMesh) || typedNumericBuffer !== "") && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 flex items-center space-x-2 bg-[#18181b]/95 border border-[#ea580c] px-3 py-1.5 rounded-sm shadow-xl font-mono text-xs text-[#f4f4f5]">
-          <span className="font-bold text-[#ea580c] uppercase">
-            {transformMode === "translate"
-              ? "G: TRANSLATE"
-              : transformMode === "rotate"
-              ? isTrackball
-                ? "R: TRACKBALL"
-                : "R: ROTATE"
-              : transformMode === "scale"
-              ? "S: SCALE"
-              : "TRANSFORM"}
-          </span>
-          <span className="text-[#3f3f46]">|</span>
-          {transformMode === "translate" && (
-            <span>
-              X: {liveTransform.pos[0].toFixed(2)}m  Y: {liveTransform.pos[1].toFixed(2)}m  Z: {liveTransform.pos[2].toFixed(2)}m
-            </span>
-          )}
-          {transformMode === "rotate" && (
-            <span>
-              X: {liveTransform.rot[0].toFixed(1)}°  Y: {liveTransform.rot[1].toFixed(1)}°  Z: {liveTransform.rot[2].toFixed(1)}°
-            </span>
-          )}
-          {transformMode === "scale" && (
-            <span>
-              X: {liveTransform.scale[0].toFixed(2)}x  Y: {liveTransform.scale[1].toFixed(2)}x  Z: {liveTransform.scale[2].toFixed(2)}x
-            </span>
-          )}
-          {axisConstraint !== "none" && (
-            <span className="px-1 py-0.2 bg-[#ea580c]/20 text-[#ea580c] text-[10px] uppercase font-bold rounded">
-              [{axisConstraint}]
-            </span>
-          )}
-          {typedNumericBuffer ? (
-            <span className="px-1.5 py-0.5 bg-[#ea580c] text-white rounded font-bold">
-              VAL: {typedNumericBuffer} (Enter)
-            </span>
-          ) : (
-            <span className="text-[10px] text-[#71717a]">
-              (Type numbers, Enter to commit, Esc to cancel)
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Modern Dope Sheet Timeline Component */}
-      <Timeline
-        isOpen={isTimelineOpen}
-        onToggleOpen={() => setIsTimelineOpen(!isTimelineOpen)}
-        isPlaying={isPlaying}
-        onTogglePlay={() => setIsPlaying(!isPlaying)}
-        onRewind={() => handleSeekFrame(0)}
-        currentFrame={currentFrame}
-        totalFrames={totalFrames}
-        onSeekFrame={handleSeekFrame}
-        isLooping={isLooping}
-        onToggleLoop={() => setIsLooping(!isLooping)}
-        turntableMode={turntableMode}
-        onToggleTurntableMode={setTurntableMode}
-        keyframes={keyframes}
-        onAddKeyframe={handleAddKeyframe}
-        onMoveKeyframe={handleMoveKeyframe}
-        onDeleteKeyframe={handleDeleteKeyframe}
-        activeObjectName={selectedMesh?.name}
-        interpolation={interpolation}
-        onChangeInterpolation={handleChangeInterpolation}
-        explodedFactor={explodedFactor}
-        onExplodedChange={handleExplodedChange}
-      />
-
-      {/* 1-Click DCC Quick Tools Tray (Decimate, UV Checker, Lighting, Snapshot) */}
-      <DccQuickTray
-        isOpen={isQuickTrayOpen}
-        onToggleOpen={() => setIsQuickTrayOpen(!isQuickTrayOpen)}
-        simplifyRatio={simplifyRatio}
-        onSimplifyRatioChange={handleSimplifyRatioChange}
-        isUvCheckerActive={isUvCheckerActive}
-        onToggleUvChecker={handleToggleUvChecker}
-        currentLightingStage={currentLightingStage}
-        onSelectLightingStage={updateLightingStage}
-        onCaptureSnapshot={handleCaptureSnapshot}
-        showDimensions={showDimensions}
-        onToggleDimensions={() => setShowDimensions((p) => !p)}
-      />
 
       {/* Viewport Bottom Status Bar (Real-Time DCC Telemetry & Contextual Key Hints HUD) */}
       <div className="flex items-center justify-between px-3 py-1 border-t border-[#27272a] bg-[#18181b] text-[11px] text-[#a1a1aa] font-mono">

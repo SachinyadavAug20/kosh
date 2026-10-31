@@ -102,11 +102,12 @@ export class UniversalGizmo {
     this.scaleGroup.add(this.scaleShaftsGroup);
 
     this.highlightMaterial = new THREE.MeshBasicMaterial({
-      color: 0xfef08a,
+      color: 0xfacc15,
       depthTest: false,
       depthWrite: false,
       transparent: true,
       opacity: 0.95,
+      side: THREE.DoubleSide,
     });
 
     this.buildGeometry();
@@ -173,13 +174,14 @@ export class UniversalGizmo {
     const colY = 0x22c55e; // Green
     const colZ = 0x3b82f6; // Blue
 
-    const createMat = (color: number, opacity = 0.9) =>
+    const createMat = (color: number, opacity = 0.9, doubleSide = false) =>
       new THREE.MeshBasicMaterial({
         color,
         depthTest: false,
         depthWrite: false,
         transparent: true,
         opacity,
+        side: doubleSide ? THREE.DoubleSide : THREE.FrontSide,
       });
 
     const createColliderMat = () =>
@@ -189,11 +191,26 @@ export class UniversalGizmo {
         depthWrite: false,
       });
 
+    const addEdges = (mesh: THREE.Mesh, edgeColor: number, opacity = 0.95) => {
+      const edges = new THREE.EdgesGeometry(mesh.geometry);
+      const line = new THREE.LineSegments(
+        edges,
+        new THREE.LineBasicMaterial({
+          color: edgeColor,
+          depthTest: false,
+          depthWrite: false,
+          transparent: true,
+          opacity,
+        })
+      );
+      mesh.add(line);
+    };
+
     // -------------------------------------------------------------
     // 1. Translation Arrows (X, Y, Z)
     // -------------------------------------------------------------
-    const arrowShaftGeo = new THREE.CylinderGeometry(0.015, 0.015, 1.0, 8);
-    const arrowConeGeo = new THREE.ConeGeometry(0.065, 0.22, 12);
+    const arrowShaftGeo = new THREE.CylinderGeometry(0.015, 0.015, 1.0, 12);
+    const arrowConeGeo = new THREE.ConeGeometry(0.065, 0.22, 16);
     // Generous hitbox (radius 0.16)
     const shaftHitboxGeo = new THREE.CylinderGeometry(0.16, 0.16, 1.15, 8);
 
@@ -205,6 +222,7 @@ export class UniversalGizmo {
     const xCone = new THREE.Mesh(arrowConeGeo, createMat(colX));
     xCone.position.set(1.1, 0, 0);
     xCone.rotation.z = -Math.PI / 2;
+    addEdges(xCone, 0xffffff, 0.8);
     xArrowGroup.add(xShaft, xCone);
     this.translateGroup.add(xArrowGroup);
     this.visualHandles.set("translate-x", xArrowGroup);
@@ -223,6 +241,7 @@ export class UniversalGizmo {
     yShaft.position.set(0, 0.5, 0);
     const yCone = new THREE.Mesh(arrowConeGeo, createMat(colY));
     yCone.position.set(0, 1.1, 0);
+    addEdges(yCone, 0xffffff, 0.8);
     yArrowGroup.add(yShaft, yCone);
     this.translateGroup.add(yArrowGroup);
     this.visualHandles.set("translate-y", yArrowGroup);
@@ -242,6 +261,7 @@ export class UniversalGizmo {
     const zCone = new THREE.Mesh(arrowConeGeo, createMat(colZ));
     zCone.position.set(0, 0, 1.1);
     zCone.rotation.x = Math.PI / 2;
+    addEdges(zCone, 0xffffff, 0.8);
     zArrowGroup.add(zShaft, zCone);
     this.translateGroup.add(zArrowGroup);
     this.visualHandles.set("translate-z", zArrowGroup);
@@ -255,49 +275,52 @@ export class UniversalGizmo {
     this.colliders.push(zHitbox);
 
     // -------------------------------------------------------------
-    // 2. Planar Drag Squares (XY, XZ, YZ)
+    // 2. Planar Drag Squares (XY, XZ, YZ) - Double-sided with crisp edges
     // -------------------------------------------------------------
-    const planeGeo = new THREE.PlaneGeometry(0.24, 0.24);
-    const planeHitboxGeo = new THREE.BoxGeometry(0.35, 0.35, 0.08);
+    const planeGeo = new THREE.PlaneGeometry(0.22, 0.22);
+    const planeHitboxGeo = new THREE.BoxGeometry(0.35, 0.35, 0.12);
 
-    // XY Plane (Yellow/Orange)
-    const xyPlane = new THREE.Mesh(planeGeo, createMat(0xf59e0b, 0.45));
-    xyPlane.position.set(0.32, 0.32, 0);
+    // XY Plane (Amber / Yellow)
+    const xyPlane = new THREE.Mesh(planeGeo, createMat(0xf59e0b, 0.5, true));
+    xyPlane.position.set(0.26, 0.26, 0);
+    addEdges(xyPlane, 0xfbbf24, 0.95);
     this.planesGroup.add(xyPlane);
     this.visualHandles.set("translate-xy", xyPlane);
     this.recordMaterials(xyPlane);
 
     const xyHitbox = new THREE.Mesh(planeHitboxGeo, createColliderMat());
-    xyHitbox.position.set(0.32, 0.32, 0);
+    xyHitbox.position.set(0.26, 0.26, 0);
     xyHitbox.userData = { handle: "translate-xy" };
     this.planesGroup.add(xyHitbox);
     this.colliders.push(xyHitbox);
 
     // XZ Plane (Cyan)
-    const xzPlane = new THREE.Mesh(planeGeo, createMat(0x06b6d4, 0.45));
-    xzPlane.position.set(0.32, 0, 0.32);
+    const xzPlane = new THREE.Mesh(planeGeo, createMat(0x06b6d4, 0.5, true));
+    xzPlane.position.set(0.26, 0, 0.26);
     xzPlane.rotation.x = -Math.PI / 2;
+    addEdges(xzPlane, 0x38bdf8, 0.95);
     this.planesGroup.add(xzPlane);
     this.visualHandles.set("translate-xz", xzPlane);
     this.recordMaterials(xzPlane);
 
     const xzHitbox = new THREE.Mesh(planeHitboxGeo, createColliderMat());
-    xzHitbox.position.set(0.32, 0, 0.32);
+    xzHitbox.position.set(0.26, 0, 0.26);
     xzHitbox.rotation.x = -Math.PI / 2;
     xzHitbox.userData = { handle: "translate-xz" };
     this.planesGroup.add(xzHitbox);
     this.colliders.push(xzHitbox);
 
     // YZ Plane (Purple)
-    const yzPlane = new THREE.Mesh(planeGeo, createMat(0xa855f7, 0.45));
-    yzPlane.position.set(0, 0.32, 0.32);
+    const yzPlane = new THREE.Mesh(planeGeo, createMat(0xa855f7, 0.5, true));
+    yzPlane.position.set(0, 0.26, 0.26);
     yzPlane.rotation.y = Math.PI / 2;
+    addEdges(yzPlane, 0xc084fc, 0.95);
     this.planesGroup.add(yzPlane);
     this.visualHandles.set("translate-yz", yzPlane);
     this.recordMaterials(yzPlane);
 
     const yzHitbox = new THREE.Mesh(planeHitboxGeo, createColliderMat());
-    yzHitbox.position.set(0, 0.32, 0.32);
+    yzHitbox.position.set(0, 0.26, 0.26);
     yzHitbox.rotation.y = Math.PI / 2;
     yzHitbox.userData = { handle: "translate-yz" };
     this.planesGroup.add(yzHitbox);
@@ -348,9 +371,8 @@ export class UniversalGizmo {
     this.colliders.push(zRingHitbox);
 
     // -------------------------------------------------------------
-    // 4. Scale Handles (Scale Shafts, Axis Cubes & Uniform Center Box)
+    // 4. Scale Handles (Scale Shafts, Axis Cubes & Uniform Center)
     // -------------------------------------------------------------
-    // Connecting shafts used in standalone "scale" mode
     const scaleShaftGeo = new THREE.CylinderGeometry(0.015, 0.015, 1.05, 8);
     const xShaftScale = new THREE.Mesh(scaleShaftGeo, createMat(colX));
     xShaftScale.position.set(0.525, 0, 0);
@@ -366,13 +388,14 @@ export class UniversalGizmo {
     zShaftScale.rotation.x = Math.PI / 2;
     this.scaleShaftsGroup.add(zShaftScale);
 
-    const scaleCubeGeo = new THREE.BoxGeometry(0.13, 0.13, 0.13);
+    const scaleCubeGeo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
     const scaleHitboxGeo = new THREE.BoxGeometry(0.28, 0.28, 0.28);
     const initPos = 0.65;
 
     // X Scale Cube
-    const xScale = new THREE.Mesh(scaleCubeGeo, createMat(colX));
+    const xScale = new THREE.Mesh(scaleCubeGeo, createMat(colX, 0.95));
     xScale.position.set(initPos, 0, 0);
+    addEdges(xScale, 0xffffff, 0.9);
     this.scaleGroup.add(xScale);
     this.visualHandles.set("scale-x", xScale);
     this.recordMaterials(xScale);
@@ -386,8 +409,9 @@ export class UniversalGizmo {
     this.xScaleHitbox = xScaleHitbox;
 
     // Y Scale Cube
-    const yScale = new THREE.Mesh(scaleCubeGeo, createMat(colY));
+    const yScale = new THREE.Mesh(scaleCubeGeo, createMat(colY, 0.95));
     yScale.position.set(0, initPos, 0);
+    addEdges(yScale, 0xffffff, 0.9);
     this.scaleGroup.add(yScale);
     this.visualHandles.set("scale-y", yScale);
     this.recordMaterials(yScale);
@@ -401,8 +425,9 @@ export class UniversalGizmo {
     this.yScaleHitbox = yScaleHitbox;
 
     // Z Scale Cube
-    const zScale = new THREE.Mesh(scaleCubeGeo, createMat(colZ));
+    const zScale = new THREE.Mesh(scaleCubeGeo, createMat(colZ, 0.95));
     zScale.position.set(0, 0, initPos);
+    addEdges(zScale, 0xffffff, 0.9);
     this.scaleGroup.add(zScale);
     this.visualHandles.set("scale-z", zScale);
     this.recordMaterials(zScale);
@@ -415,10 +440,11 @@ export class UniversalGizmo {
     this.colliders.push(zScaleHitbox);
     this.zScaleHitbox = zScaleHitbox;
 
-    // Uniform Center Cube (Chamfered look, Zinc White)
-    const centerGeo = new THREE.BoxGeometry(0.18, 0.18, 0.18);
+    // Uniform Center Octahedron Handle (Faceted diamond with Kosh orange edges)
+    const centerGeo = new THREE.OctahedronGeometry(0.12, 0);
     const centerHitboxGeo = new THREE.BoxGeometry(0.32, 0.32, 0.32);
-    const centerCube = new THREE.Mesh(centerGeo, createMat(0xf4f4f5, 0.75));
+    const centerCube = new THREE.Mesh(centerGeo, createMat(0xf4f4f5, 0.85, true));
+    addEdges(centerCube, 0xea580c, 0.95);
     this.scaleGroup.add(centerCube);
     this.visualHandles.set("scale-xyz", centerCube);
     this.recordMaterials(centerCube);
@@ -529,7 +555,6 @@ export class UniversalGizmo {
       visual.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           child.material = this.highlightMaterial;
-          child.scale.set(1.25, 1.25, 1.25);
         }
       });
     }
@@ -544,7 +569,6 @@ export class UniversalGizmo {
         if (child instanceof THREE.Mesh) {
           const orig = this.originalMaterials.get(child);
           if (orig) child.material = orig;
-          child.scale.set(1.0, 1.0, 1.0);
         }
       });
     }
