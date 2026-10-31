@@ -400,7 +400,7 @@ export default function ShareViewPage() {
         <div ref={containerRef} className="w-full h-full" />
 
         {/* Viewport Overlay Controls Pill */}
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex items-center space-x-2 bg-[#1a1a1e]/90 backdrop-blur border border-[#333338] px-3 py-1.5 rounded-full shadow-2xl z-20">
+        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex items-center space-x-2 bg-[#1a1a1e] border border-[#333338] px-3 py-1.5 rounded-full shadow-2xl z-20">
           <button
             onClick={() => setIsPlaying(!isPlaying)}
             title={isPlaying ? "Pause Animation" : "Play Animation"}
@@ -435,7 +435,7 @@ export default function ShareViewPage() {
 
       {/* 3. Blender Python Script Modal */}
       {showScriptModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-[#1a1a1e] border border-[#333338] w-full max-w-3xl rounded-lg shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#333338]">
               <div className="flex items-center space-x-2">

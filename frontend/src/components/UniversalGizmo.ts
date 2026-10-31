@@ -80,6 +80,12 @@ export class UniversalGizmo {
   // Highlight Material
   private highlightMaterial: THREE.MeshBasicMaterial;
 
+  // Multi-Object Secondary Selection Synchronizer
+  private secondaryTargets: THREE.Object3D[] = [];
+  private initialSecondaryPositions: Map<THREE.Object3D, THREE.Vector3> = new Map();
+  private initialSecondaryRotations: Map<THREE.Object3D, THREE.Euler> = new Map();
+  private initialSecondaryScales: Map<THREE.Object3D, THREE.Vector3> = new Map();
+
   constructor(camera: THREE.Camera, domElement: HTMLElement, options: UniversalGizmoOptions) {
     this.camera = camera;
     this.domElement = domElement;
@@ -133,6 +139,10 @@ export class UniversalGizmo {
       this.isDragging = false;
       this.activeHandle = null;
     }
+  }
+
+  public setSecondaryTargets(targets: THREE.Object3D[]) {
+    this.secondaryTargets = targets.filter((t) => t && t !== this.targetObject);
   }
 
   public getTarget(): THREE.Object3D | null {
@@ -600,6 +610,18 @@ export class UniversalGizmo {
     this.initialObjectRotation.copy(this.targetObject.rotation);
     this.initialObjectScale.copy(this.targetObject.scale);
 
+    // Snapshot secondary target poses
+    this.initialSecondaryPositions.clear();
+    this.initialSecondaryRotations.clear();
+    this.initialSecondaryScales.clear();
+    for (const sec of this.secondaryTargets) {
+      if (sec) {
+        this.initialSecondaryPositions.set(sec, sec.position.clone());
+        this.initialSecondaryRotations.set(sec, sec.rotation.clone());
+        this.initialSecondaryScales.set(sec, sec.scale.clone());
+      }
+    }
+
     // Setup intersection drag plane
     const center = this.group.position;
     const camDir = this.camera.position.clone().sub(center).normalize();
@@ -726,6 +748,13 @@ export class UniversalGizmo {
       }
 
       this.targetObject.position.copy(newPos);
+      const deltaPos = newPos.clone().sub(this.initialObjectPosition);
+      for (const sec of this.secondaryTargets) {
+        const initP = this.initialSecondaryPositions.get(sec);
+        if (initP) {
+          sec.position.copy(initP.clone().add(deltaPos));
+        }
+      }
     }
 
     // 2. Rotations
@@ -755,6 +784,16 @@ export class UniversalGizmo {
           angle = Math.round(angle / stepRad) * stepRad;
         }
         this.targetObject.rotation.z = this.initialObjectRotation.z + angle;
+      }
+
+      const dRotX = this.targetObject.rotation.x - this.initialObjectRotation.x;
+      const dRotY = this.targetObject.rotation.y - this.initialObjectRotation.y;
+      const dRotZ = this.targetObject.rotation.z - this.initialObjectRotation.z;
+      for (const sec of this.secondaryTargets) {
+        const initR = this.initialSecondaryRotations.get(sec);
+        if (initR) {
+          sec.rotation.set(initR.x + dRotX, initR.y + dRotY, initR.z + dRotZ);
+        }
       }
 
       const deg = THREE.MathUtils.radToDeg(angle);
@@ -790,6 +829,16 @@ export class UniversalGizmo {
       }
 
       this.targetObject.scale.copy(newScale);
+
+      const sx = this.initialObjectScale.x !== 0 ? newScale.x / this.initialObjectScale.x : 1;
+      const sy = this.initialObjectScale.y !== 0 ? newScale.y / this.initialObjectScale.y : 1;
+      const sz = this.initialObjectScale.z !== 0 ? newScale.z / this.initialObjectScale.z : 1;
+      for (const sec of this.secondaryTargets) {
+        const initS = this.initialSecondaryScales.get(sec);
+        if (initS) {
+          sec.scale.set(initS.x * sx, initS.y * sy, initS.z * sz);
+        }
+      }
     }
 
     this.options.onDragMove?.({
@@ -818,28 +867,36 @@ export class UniversalGizmo {
   // 1-Click Transform Reset Actions
   // -------------------------------------------------------------
   public placeOnFloor() {
-    if (!this.targetObject) return;
-    const bbox = new THREE.Box3().setFromObject(this.targetObject);
-    const bottomOffset = this.targetObject.position.y - bbox.min.y;
-    this.targetObject.position.y = bottomOffset;
+    const targets = [this.targetObject, ...this.secondaryTargets].filter(Boolean) as THREE.Object3D[];
+    for (const obj of targets) {
+      const bbox = new THREE.Box3().setFromObject(obj);
+      const bottomOffset = obj.position.y - bbox.min.y;
+      obj.position.y = bottomOffset;
+    }
     this.options.onObjectChange?.();
   }
 
   public centerToOrigin() {
-    if (!this.targetObject) return;
-    this.targetObject.position.set(0, this.targetObject.position.y, 0);
+    const targets = [this.targetObject, ...this.secondaryTargets].filter(Boolean) as THREE.Object3D[];
+    for (const obj of targets) {
+      obj.position.set(0, obj.position.y, 0);
+    }
     this.options.onObjectChange?.();
   }
 
   public resetRotation() {
-    if (!this.targetObject) return;
-    this.targetObject.rotation.set(0, 0, 0);
+    const targets = [this.targetObject, ...this.secondaryTargets].filter(Boolean) as THREE.Object3D[];
+    for (const obj of targets) {
+      obj.rotation.set(0, 0, 0);
+    }
     this.options.onObjectChange?.();
   }
 
   public resetScale() {
-    if (!this.targetObject) return;
-    this.targetObject.scale.set(1, 1, 1);
+    const targets = [this.targetObject, ...this.secondaryTargets].filter(Boolean) as THREE.Object3D[];
+    for (const obj of targets) {
+      obj.scale.set(1, 1, 1);
+    }
     this.options.onObjectChange?.();
   }
 

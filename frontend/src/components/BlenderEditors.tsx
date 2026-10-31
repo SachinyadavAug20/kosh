@@ -66,7 +66,9 @@ export interface MeshNodeItem {
 export interface OutlinerEditorProps {
   meshList: MeshNodeItem[];
   selectedMeshName: string | null;
+  selectedMeshNames?: string[];
   onSelectMesh: (name: string | null) => void;
+  onToggleSelectMesh?: (name: string) => void;
   onToggleMeshVisibility: (name: string) => void;
   lockedMeshes: Set<string>;
   onToggleMeshLock: (name: string) => void;
@@ -75,7 +77,9 @@ export interface OutlinerEditorProps {
 export function OutlinerEditor({
   meshList = [],
   selectedMeshName,
+  selectedMeshNames = [],
   onSelectMesh,
+  onToggleSelectMesh,
   onToggleMeshVisibility,
   lockedMeshes,
   onToggleMeshLock,
@@ -96,21 +100,27 @@ export function OutlinerEditor({
           type="text"
           value={outlinerFilter}
           onChange={(e) => setOutlinerFilter(e.target.value)}
-          placeholder="Filter scene meshes..."
+          placeholder="Filter scene meshes... (Ctrl+Click to multi-select)"
           className="w-full bg-[#141416] border border-[#27272a] rounded pl-7 pr-2 py-1 text-[11px] font-mono text-[#f4f4f5] placeholder-[#52525b] focus:outline-none focus:border-[#ea580c]"
         />
       </div>
 
       {/* Summary Metrics */}
       <div className="flex items-center justify-between text-[10px] font-mono text-[#71717a] shrink-0 px-0.5">
-        <span>Meshes: {meshList.length}</span>
+        <span>
+          Meshes: {meshList.length}
+          {selectedMeshNames.length > 1 && (
+            <span className="ml-1 text-[#ea580c] font-bold">({selectedMeshNames.length} selected)</span>
+          )}
+        </span>
         <span>{totalTris.toLocaleString()} Tris</span>
       </div>
 
       {/* Mesh Tree List */}
       <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar pr-0.5">
         {filtered.map((mesh) => {
-          const isSelected = selectedMeshName === mesh.name;
+          const isSelected = selectedMeshName === mesh.name || (selectedMeshNames && selectedMeshNames.includes(mesh.name));
+          const isActive = selectedMeshName === mesh.name;
           const isLocked = lockedMeshes.has(mesh.name);
           const isVisible = mesh.visible !== false;
 
@@ -119,21 +129,32 @@ export function OutlinerEditor({
               key={mesh.id}
               className={`flex items-center justify-between px-2 py-1.5 rounded font-mono text-[11px] border transition-colors ${
                 isSelected
-                  ? "bg-[#ea580c]/15 border-[#ea580c] text-white"
+                  ? isActive
+                    ? "bg-[#ea580c]/20 border-[#ea580c] text-white"
+                    : "bg-[#ea580c]/10 border-[#d97706]/70 text-[#f4f4f5]"
                   : "bg-[#141416] border-[#27272a] hover:bg-[#202024] text-[#a1a1aa]"
               }`}
             >
               <button
                 type="button"
-                onClick={() => onSelectMesh(isSelected ? null : mesh.name)}
+                onClick={(e) => {
+                  if (e.ctrlKey || e.shiftKey) {
+                    onToggleSelectMesh?.(mesh.name);
+                  } else {
+                    onSelectMesh(isSelected ? null : mesh.name);
+                  }
+                }}
                 className="flex-1 flex items-center space-x-1.5 text-left truncate min-w-0"
               >
                 <Box
                   className={`w-3.5 h-3.5 shrink-0 ${
-                    isSelected ? "text-[#ea580c]" : "text-[#71717a]"
+                    isActive ? "text-[#f59e0b]" : isSelected ? "text-[#ea580c]" : "text-[#71717a]"
                   }`}
                 />
                 <span className="truncate font-semibold">{mesh.name}</span>
+                {isSelected && !isActive && (
+                  <span className="ml-1 text-[8px] px-1 py-0.2 rounded bg-[#d97706]/30 text-[#f59e0b]">SEL</span>
+                )}
               </button>
 
               <div className="flex items-center space-x-2 shrink-0 ml-2">
@@ -888,10 +909,10 @@ export function DirectorEditor({
   );
 
   const presets = [
-    { label: "🌃 Cyberpunk Alley", prompt: "A courier runs through a rain-soaked cyberpunk alley, stops at a neon door, and looks back" },
-    { label: "🌅 Sunset Cabin", prompt: "A traveler walks through a pine forest towards a warm cabin at golden hour sunset" },
-    { label: "🌌 Starry Ruins", prompt: "An adventurer discovers ancient ruins under a starry night sky with glowing campfire" },
-    { label: "🏜️ Desert Expedition", prompt: "A low-poly robotic scout jogs across sunny sand dunes exploring an outpost" },
+    { label: "Cyberpunk Alley", prompt: "A courier runs through a rain-soaked cyberpunk alley, stops at a neon door, and looks back" },
+    { label: "Sunset Cabin", prompt: "A traveler walks through a pine forest towards a warm cabin at golden hour sunset" },
+    { label: "Starry Ruins", prompt: "An adventurer discovers ancient ruins under a starry night sky with glowing campfire" },
+    { label: "Desert Expedition", prompt: "A low-poly robotic scout jogs across sunny sand dunes exploring an outpost" },
   ];
 
   return (
@@ -930,7 +951,7 @@ export function DirectorEditor({
             disabled={isGenerating || !promptInput.trim()}
             className="flex-1 py-1.5 bg-[#ea580c] hover:bg-[#f97316] disabled:opacity-50 text-white rounded font-mono text-[11px] font-bold flex items-center justify-center space-x-1.5 shadow-md transition-colors"
           >
-            <span>{isGenerating ? "Synthesizing Scene..." : "Generate Scene 🪄"}</span>
+            <span>{isGenerating ? "Synthesizing Scene..." : "Generate Scene"}</span>
           </button>
           {onOpenExportModal && (
             <button
@@ -938,7 +959,7 @@ export function DirectorEditor({
               onClick={onOpenExportModal}
               className="px-3 py-1.5 bg-[#27272a] hover:bg-[#3f3f46] text-[#f4f4f5] rounded font-mono text-[11px] font-medium transition-colors"
             >
-              Export 🎬
+              Export Video
             </button>
           )}
         </div>
@@ -1022,6 +1043,8 @@ export function DirectorEditor({
 // -------------------------------------------------------------
 // 5. MCP Live Console Editor (Real-Time JSON-RPC Tool Calls)
 // -------------------------------------------------------------
+import { DIRECTOR_MCP_TOOLS, dispatchMcpTool } from "../lib/mcp/DirectorMcpTools";
+
 export interface McpConsoleEditorProps {
   onExecuteTool?: (toolName: string, params: Record<string, any>) => void;
   isLoading?: boolean;
@@ -1031,28 +1054,63 @@ export function McpConsoleEditor({
   onExecuteTool,
   isLoading = false,
 }: McpConsoleEditorProps) {
-  const [selectedTool, setSelectedTool] = useState<string>("blender_eval");
+  const [selectedTool, setSelectedTool] = useState<string>("create_actor");
   const [jsonParams, setJsonParams] = useState<string>(
-    JSON.stringify({ code: "import bpy\nbpy.ops.mesh.primitive_cube_add(size=2.0)" }, null, 2)
+    JSON.stringify(
+      DIRECTOR_MCP_TOOLS.find((t) => t.name === "create_actor")?.samplePayload || {},
+      null,
+      2
+    )
   );
-  const [logs, setLogs] = useState<Array<{ time: string; tool: string; status: string }>>([
+  const [logs, setLogs] = useState<Array<{ time: string; tool: string; status: string; detail?: string }>>([
     { time: "10:30:12", tool: "mcp/health_check", status: "200 OK" },
-    { time: "10:30:15", tool: "blender_eval", status: "SUCCESS (Mesh Added)" },
+    { time: "10:30:15", tool: "blender_eval", status: "SUCCESS (Engine Ready)" },
   ]);
 
   const tools = [
-    { id: "blender_eval", label: "blender_eval (Python)" },
-    { id: "openscad_render", label: "openscad_render (CSG)" },
-    { id: "svg_extrude", label: "svg_extrude (Path)" },
-    { id: "audio_motion_bake", label: "audio_motion_bake (FFT)" },
+    ...DIRECTOR_MCP_TOOLS.map((t) => ({ id: t.name, label: `${t.name} (Director)`, sample: t.samplePayload })),
+    {
+      id: "blender_eval",
+      label: "blender_eval (Python)",
+      sample: { code: "import bpy\nbpy.ops.mesh.primitive_cube_add(size=2.0)" },
+    },
+    {
+      id: "openscad_render",
+      label: "openscad_render (CSG)",
+      sample: { code: "cube([10, 10, 10], center=true);" },
+    },
+    {
+      id: "svg_extrude",
+      label: "svg_extrude (Path)",
+      sample: { path: "M 0 0 L 10 0 L 10 10 Z", depth: 2.0 },
+    },
+    {
+      id: "audio_motion_bake",
+      label: "audio_motion_bake (FFT)",
+      sample: { audioUrl: "/audio/narration_demo.wav", fps: 30 },
+    },
   ];
+
+  const handleToolSelect = (toolId: string) => {
+    setSelectedTool(toolId);
+    const found = tools.find((t) => t.id === toolId);
+    if (found && found.sample) {
+      setJsonParams(JSON.stringify(found.sample, null, 2));
+    }
+  };
 
   const handleRun = () => {
     try {
       const parsed = JSON.parse(jsonParams);
+      const res = dispatchMcpTool(selectedTool, parsed);
       onExecuteTool?.(selectedTool, parsed);
       setLogs((prev) => [
-        { time: new Date().toLocaleTimeString(), tool: selectedTool, status: "DISPATCHED" },
+        {
+          time: new Date().toLocaleTimeString(),
+          tool: selectedTool,
+          status: res.error ? `ERROR (${res.error.code})` : "JSON-RPC 200 OK",
+          detail: res.error ? res.error.message : "Executed",
+        },
         ...prev,
       ]);
     } catch (e: any) {
@@ -1080,7 +1138,7 @@ export function McpConsoleEditor({
         <label className="text-[10px] text-[#71717a] uppercase">Registered Endpoint</label>
         <select
           value={selectedTool}
-          onChange={(e) => setSelectedTool(e.target.value)}
+          onChange={(e) => handleToolSelect(e.target.value)}
           className="w-full bg-[#141416] border border-[#27272a] rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-[#ea580c]"
         >
           {tools.map((t) => (

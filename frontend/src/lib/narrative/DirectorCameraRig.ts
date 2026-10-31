@@ -8,9 +8,11 @@ export interface CameraFrameState {
   fov: number;
 }
 
+export type CameraShotStyle = "wide" | "close" | "tracking" | "shoulder" | "dolly" | "orbit" | "static";
+
 export interface CameraCutPoint {
   frame: number;
-  cameraType?: "wide" | "close" | "tracking" | "shoulder" | "dolly" | "orbit" | "static";
+  cameraType?: CameraShotStyle;
   pos?: [number, number, number];
   lookAt?: [number, number, number];
 }

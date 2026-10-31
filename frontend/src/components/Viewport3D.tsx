@@ -14,7 +14,7 @@ import { ExportFormat, BackendHealth, McpToolDefinition } from "@/types/mcp";
 import { Timeline, KeyframeMarker, InterpolationType } from "./Timeline";
 import { FloatingInspector, SwatchPreset } from "./FloatingInspector";
 import { SimplifyModifier } from "three/examples/jsm/modifiers/SimplifyModifier.js";
-import { CanvasOverlay } from "./CanvasOverlay";
+import { CanvasOverlay, SelectionTool } from "./CanvasOverlay";
 import { ViewportNavigationGizmo } from "./ViewportNavigationGizmo";
 import { DccQuickTray, LightingStage } from "./DccQuickTray";
 import { UniversalGizmo, GizmoMode, DragBadgeInfo } from "./UniversalGizmo";
@@ -22,6 +22,7 @@ import {
   BlenderTopBar,
   TransformOrientation,
   PivotPoint,
+  SnapElement,
 } from "./BlenderTopBar";
 import { BlenderLeftToolbar } from "./BlenderLeftToolbar";
 import { BlenderNPanel } from "./BlenderNPanel";
@@ -30,7 +31,11 @@ import { BlenderWorkspace, WorkspacePreset, LeafNode } from "./BlenderWorkspace"
 import { OutlinerEditor, PropertiesEditor, ScriptingEditor, DirectorEditor, McpConsoleEditor } from "./BlenderEditors";
 import { AspectRatioFramer, FramingMode } from "./narrative/AspectRatioFramer";
 import { VideoExportModal } from "./narrative/VideoExportModal";
-import { DirectorPromptBar } from "./narrative/DirectorPromptBar";
+import { ModelPromptBar } from "./ModelPromptBar";
+import { ApiKeyModal } from "./ApiKeyModal";
+import { PostProcessingPipeline } from "../lib/rendering/PostProcessingPipeline";
+import { AudioVisemeSynthesizer } from "../lib/audio/AudioVisemeSynthesizer";
+import { GraphEditorCanvas } from "./timeline/GraphEditorCanvas";
 import { NarrativeSceneDescriptor } from "../lib/narrative/NarrativeSceneSchema";
 import { parseNarrativePrompt } from "../lib/narrative/NarrativePromptParser";
 import {
@@ -38,6 +43,7 @@ import {
   createLowPolySkyDome,
   createLowPolyTerrain,
   instantiateLowPolyEntity,
+  generateProceduralModelFromPrompt,
 } from "../lib/narrative/LowPolyProceduralLibrary";
 import { LowPolyCharacter } from "../lib/narrative/LowPolyCharacterRig";
 import { DirectorCameraRig } from "../lib/narrative/DirectorCameraRig";
@@ -93,8 +99,17 @@ export type SculptBrush = "draw" | "clay" | "inflate" | "flatten" | "grab" | "cr
 export type CameraView = "iso" | "front" | "back" | "top" | "bottom" | "right" | "left";
 export type AxisConstraint = "none" | "x" | "y" | "z" | "shift-x" | "shift-y" | "shift-z";
 export type SnapTarget = "closest" | "center" | "median" | "active";
-export type SnapElement = "increment" | "vertex" | "edge" | "face" | "volume";
-export type TransformMode = "all" | "select" | "translate" | "rotate" | "scale";
+export type TransformMode =
+  | "all"
+  | "select"
+  | "translate"
+  | "rotate"
+  | "scale"
+  | "cursor"
+  | "extrude"
+  | "inset"
+  | "bevel"
+  | "loopcut";
 
 export interface MeshNodeInfo {
   id: string;
@@ -313,7 +328,71 @@ export function Viewport3D({
   } | null>(null);
 
   const [meshList, setMeshList] = useState<MeshNodeInfo[]>([]);
-  const [selectedMesh, setSelectedMesh] = useState<THREE.Mesh | null>(null);
+  const [selectedMeshes, setSelectedMeshes] = useState<THREE.Mesh[]>([]);
+  const selectedMesh = selectedMeshes.length > 0 ? selectedMeshes[selectedMeshes.length - 1] : null;
+  const setSelectedMesh = useCallback((mesh: THREE.Mesh | null) => {
+    if (!mesh) setSelectedMeshes([]);
+    else setSelectedMeshes([mesh]);
+  }, []);
+  const [selectionTool, setSelectionTool] = useState<SelectionTool>("tweak");
+  const selectionHelpersGroupRef = useRef<THREE.Group | null>(null);
+
+  const updateSelectionHelpers = useCallback(() => {
+    if (selectionHelpersGroupRef.current) {
+      for (const h of selectionHelpersGroupRef.current.children) {
+        if (h instanceof THREE.BoxHelper) h.update();
+      }
+    }
+    if (selectionBoxHelperRef.current) {
+      selectionBoxHelperRef.current.update();
+    }
+  }, []);
+
+  const toggleMeshByName = useCallback((name: string) => {
+    const found = meshList.find((m) => m.name === name)?.meshRef;
+    if (!found) return;
+    setSelectedMeshes((prev) => {
+      const exists = prev.some((m) => m === found || m.name === name);
+      if (exists) {
+        return prev.filter((m) => m !== found && m.name !== name);
+      } else {
+        return [...prev, found];
+      }
+    });
+  }, [meshList]);
+
+  const selectMeshByName = useCallback((name: string | null) => {
+    if (!name) {
+      setSelectedMeshes([]);
+      return;
+    }
+    const found = meshList.find((m) => m.name === name)?.meshRef;
+    if (found) {
+      setSelectedMeshes([found]);
+    }
+  }, [meshList]);
+
+  const selectMultipleMeshes = useCallback((names: string[], mode: "replace" | "add" | "remove") => {
+    const matched = meshList
+      .filter((m) => names.includes(m.name) && m.meshRef)
+      .map((m) => m.meshRef);
+
+    setSelectedMeshes((prev) => {
+      if (mode === "replace") {
+        return matched;
+      }
+      if (mode === "add") {
+        const existingNames = new Set(prev.map((m) => m.name));
+        const toAdd = matched.filter((m) => !existingNames.has(m.name));
+        return [...prev, ...toAdd];
+      }
+      if (mode === "remove") {
+        const removeNames = new Set(names);
+        return prev.filter((m) => !removeNames.has(m.name));
+      }
+      return prev;
+    });
+  }, [meshList]);
 
   const handleToggleMeshLock = useCallback((meshName: string) => {
     setLockedMeshes((prev) => {
@@ -346,14 +425,14 @@ export function Viewport3D({
       selectedMesh.rotation.set((rot[0] * Math.PI) / 180, (rot[1] * Math.PI) / 180, (rot[2] * Math.PI) / 180);
       selectedMesh.scale.set(scl[0], scl[1], scl[2]);
       if (universalGizmoRef.current) universalGizmoRef.current.update();
-      if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+      updateSelectionHelpers();
       setSelectedTransform({
         position: { x: pos[0], y: pos[1], z: pos[2] },
         rotation: { x: rot[0], y: rot[1], z: rot[2] },
         scale: { x: scl[0], y: scl[1], z: scl[2] },
       });
     },
-    [selectedMesh]
+    [selectedMesh, updateSelectionHelpers]
   );
 
   // Pre-Transform Snapshot for RMB / Esc Cancel
@@ -489,10 +568,19 @@ export function Viewport3D({
 
   // Lighting & UV Refs
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
+  const hemiLightRef = useRef<THREE.HemisphereLight | null>(null);
   const keyLightRef = useRef<THREE.DirectionalLight | null>(null);
   const fillLightRef = useRef<THREE.DirectionalLight | null>(null);
   const rimLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const headlampRef = useRef<THREE.DirectionalLight | null>(null);
+  const [headlampEnabled, setHeadlampEnabled] = useState<boolean>(true);
+  const headlampEnabledRef = useRef<boolean>(true);
+  const [lightingPreset, setLightingPreset] = useState<"cad_studio" | "matcap" | "high_contrast">("cad_studio");
   const uvCheckerTextureRef = useRef<THREE.CanvasTexture | null>(null);
+
+  useEffect(() => {
+    headlampEnabledRef.current = headlampEnabled;
+  }, [headlampEnabled]);
 
   const [liveTransform, setLiveTransform] = useState<{
     pos: [number, number, number];
@@ -527,6 +615,21 @@ export function Viewport3D({
   const isPlayingRef = useRef<boolean>(false);
   const currentFrameRef = useRef<number>(0);
   const narrativeTotalFramesRef = useRef<number>(180);
+  const [isKeyModalOpen, setIsKeyModalOpen] = useState<boolean>(false);
+
+  // Post-Processing Pipeline & Audio Synthesizer Refs
+  const postPipelineRef = useRef<PostProcessingPipeline | null>(null);
+  const [isPostProcessingEnabled, setIsPostProcessingEnabled] = useState<boolean>(true);
+  const isPostProcessingEnabledRef = useRef<boolean>(true);
+  const audioSynthesizerRef = useRef<AudioVisemeSynthesizer>(new AudioVisemeSynthesizer());
+  const terrainMeshRef = useRef<THREE.Object3D | null>(null);
+
+  useEffect(() => {
+    isPostProcessingEnabledRef.current = isPostProcessingEnabled;
+    if (postPipelineRef.current) {
+      postPipelineRef.current.setEnabled(isPostProcessingEnabled);
+    }
+  }, [isPostProcessingEnabled]);
 
   // Raycaster & Mouse Click Tracking (to distinguish click vs orbit drag)
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
@@ -579,6 +682,21 @@ export function Viewport3D({
     renderer.toneMappingExposure = 1.0;
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
+
+    // High-Fidelity Post-Processing Chain (SSAO + Bloom + Output tone mapping)
+    try {
+      const post = new PostProcessingPipeline(
+        renderer,
+        scene,
+        perspCamera,
+        width,
+        height,
+        { enabled: isPostProcessingEnabledRef.current }
+      );
+      postPipelineRef.current = post;
+    } catch (e) {
+      console.warn("PostProcessingPipeline init skipped, fallback to standard WebGL renderer", e);
+    }
 
     // D. OrbitControls
     const orbit = new OrbitControls(perspCamera, renderer.domElement);
@@ -709,29 +827,51 @@ export function Viewport3D({
     scene.add(universalGizmo.group);
     universalGizmoRef.current = universalGizmo;
 
-    // F. Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+    // F. Studio 3-Point CAD Rig & Ambient Lighting
+    // Sky Color: #ffffff, Ground Color: #18181b, Intensity: 0.35 (No face renders pitch-black)
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x18181b, 0.35);
+    hemiLight.position.set(0, 20, 0);
+    scene.add(hemiLight);
+    hemiLightRef.current = hemiLight;
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
     scene.add(ambientLight);
     ambientLightRef.current = ambientLight;
 
+    // Key Light (Directional, Studio position [5, 12, 7], intensity 2.0, soft PCF shadows)
     const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
-    keyLight.position.set(5, 10, 7);
+    keyLight.position.set(5, 12, 7);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.width = 2048;
     keyLight.shadow.mapSize.height = 2048;
     keyLight.shadow.bias = -0.0001;
+    keyLight.shadow.camera.near = 0.5;
+    keyLight.shadow.camera.far = 40;
+    keyLight.shadow.camera.left = -6;
+    keyLight.shadow.camera.right = 6;
+    keyLight.shadow.camera.top = 6;
+    keyLight.shadow.camera.bottom = -6;
     scene.add(keyLight);
     keyLightRef.current = keyLight;
 
-    const fillLight = new THREE.DirectionalLight(0x94a3b8, 0.7);
-    fillLight.position.set(-6, 3, -5);
+    // Fill Light (Directional, Position [-6, 4, -5], Cool neutral grey #e2e8f0, intensity 0.8)
+    const fillLight = new THREE.DirectionalLight(0xe2e8f0, 0.8);
+    fillLight.position.set(-6, 4, -5);
     scene.add(fillLight);
     fillLightRef.current = fillLight;
 
-    const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    rimLight.position.set(0, -5, -6);
+    // Rim / Edge Light (Directional, Position [0, -5, -8], Color #f1f5f9, intensity 1.2)
+    const rimLight = new THREE.DirectionalLight(0xf1f5f9, 1.2);
+    rimLight.position.set(0, -5, -8);
     scene.add(rimLight);
     rimLightRef.current = rimLight;
+
+    // Camera Inspection Headlamp (Locked to camera origin, look direction, intensity 0.8)
+    const headlamp = new THREE.DirectionalLight(0xffffff, 0.8);
+    headlamp.position.copy(perspCamera.position);
+    scene.add(headlamp);
+    scene.add(headlamp.target);
+    headlampRef.current = headlamp;
 
     // G. Workstation Helpers (Horizon-Fade Grid & Ground Contact Shadow Catcher)
     const gridGeo = new THREE.PlaneGeometry(60, 60);
@@ -832,11 +972,16 @@ export function Viewport3D({
     scene.add(wireOverlayGroup);
     wireOverlayGroupRef.current = wireOverlayGroup;
 
-    // I. Selection Box Outline Helper
+    // I. Selection Box Outline Helper & Group
     const boxHelper = new THREE.BoxHelper(new THREE.Mesh(), 0xea580c);
     boxHelper.visible = false;
     scene.add(boxHelper);
     selectionBoxHelperRef.current = boxHelper;
+
+    const selectionGroup = new THREE.Group();
+    selectionGroup.name = "selection_helpers_group";
+    scene.add(selectionGroup);
+    selectionHelpersGroupRef.current = selectionGroup;
 
     // Sculpt Brush Ring Indicator Cursor
     const ringGeo = new THREE.RingGeometry(0.32, 0.35, 32);
@@ -924,18 +1069,50 @@ export function Viewport3D({
         setCurrentFrame(currentFrameRef.current);
 
         const progress = currentFrameRef.current / totalF;
-        narrativeCharacterRef.current.updateAtProgress(progress, totalF / 30);
+        narrativeCharacterRef.current.updateAtProgress(progress, totalF / 30, terrainMeshRef.current);
+
+        // Formant Lip-Sync Viseme Evaluation
+        if (audioSynthesizerRef.current?.isLoaded) {
+          const vis = audioSynthesizerRef.current.getVisemeAtFrame(currentFrameRef.current);
+          narrativeCharacterRef.current.updateVisemes(vis);
+        }
 
         if (directorCameraRigRef.current && isDirectorCameraActiveRef.current) {
           directorCameraRigRef.current.updateAtFrame(currentFrameRef.current, totalF);
         }
       }
 
-      orbit.update();
-      universalGizmo.update();
+      // Safety guard against TransformControls unparented object warning
+      if (transform.object && !transform.object.parent) {
+        transform.detach();
+      }
+
       const activeCamera = isOrtho ? orthoCamera : perspCamera;
       universalGizmo.setCamera(activeCamera);
-      renderer.render(scene, activeCamera);
+
+      // Camera-Attached CAD Headlamp (Inspection Light follows view angle)
+      if (headlampRef.current) {
+        if (headlampEnabledRef.current) {
+          headlampRef.current.visible = true;
+          headlampRef.current.position.copy(activeCamera.position);
+          const dir = new THREE.Vector3();
+          activeCamera.getWorldDirection(dir);
+          headlampRef.current.target.position.copy(activeCamera.position).add(dir.multiplyScalar(5));
+          headlampRef.current.target.updateMatrixWorld();
+        } else {
+          headlampRef.current.visible = false;
+        }
+      }
+
+      orbit.update();
+      universalGizmo.update();
+
+      if (postPipelineRef.current && isPostProcessingEnabledRef.current) {
+        postPipelineRef.current.updateCamera(activeCamera);
+        postPipelineRef.current.render();
+      } else {
+        renderer.render(scene, activeCamera);
+      }
     };
     animate();
 
@@ -957,6 +1134,9 @@ export function Viewport3D({
       orthoCamera.updateProjectionMatrix();
 
       renderer.setSize(w, h);
+      if (postPipelineRef.current) {
+        postPipelineRef.current.setSize(w, h);
+      }
     };
     window.addEventListener("resize", handleResize);
     const ro = new ResizeObserver(() => handleResize());
@@ -968,6 +1148,9 @@ export function Viewport3D({
       cancelAnimationFrame(animationFrameId);
       orbit.dispose();
       transform.dispose();
+      if (postPipelineRef.current) {
+        postPipelineRef.current.dispose();
+      }
       renderer.dispose();
       universalGizmo.dispose();
       if (container.contains(renderer.domElement)) {
@@ -1391,54 +1574,84 @@ export function Viewport3D({
       new THREE.Vector2(x, y),
       isOrtho && orthoCameraRef.current ? orthoCameraRef.current : cameraRef.current
     );
-    const intersects = raycasterRef.current.intersectObjects(currentModelRef.current.children, true);
+
+    // Build a filtered list of selectable meshes: visible, not helper/gizmo
+    const collectSelectable = (obj: THREE.Object3D, out: THREE.Object3D[]) => {
+      if (!obj.visible) return;
+      if (obj instanceof THREE.Mesh) {
+        const n = obj.name || "";
+        const isHelper = n.includes("Helper") || n.includes("Gizmo") || n.includes("Grid") ||
+          n.includes("Selection") || obj.userData?.isHelper === true || obj.userData?.isGizmo === true;
+        if (!isHelper) out.push(obj);
+      }
+      for (const c of obj.children) collectSelectable(c, out);
+    };
+
+    const selectable: THREE.Object3D[] = [];
+    for (const child of currentModelRef.current.children) collectSelectable(child, selectable);
+
+    const intersects = raycasterRef.current.intersectObjects(selectable, false);
 
     if (intersects.length > 0) {
+      // Front-face priority: find the first intersection whose face normal
+      // faces the camera (i.e. hit.face normal dot ray direction < 0).
+      // Fall back to the closest intersection if none pass the front-face test
+      // (e.g. non-indexed or degenerate geometry).
       let hitMesh: THREE.Mesh | null = null;
       for (const hit of intersects) {
-        if (hit.object instanceof THREE.Mesh) {
-          hitMesh = hit.object;
+        if (!(hit.object instanceof THREE.Mesh)) continue;
+        if (!hit.object.visible) continue;
+        if (hit.face) {
+          const normal = hit.face.normal.clone();
+          // Transform normal to world space to compare with ray direction
+          const worldNormal = normal
+            .clone()
+            .applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld))
+            .normalize();
+          const dot = worldNormal.dot(raycasterRef.current.ray.direction);
+          if (dot < 0) {
+            hitMesh = hit.object; // front-facing
+            break;
+          }
+        } else {
+          hitMesh = hit.object; // no face data — accept closest
           break;
         }
       }
 
+      // Fallback: if no front-facing hit found, take the closest mesh hit
+      if (!hitMesh) {
+        for (const hit of intersects) {
+          if (hit.object instanceof THREE.Mesh && hit.object.visible) {
+            hitMesh = hit.object;
+            break;
+          }
+        }
+      }
+
       if (hitMesh) {
-        setSelectedMesh(hitMesh);
-        onMeshSelect?.(hitMesh.name);
-        universalGizmoRef.current?.attach(hitMesh);
-
-        // Update live transform state to match selected mesh
-        setLiveTransform({
-          pos: [
-            parseFloat(hitMesh.position.x.toFixed(2)),
-            parseFloat(hitMesh.position.y.toFixed(2)),
-            parseFloat(hitMesh.position.z.toFixed(2)),
-          ],
-          rot: [
-            parseFloat(THREE.MathUtils.radToDeg(hitMesh.rotation.x).toFixed(1)),
-            parseFloat(THREE.MathUtils.radToDeg(hitMesh.rotation.y).toFixed(1)),
-            parseFloat(THREE.MathUtils.radToDeg(hitMesh.rotation.z).toFixed(1)),
-          ],
-          scale: [
-            parseFloat(hitMesh.scale.x.toFixed(2)),
-            parseFloat(hitMesh.scale.y.toFixed(2)),
-            parseFloat(hitMesh.scale.z.toFixed(2)),
-          ],
-        });
-
-        // Read current material values
-        const mat = hitMesh.material as THREE.MeshStandardMaterial;
-        if (mat && mat.color) {
-          setMatColor(`#${mat.color.getHexString()}`);
-          setMatRoughness(mat.roughness ?? 0.35);
-          setMatMetalness(mat.metalness ?? 0.25);
+        if (e.ctrlKey || e.shiftKey) {
+          setSelectedMeshes((prev) => {
+            const exists = prev.some((m) => m === hitMesh || m.name === hitMesh!.name);
+            if (exists) {
+              return prev.filter((m) => m !== hitMesh && m.name !== hitMesh!.name);
+            } else {
+              return [...prev, hitMesh!];
+            }
+          });
+        } else {
+          setSelectedMeshes([hitMesh]);
         }
       }
     } else {
-      // Clicked in empty space -> Deselect cleanly and hide gizmo
-      setSelectedMesh(null);
-      onMeshSelect?.(null);
-      universalGizmoRef.current?.attach(null);
+      // Clicked in empty space -> Deselect cleanly unless Ctrl or Shift held
+      if (!e.ctrlKey && !e.shiftKey) {
+        setSelectedMeshes([]);
+        onMeshSelect?.(null);
+        universalGizmoRef.current?.attach(null);
+        universalGizmoRef.current?.setSecondaryTargets([]);
+        transformControlsRef.current?.detach();
+      }
     }
   };
 
@@ -1452,37 +1665,123 @@ export function Viewport3D({
       new THREE.Vector2(x, y),
       isOrtho && orthoCameraRef.current ? orthoCameraRef.current : cameraRef.current
     );
-    const intersects = raycasterRef.current.intersectObjects(currentModelRef.current.children, true);
+
+    // Same filtered, front-face-priority raycast as handlePointerUp
+    const collectSelectable = (obj: THREE.Object3D, out: THREE.Object3D[]) => {
+      if (!obj.visible) return;
+      if (obj instanceof THREE.Mesh) {
+        const n = obj.name || "";
+        const isHelper = n.includes("Helper") || n.includes("Gizmo") || n.includes("Grid") ||
+          n.includes("Selection") || obj.userData?.isHelper === true || obj.userData?.isGizmo === true;
+        if (!isHelper) out.push(obj);
+      }
+      for (const c of obj.children) collectSelectable(c, out);
+    };
+    const selectable: THREE.Object3D[] = [];
+    for (const child of currentModelRef.current.children) collectSelectable(child, selectable);
+
+    const intersects = raycasterRef.current.intersectObjects(selectable, false);
 
     if (intersects.length > 0) {
       let hitMesh: THREE.Mesh | null = null;
       for (const hit of intersects) {
-        if (hit.object instanceof THREE.Mesh) {
+        if (!(hit.object instanceof THREE.Mesh) || !hit.object.visible) continue;
+        if (hit.face) {
+          const worldNormal = hit.face.normal
+            .clone()
+            .applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld))
+            .normalize();
+          if (worldNormal.dot(raycasterRef.current.ray.direction) < 0) {
+            hitMesh = hit.object;
+            break;
+          }
+        } else {
           hitMesh = hit.object;
           break;
         }
       }
+      if (!hitMesh) {
+        for (const hit of intersects) {
+          if (hit.object instanceof THREE.Mesh && hit.object.visible) {
+            hitMesh = hit.object;
+            break;
+          }
+        }
+      }
       if (hitMesh) {
-        setSelectedMesh(hitMesh);
-        onMeshSelect?.(hitMesh.name);
-        universalGizmoRef.current?.attach(hitMesh);
-        smoothFocusObject(hitMesh);
+        setSelectedMeshes([hitMesh]);
+        smoothFocusObjects([hitMesh]);
       }
     } else if (currentModelRef.current) {
-      smoothFocusObject(currentModelRef.current);
+      smoothFocusObjects([currentModelRef.current]);
     }
   };
 
-  // Sync selection outline bounding box helper
+  // Sync Selection Outlines & Universal Gizmo on selectedMeshes change
   useEffect(() => {
-    if (!selectionBoxHelperRef.current) return;
-    if (selectedMesh) {
-      selectionBoxHelperRef.current.setFromObject(selectedMesh);
-      selectionBoxHelperRef.current.visible = true;
-    } else {
-      selectionBoxHelperRef.current.visible = false;
+    const activeMesh = selectedMeshes.length > 0 ? selectedMeshes[selectedMeshes.length - 1] : null;
+    onMeshSelect?.(activeMesh ? activeMesh.name : null);
+
+    if (universalGizmoRef.current) {
+      universalGizmoRef.current.attach(activeMesh);
+      universalGizmoRef.current.setSecondaryTargets(selectedMeshes.filter((m) => m !== activeMesh));
     }
-  }, [selectedMesh]);
+    if (transformControlsRef.current && (!activeMesh || !activeMesh.parent)) {
+      transformControlsRef.current.detach();
+    }
+
+    if (activeMesh) {
+      setLiveTransform({
+        pos: [
+          parseFloat(activeMesh.position.x.toFixed(2)),
+          parseFloat(activeMesh.position.y.toFixed(2)),
+          parseFloat(activeMesh.position.z.toFixed(2)),
+        ],
+        rot: [
+          parseFloat(THREE.MathUtils.radToDeg(activeMesh.rotation.x).toFixed(1)),
+          parseFloat(THREE.MathUtils.radToDeg(activeMesh.rotation.y).toFixed(1)),
+          parseFloat(THREE.MathUtils.radToDeg(activeMesh.rotation.z).toFixed(1)),
+        ],
+        scale: [
+          parseFloat(activeMesh.scale.x.toFixed(2)),
+          parseFloat(activeMesh.scale.y.toFixed(2)),
+          parseFloat(activeMesh.scale.z.toFixed(2)),
+        ],
+      });
+
+      const mat = activeMesh.material as THREE.MeshStandardMaterial;
+      if (mat && mat.color) {
+        setMatColor(`#${mat.color.getHexString()}`);
+        setMatRoughness(mat.roughness ?? 0.35);
+        setMatMetalness(mat.metalness ?? 0.25);
+      }
+    }
+
+    // Rebuild multi-selection helpers (Gold for active mesh, amber for other selected meshes)
+    if (selectionHelpersGroupRef.current) {
+      while (selectionHelpersGroupRef.current.children.length > 0) {
+        const child = selectionHelpersGroupRef.current.children[0];
+        selectionHelpersGroupRef.current.remove(child);
+        if (child instanceof THREE.BoxHelper) {
+          child.geometry.dispose();
+          (child.material as THREE.Material).dispose();
+        }
+      }
+
+      for (const m of selectedMeshes) {
+        const isActive = m === activeMesh;
+        const color = isActive ? 0xf59e0b : 0xd97706;
+        const helper = new THREE.BoxHelper(m, color);
+        helper.visible = true;
+        selectionHelpersGroupRef.current.add(helper);
+      }
+    }
+
+    // Update Blender-style OutlinePass glow for selected meshes
+    if (postPipelineRef.current) {
+      postPipelineRef.current.setOutlineTargets(selectedMeshes);
+    }
+  }, [selectedMeshes, onMeshSelect]);
 
   // Sync external mesh selection (e.g. from Scene Outliner in right drawer)
   useEffect(() => {
@@ -1512,17 +1811,13 @@ export function Viewport3D({
     }
   }, [transformMode, snapEnabled, gridSnapUnit, rotationSnapStep, isShiftHeld, isCtrlHeld]);
 
-  // Sync Universal Gizmo Attachment on selectedMesh change
-  useEffect(() => {
-    if (universalGizmoRef.current) {
-      universalGizmoRef.current.attach(selectedMesh);
+  // Smooth Focus Camera Animation on Objects
+  const smoothFocusObjects = useCallback((objects: THREE.Object3D[]) => {
+    if (!cameraRef.current || !orbitControlsRef.current || objects.length === 0) return;
+    const box = new THREE.Box3();
+    for (const obj of objects) {
+      box.expandByObject(obj);
     }
-  }, [selectedMesh]);
-
-  // Smooth Focus Camera Animation on Object
-  const smoothFocusObject = useCallback((obj: THREE.Object3D) => {
-    if (!cameraRef.current || !orbitControlsRef.current) return;
-    const box = new THREE.Box3().setFromObject(obj);
     const center = new THREE.Vector3();
     box.getCenter(center);
     const size = new THREE.Vector3();
@@ -1557,6 +1852,10 @@ export function Viewport3D({
     };
     requestAnimationFrame(animateFocus);
   }, []);
+
+  const smoothFocusObject = useCallback((obj: THREE.Object3D) => {
+    smoothFocusObjects([obj]);
+  }, [smoothFocusObjects]);
 
   // 1-Click Transform Reset Actions for Selected Mesh
   const handlePlaceOnFloor = useCallback(() => {
@@ -1604,7 +1903,7 @@ export function Viewport3D({
     if (!transformControlsRef.current) return;
     const tc = transformControlsRef.current;
 
-    if (transformMode === "select" || transformMode === "all") {
+    if (transformMode !== "translate" && transformMode !== "rotate" && transformMode !== "scale") {
       tc.enabled = false;
       tc.detach();
     } else {
@@ -1671,7 +1970,7 @@ export function Viewport3D({
       }
 
       const target = selectedMesh || currentModelRef.current;
-      if (target) {
+      if (target && target.parent) {
         tc.attach(target);
         if (!preTransformSnapshotRef.current) {
           preTransformSnapshotRef.current = {
@@ -1680,6 +1979,8 @@ export function Viewport3D({
             scale: target.scale.clone(),
           };
         }
+      } else {
+        tc.detach();
       }
     }
   }, [
@@ -1870,19 +2171,10 @@ export function Viewport3D({
 
   // Frame / Focus Camera on Selected Mesh (Numpad . or F)
   const handleFocus = useCallback(() => {
-    const targetObj = selectedMesh || currentModelRef.current;
-    if (!targetObj || !orbitControlsRef.current || !cameraRef.current) return;
-    const box = new THREE.Box3().setFromObject(targetObj);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-    const sphere = new THREE.Sphere();
-    box.getBoundingSphere(sphere);
-    const dist = Math.max(sphere.radius * 2.2, 1.5);
-    orbitControlsRef.current.target.copy(center);
-    cameraRef.current.position.set(center.x + dist * 0.7, center.y + dist * 0.5, center.z + dist * 0.7);
-    cameraRef.current.lookAt(center);
-    orbitControlsRef.current.update();
-  }, [selectedMesh]);
+    const targets = selectedMeshes.length > 0 ? selectedMeshes : (currentModelRef.current ? [currentModelRef.current] : []);
+    if (targets.length === 0 || !orbitControlsRef.current || !cameraRef.current) return;
+    smoothFocusObjects(targets);
+  }, [selectedMeshes, smoothFocusObjects]);
 
   // --- Modern Dope Sheet Keyframe Handlers ---
   const handleSeekFrame = useCallback((frame: number) => {
@@ -2041,47 +2333,75 @@ export function Viewport3D({
     if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
   };
 
-  // Duplicate Selected Sub-Mesh (Shift + D)
+  // Duplicate Selected Sub-Meshes (Shift + D)
   const handleDuplicate = useCallback(() => {
-    if (!selectedMesh || !currentModelRef.current) return;
-    const clone = selectedMesh.clone(true);
-    const count = meshList.filter((m) => m.name.startsWith(selectedMesh.name)).length;
-    clone.name = `${selectedMesh.name}.${String(count).padStart(3, "0")}`;
-    clone.position.x += 0.5;
-    clone.updateMatrixWorld();
-    selectedMesh.parent?.add(clone);
+    const targets = selectedMeshes.length > 0 ? selectedMeshes : (selectedMesh ? [selectedMesh] : []);
+    if (targets.length === 0 || !currentModelRef.current) return;
 
-    const geom = clone.geometry as THREE.BufferGeometry;
-    const tris = geom.index ? geom.index.count / 3 : (geom.attributes.position ? geom.attributes.position.count / 3 : 0);
-    const verts = geom.attributes.position ? geom.attributes.position.count : 0;
+    const newClones: THREE.Mesh[] = [];
+    const newItems: MeshNodeInfo[] = [];
 
-    const newInfo: MeshNodeInfo = {
-      id: clone.uuid,
-      name: clone.name,
-      triangles: Math.round(tris),
-      vertices: Math.round(verts),
-      visible: true,
-      meshRef: clone,
-    };
-    const updatedList = [...meshList, newInfo];
+    for (const target of targets) {
+      const clone = target.clone(true);
+      const count = meshList.filter((m) => m.name.startsWith(target.name)).length;
+      clone.name = `${target.name}.${String(count).padStart(3, "0")}`;
+      clone.position.x += 0.5;
+      clone.updateMatrixWorld();
+      target.parent?.add(clone);
+
+      const geom = clone.geometry as THREE.BufferGeometry;
+      const tris = geom.index ? geom.index.count / 3 : (geom.attributes.position ? geom.attributes.position.count / 3 : 0);
+      const verts = geom.attributes.position ? geom.attributes.position.count : 0;
+
+      newItems.push({
+        id: clone.uuid,
+        name: clone.name,
+        triangles: Math.round(tris),
+        vertices: Math.round(verts),
+        visible: true,
+        meshRef: clone,
+      });
+      newClones.push(clone);
+    }
+
+    const updatedList = [...meshList, ...newItems];
     setMeshList(updatedList);
     onMeshListUpdate?.(updatedList);
-    setSelectedMesh(clone);
-    onMeshSelect?.(clone.name);
-  }, [selectedMesh, meshList, onMeshListUpdate, onMeshSelect]);
+    setSelectedMeshes(newClones);
+    onMeshSelect?.(newClones[newClones.length - 1].name);
+    showUndoToast(`Duplicated ${newClones.length} mesh${newClones.length > 1 ? "es" : ""}`);
+  }, [selectedMeshes, selectedMesh, meshList, onMeshListUpdate, onMeshSelect, showUndoToast]);
 
-  // Delete Selected Sub-Mesh (X or Delete)
+  // Delete Selected Sub-Meshes (X or Delete)
   const handleDelete = useCallback(() => {
-    if (!selectedMesh || !currentModelRef.current) return;
-    if (transformControlsRef.current) transformControlsRef.current.detach();
-    selectedMesh.removeFromParent();
+    const targets = selectedMeshes.length > 0 ? selectedMeshes : (selectedMesh ? [selectedMesh] : []);
+    if (targets.length === 0) return;
 
-    const newMeshList = meshList.filter((m) => m.name !== selectedMesh.name);
+    if (transformControlsRef.current) {
+      transformControlsRef.current.detach();
+    }
+    if (universalGizmoRef.current) {
+      universalGizmoRef.current.attach(null);
+    }
+    if (selectionBoxHelperRef.current) {
+      selectionBoxHelperRef.current.visible = false;
+    }
+
+    const targetNames = new Set(targets.map((t) => t.name));
+    for (const target of targets) {
+      target.removeFromParent();
+      if (currentModelRef.current === target) {
+        currentModelRef.current = null;
+      }
+    }
+
+    const newMeshList = meshList.filter((m) => !targetNames.has(m.name));
     setMeshList(newMeshList);
     onMeshListUpdate?.(newMeshList);
-    setSelectedMesh(null);
+    setSelectedMeshes([]);
     onMeshSelect?.(null);
-  }, [selectedMesh, meshList, onMeshListUpdate, onMeshSelect]);
+    showUndoToast(`Deleted ${targets.length} mesh${targets.length > 1 ? "es" : ""}`);
+  }, [selectedMeshes, selectedMesh, meshList, onMeshListUpdate, onMeshSelect, showUndoToast]);
 
   // Standard Camera Presets (Front, Back, Top, Bottom, Right, Left, Iso)
   const setCameraPreset = useCallback((preset: CameraView) => {
@@ -2117,48 +2437,7 @@ export function Viewport3D({
     orbitControlsRef.current.update();
   }, []);
 
-  // --- DCC Quick Tools Handlers ---
-  const selectMeshByName = useCallback((meshName: string | null) => {
-    if (!meshName) {
-      setSelectedMesh(null);
-      onMeshSelect?.(null);
-      if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.visible = false;
-      return;
-    }
-    const hit = meshList.find((m) => m.name === meshName);
-    if (hit && hit.meshRef) {
-      const hitMesh = hit.meshRef;
-      setSelectedMesh(hitMesh);
-      onMeshSelect?.(hitMesh.name);
-      setLiveTransform({
-        pos: [
-          parseFloat(hitMesh.position.x.toFixed(2)),
-          parseFloat(hitMesh.position.y.toFixed(2)),
-          parseFloat(hitMesh.position.z.toFixed(2)),
-        ],
-        rot: [
-          parseFloat(THREE.MathUtils.radToDeg(hitMesh.rotation.x).toFixed(1)),
-          parseFloat(THREE.MathUtils.radToDeg(hitMesh.rotation.y).toFixed(1)),
-          parseFloat(THREE.MathUtils.radToDeg(hitMesh.rotation.z).toFixed(1)),
-        ],
-        scale: [
-          parseFloat(hitMesh.scale.x.toFixed(2)),
-          parseFloat(hitMesh.scale.y.toFixed(2)),
-          parseFloat(hitMesh.scale.z.toFixed(2)),
-        ],
-      });
-      const mat = hitMesh.material as THREE.MeshStandardMaterial;
-      if (mat && mat.color) {
-        setMatColor(`#${mat.color.getHexString()}`);
-        if (mat.roughness !== undefined) setMatRoughness(mat.roughness);
-        if (mat.metalness !== undefined) setMatMetalness(mat.metalness);
-      }
-      if (selectionBoxHelperRef.current) {
-        selectionBoxHelperRef.current.setFromObject(hitMesh);
-        selectionBoxHelperRef.current.visible = true;
-      }
-    }
-  }, [meshList, onMeshSelect]);
+
 
   const updateLightingStage = useCallback((stage: LightingStage) => {
     setCurrentLightingStage(stage);
@@ -2558,9 +2837,17 @@ export function Viewport3D({
       }
       if (e.key.toLowerCase() === "w" && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
-        setTransformMode("translate");
-        setIsModalTransforming(false);
-        setAxisConstraint("none");
+        if (transformMode === "select") {
+          setSelectionTool((prev) => {
+            const cycle: SelectionTool[] = ["tweak", "box", "circle", "lasso"];
+            const idx = cycle.indexOf(prev);
+            return cycle[(idx + 1) % cycle.length];
+          });
+        } else {
+          setTransformMode("translate");
+          setIsModalTransforming(false);
+          setAxisConstraint("none");
+        }
         return;
       }
       if (e.key.toLowerCase() === "e" && !e.ctrlKey && !e.altKey) {
@@ -2568,6 +2855,20 @@ export function Viewport3D({
         setTransformMode("rotate");
         setIsModalTransforming(false);
         setAxisConstraint("none");
+        return;
+      }
+
+      // B -> Box Select Tool Toggle
+      if (e.key.toLowerCase() === "b" && !e.ctrlKey && !e.altKey && !e.shiftKey && !isModalTransforming) {
+        e.preventDefault();
+        setSelectionTool((prev) => (prev === "box" ? "tweak" : "box"));
+        return;
+      }
+
+      // C -> Circle Select Tool Toggle
+      if (e.key.toLowerCase() === "c" && !e.ctrlKey && !e.altKey && !e.shiftKey && !isModalTransforming) {
+        e.preventDefault();
+        setSelectionTool((prev) => (prev === "circle" ? "tweak" : "circle"));
         return;
       }
 
@@ -2622,23 +2923,39 @@ export function Viewport3D({
         return;
       }
 
+      // Ctrl + I -> Invert Selection
+      if (e.ctrlKey && e.key.toLowerCase() === "i") {
+        e.preventDefault();
+        setSelectedMeshes((prev) => {
+          const selectedSet = new Set(prev);
+          const inverted = meshList.map((m) => m.meshRef).filter((m) => m && !selectedSet.has(m));
+          if (inverted.length > 0) {
+            onMeshSelect?.(inverted[inverted.length - 1].name);
+          } else {
+            onMeshSelect?.(null);
+          }
+          return inverted;
+        });
+        return;
+      }
+
       // Selection: A (Select All) / Alt + A or Double A (Deselect)
       if (e.key.toLowerCase() === "a" && !e.ctrlKey && !e.shiftKey) {
         e.preventDefault();
         if (e.altKey) {
-          setSelectedMesh(null);
+          setSelectedMeshes([]);
           onMeshSelect?.(null);
         } else {
           const now = Date.now();
-          if (now - lastAPressTimeRef.current < 400 && selectedMesh) {
-            setSelectedMesh(null);
+          if (now - lastAPressTimeRef.current < 400 && selectedMeshes.length > 0) {
+            setSelectedMeshes([]);
             onMeshSelect?.(null);
           } else {
-            // Select first mesh or whole object
-            if (meshList.length > 0) {
-              const target = meshList[0].meshRef;
-              setSelectedMesh(target);
-              onMeshSelect?.(target.name);
+            // Select ALL meshes in the scene
+            const allMeshes = meshList.map((m) => m.meshRef).filter(Boolean);
+            setSelectedMeshes(allMeshes);
+            if (allMeshes.length > 0) {
+              onMeshSelect?.(allMeshes[allMeshes.length - 1].name);
             }
           }
           lastAPressTimeRef.current = now;
@@ -2877,6 +3194,138 @@ export function Viewport3D({
     setMeshList(list);
     onMeshListUpdate?.(list);
   };
+
+  // -------------------------------------------------------------
+  // Instant Procedural Model Synthesis & CAD Prompt Execution
+  // -------------------------------------------------------------
+  const refreshMeshList = useCallback(() => {
+    if (!rootModelGroupRef.current) return;
+    const list: MeshNodeInfo[] = [];
+    rootModelGroupRef.current.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.name && !child.name.includes("Helper")) {
+        list.push({
+          id: child.uuid,
+          name: child.name,
+          triangles: child.geometry.index ? child.geometry.index.count / 3 : child.geometry.attributes.position.count / 3,
+          vertices: child.geometry.attributes.position.count,
+          visible: child.visible,
+          meshRef: child,
+        });
+      }
+    });
+    setMeshList(list);
+    onMeshListUpdate?.(list);
+  }, [onMeshListUpdate]);
+
+  const handleClearCanvas = useCallback(() => {
+    if (transformControlsRef.current) {
+      transformControlsRef.current.detach();
+      transformControlsRef.current.enabled = false;
+    }
+    if (universalGizmoRef.current) {
+      universalGizmoRef.current.attach(null);
+    }
+    if (selectionBoxHelperRef.current) {
+      selectionBoxHelperRef.current.visible = false;
+    }
+    if (rootModelGroupRef.current) {
+      while (rootModelGroupRef.current.children.length > 0) {
+        const child = rootModelGroupRef.current.children[0];
+        rootModelGroupRef.current.remove(child);
+        child.traverse((sub) => {
+          if (sub instanceof THREE.Mesh) {
+            sub.geometry?.dispose();
+            if (Array.isArray(sub.material)) {
+              sub.material.forEach((m) => m.dispose());
+            } else {
+              sub.material?.dispose();
+            }
+          }
+        });
+      }
+    }
+    currentModelRef.current = null;
+    setSelectedMesh(null);
+    onMeshSelect?.(null);
+    setMeshList([]);
+    setLastAddedPrimitive(null);
+    showUndoToast("Clear Canvas");
+  }, [onMeshSelect, showUndoToast]);
+
+  const handleGenerateModelFromPrompt = useCallback(
+    (promptText: string, format: ExportFormat = "glb") => {
+      if (!sceneRef.current) return;
+      setIsLoadingModel(true);
+
+      // Detach any active gizmos to prevent dangling unparented references
+      if (transformControlsRef.current) {
+        transformControlsRef.current.detach();
+      }
+      if (universalGizmoRef.current) {
+        universalGizmoRef.current.attach(null);
+      }
+      if (selectionBoxHelperRef.current) {
+        selectionBoxHelperRef.current.visible = false;
+      }
+
+      // 1. Instant interactive procedural CAD preview in the scene (0ms)
+      try {
+        const proceduralMesh = generateProceduralModelFromPrompt(promptText);
+        if (proceduralMesh && rootModelGroupRef.current) {
+          while (rootModelGroupRef.current.children.length > 0) {
+            const child = rootModelGroupRef.current.children[0];
+            rootModelGroupRef.current.remove(child);
+            child.traverse((sub) => {
+              if (sub instanceof THREE.Mesh) {
+                sub.geometry?.dispose();
+                if (Array.isArray(sub.material)) {
+                  sub.material.forEach((m) => m.dispose());
+                } else {
+                  sub.material?.dispose();
+                }
+              }
+            });
+          }
+
+          rootModelGroupRef.current.add(proceduralMesh);
+          currentModelRef.current = proceduralMesh;
+
+          // Find first mesh in hierarchy for selection
+          let firstMesh: THREE.Mesh | null = null;
+          if (proceduralMesh instanceof THREE.Mesh) {
+            firstMesh = proceduralMesh;
+          } else {
+            proceduralMesh.traverse((child) => {
+              if (!firstMesh && child instanceof THREE.Mesh) {
+                firstMesh = child;
+              }
+            });
+          }
+
+          if (firstMesh) {
+            setSelectedMesh(firstMesh);
+            onMeshSelect?.(firstMesh.name);
+          } else {
+            setSelectedMesh(null);
+            onMeshSelect?.(null);
+          }
+
+          refreshMeshList();
+          handleFocus();
+          setIsLoadingModel(false);
+          showUndoToast(`Generated: ${promptText.slice(0, 24)}...`);
+        }
+      } catch (err) {
+        console.warn("Procedural instant preview fallback:", err);
+      }
+
+      // 2. Call backend tool to generate high quality model / blender pipeline
+      if (onExecuteTool) {
+        onExecuteTool("cad_model", { prompt: promptText, format } as any);
+      }
+    },
+    [onExecuteTool, refreshMeshList, handleFocus, onMeshSelect, showUndoToast]
+  );
 
   // -------------------------------------------------------------
   // Narrative Scene Synthesis & Procedural Assembly
@@ -3149,11 +3598,60 @@ export function Viewport3D({
   };
 
   // -------------------------------------------------------------
-  // Direct Multi-Format Exporters (GLB, STL, OBJ, PNG Snapshot)
+  // Direct Multi-Format Exporters (GLB, STL, OBJ, BLEND, PNG Snapshot)
   // -------------------------------------------------------------
-  const handleExportDirect = (exportFmt: "glb" | "stl" | "obj" | "png", alphaBackground = false) => {
+  const handleExportDirect = (exportFmt: "glb" | "stl" | "obj" | "png" | "blend", alphaBackground = false) => {
     if (!rootModelGroupRef.current || !rendererRef.current) return;
     const baseName = assetName ? assetName.replace(/\.[^/.]+$/, "") : "kosh_scene";
+
+    if (exportFmt === "blend") {
+      setIsExportMenuOpen(false);
+      showUndoToast("Generating native .blend file with Blender...");
+      try {
+        const exporter = new GLTFExporter();
+        exporter.parse(
+          rootModelGroupRef.current,
+          async (gltf) => {
+            try {
+              const glbBlob = new Blob([gltf as ArrayBuffer], { type: "model/gltf-binary" });
+              const targetUrl = `${apiBase || ""}/api/assets/export-blend?name=${encodeURIComponent(baseName)}`;
+              const res = await fetch(targetUrl, {
+                method: "POST",
+                headers: { "Content-Type": "model/gltf-binary" },
+                body: glbBlob,
+              });
+
+              if (!res.ok) {
+                throw new Error(`Blender export failed with HTTP ${res.status}`);
+              }
+
+              const blendBlob = await res.blob();
+              const url = URL.createObjectURL(blendBlob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `${baseName}.blend`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+              showUndoToast("Downloaded native .blend scene");
+            } catch (err: any) {
+              console.error("Native .blend export error:", err);
+              showUndoToast(`Blend export error: ${err.message || "Failed"}`);
+            }
+          },
+          (err) => {
+            console.error("GLTF scene parse error before Blender conversion:", err);
+            showUndoToast("Failed to serialize scene for Blender");
+          },
+          { binary: true }
+        );
+      } catch (e: any) {
+        console.error("Blend export error:", e);
+        showUndoToast("Failed to generate .blend");
+      }
+      return;
+    }
 
     if (exportFmt === "glb") {
       const exporter = new GLTFExporter();
@@ -3360,6 +3858,10 @@ export function Viewport3D({
         onOpenPasteBpy={onOpenPasteBpy || (() => {})}
         onOpenShare={onOpenShare || (() => {})}
         onOpenShowcase={onOpenShowcase || (() => {})}
+        onOpenKeyModal={() => setIsKeyModalOpen(true)}
+        onExport={handleExportDirect}
+        selectedCount={selectedMeshes.length}
+        onClearCanvas={handleClearCanvas}
         interactionMode={interactionMode}
         onSetInteractionMode={setInteractionMode}
         shadingMode={shadingMode}
@@ -3405,7 +3907,7 @@ export function Viewport3D({
 
       {/* Persistent Undo / Redo Floating Toast */}
       {undoToast && (
-        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-40 px-3 py-1.5 bg-[#202024]/95 backdrop-blur border border-[#ea580c]/50 text-[#f4f4f5] rounded text-xs font-mono shadow-2xl flex items-center space-x-2 animate-fade-in pointer-events-none">
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-40 px-3 py-1.5 bg-[#202024] border border-[#ea580c]/50 text-[#f4f4f5] rounded text-xs font-mono shadow-2xl flex items-center space-x-2 animate-fade-in pointer-events-none">
           <span className="w-1.5 h-1.5 rounded-full bg-[#ea580c] animate-pulse" />
           <span>{undoToast}</span>
         </div>
@@ -3457,6 +3959,8 @@ export function Viewport3D({
                       isOpen={isTOpen}
                       transformMode={transformMode}
                       onSetTransformMode={setTransformMode}
+                      selectionTool={selectionTool}
+                      onSetSelectionTool={setSelectionTool}
                       onAddPrimitive={handleAddPrimitive}
                       tools={tools}
                       isLoading={isLoading}
@@ -3476,7 +3980,7 @@ export function Viewport3D({
                       {/* Friendly Live Numeric Dragging Badge (Attached to Mouse) */}
                       {liveDragBadge && (
                         <div
-                          className="pointer-events-none fixed z-50 px-2 py-1 rounded bg-[#18181b]/95 border border-[#ea580c] text-white font-mono text-[11px] shadow-2xl flex items-center space-x-1.5 backdrop-blur-xs transform -translate-x-1/2 -translate-y-full mb-2"
+                          className="pointer-events-none fixed z-50 px-2 py-1 rounded bg-[#18181b] border border-[#ea580c] text-white font-mono text-[11px] shadow-2xl flex items-center space-x-1.5 transform -translate-x-1/2 -translate-y-full mb-2"
                           style={{
                             left: `${liveDragBadge.x}px`,
                             top: `${liveDragBadge.y - 12}px`,
@@ -3490,7 +3994,7 @@ export function Viewport3D({
 
                       {/* Loading Spinner Overlay */}
                       {isLoadingModel && (
-                        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#141416]/80 text-[#f4f4f5]">
+                        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#141416]/90 text-[#f4f4f5]">
                           <div className="w-6 h-6 border-2 border-[#ea580c] border-t-transparent rounded-full animate-spin mb-2" />
                           <span className="font-mono text-xs text-[#a1a1aa]">PARSING 3D CAD GEOMETRY...</span>
                         </div>
@@ -3499,7 +4003,7 @@ export function Viewport3D({
                       {/* Shading Radial Pie Menu Overlay (Z Hotkey) */}
                       {isPieMenuOpen && (
                         <div
-                          className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-[1px]"
+                          className="absolute inset-0 z-40 flex items-center justify-center bg-black/60"
                           onClick={() => setIsPieMenuOpen(false)}
                         >
                           <div
@@ -3585,7 +4089,7 @@ export function Viewport3D({
                       {/* Mode Switcher Radial Pie Menu Overlay (Tab Hotkey) */}
                       {isTabPieMenuOpen && (
                         <div
-                          className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-[1px]"
+                          className="absolute inset-0 z-40 flex items-center justify-center bg-black/60"
                           onClick={() => setIsTabPieMenuOpen(false)}
                         >
                           <div
@@ -3765,10 +4269,18 @@ export function Viewport3D({
                       <CanvasOverlay
                         camera={isOrtho ? orthoCameraRef.current : cameraRef.current}
                         selectedMesh={selectedMesh}
+                        selectedMeshes={selectedMeshes}
                         currentModel={rootModelGroupRef.current}
                         meshList={meshList.map((m) => ({ name: m.name, meshRef: m.meshRef }))}
                         onSelectMesh={(meshName) => selectMeshByName(meshName)}
-                        transformMode={transformMode}
+                        onSelectMultiple={selectMultipleMeshes}
+                        selectionTool={selectionTool}
+                        onSetSelectionTool={setSelectionTool}
+                        transformMode={
+                          (["all", "select", "translate", "rotate", "scale"] as const).includes(transformMode as any)
+                            ? (transformMode as any)
+                            : "select"
+                        }
                         liveTransform={liveTransform}
                         axisConstraint={axisConstraint}
                         showDimensions={showDimensions}
@@ -3831,30 +4343,12 @@ export function Viewport3D({
                         </div>
                       )}
 
-                      {/* Aspect Ratio Framing Letterbox Matte */}
-                      <AspectRatioFramer
-                        mode={narrativeFramingMode}
-                        containerRef={containerRef}
-                      />
-
-                      {/* Floating Narrative Scene Director HUD */}
-                      <DirectorPromptBar
-                        onGenerate={handleGenerateNarrativeScene}
-                        framingMode={narrativeFramingMode}
-                        onSetFramingMode={setNarrativeFramingMode}
-                        onOpenExportModal={() => setIsVideoExportModalOpen(true)}
-                        hasActiveScene={narrativeDescriptor !== null}
-                        isPlaying={isPlaying}
-                        onTogglePlay={() => {
-                          const nextPlay = !isPlaying;
-                          setIsPlaying(nextPlay);
-                          isPlayingRef.current = nextPlay;
-                        }}
-                        currentFrame={currentFrame}
-                        totalFrames={totalFrames}
-                        onScrubFrame={handleSeekFrame}
-                        onResetScene={handleResetNarrativeScene}
-                        isGenerating={isGeneratingNarrative}
+                      {/* Sleek Floating CAD Command Prompt Bar (Bottom-Center) */}
+                      <ModelPromptBar
+                        onGenerate={handleGenerateModelFromPrompt}
+                        isLoading={isLoading || isLoadingModel}
+                        token={token}
+                        onOpenKeyModal={() => setIsKeyModalOpen(true)}
                       />
                     </div>
 
@@ -3863,8 +4357,10 @@ export function Viewport3D({
                       isOpen={isNOpen}
                       onToggleOpen={() => setIsNOpen(!isNOpen)}
                       selectedMeshName={selectedMesh?.name || null}
+                      selectedMeshNames={selectedMeshes.map((m) => m.name)}
                       meshList={meshList}
                       onSelectMesh={(name) => selectMeshByName(name)}
+                      onToggleSelectMesh={toggleMeshByName}
                       onToggleMeshVisibility={handleToggleMeshVisibility}
                       lockedMeshes={lockedMeshes}
                       onToggleMeshLock={handleToggleMeshLock}
@@ -3879,6 +4375,10 @@ export function Viewport3D({
                       onSubdivide={handleSubdivide}
                       isWireframe={shadingMode === "wireframe"}
                       onToggleWireframe={() => setShadingMode(shadingMode === "wireframe" ? "solid" : "wireframe")}
+                      onApplyModifier={(type, params) => {
+                        if (type === "subdivide") handleSubdivide();
+                        showUndoToast(`Apply ${type}`);
+                      }}
                       currentRoughness={matRoughness}
                       currentMetalness={matMetalness}
                       currentColor={matColor}
@@ -3917,6 +4417,19 @@ export function Viewport3D({
                     onChangeInterpolation={handleChangeInterpolation}
                     explodedFactor={explodedFactor}
                     onExplodedChange={handleExplodedChange}
+                    audioSynthesizer={audioSynthesizerRef.current}
+                  />
+                );
+
+              case "graph_editor":
+                return (
+                  <GraphEditorCanvas
+                    currentFrame={currentFrame}
+                    totalFrames={totalFrames}
+                    onSeekFrame={handleSeekFrame}
+                    isPlaying={isPlaying}
+                    onTogglePlay={() => setIsPlaying(!isPlaying)}
+                    onRewind={() => handleSeekFrame(0)}
                   />
                 );
 
@@ -3925,7 +4438,9 @@ export function Viewport3D({
                   <OutlinerEditor
                     meshList={meshList}
                     selectedMeshName={selectedMesh?.name || null}
+                    selectedMeshNames={selectedMeshes.map((m) => m.name)}
                     onSelectMesh={(name) => selectMeshByName(name)}
+                    onToggleSelectMesh={toggleMeshByName}
                     onToggleMeshVisibility={handleToggleMeshVisibility}
                     lockedMeshes={lockedMeshes}
                     onToggleMeshLock={handleToggleMeshLock}
@@ -4066,14 +4581,13 @@ export function Viewport3D({
         )}
       </div>
 
-      {/* Narrative Video Deterministic Export Modal */}
-      <VideoExportModal
-        isOpen={isVideoExportModalOpen}
-        onClose={() => setIsVideoExportModalOpen(false)}
-        sceneDescriptor={narrativeDescriptor}
-        scene={sceneRef.current}
-        character={narrativeCharacterRef.current}
-        cameraRig={directorCameraRigRef.current}
+      {/* Bring Your Own Key (BYOK) Gemini / Custom API Key Modal */}
+      <ApiKeyModal
+        isOpen={isKeyModalOpen}
+        onClose={() => setIsKeyModalOpen(false)}
+        token={token || ""}
+        onSaveToken={onSaveToken || (() => {})}
+        onClearToken={onClearToken || (() => {})}
       />
     </div>
   );

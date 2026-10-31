@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { NarrativeActor, ActorAction, CharacterType } from "./NarrativeSceneSchema";
 import { createLowPolyMaterial } from "./LowPolyProceduralLibrary";
+import { TwoBoneIKSolver } from "../animation/TwoBoneIKSolver";
 
 export interface CharacterJoints {
   root: THREE.Group;
@@ -9,6 +10,7 @@ export interface CharacterJoints {
   chest: THREE.Group;
   neck: THREE.Group;
   head: THREE.Group;
+  mouth?: THREE.Group;
   leftArm: THREE.Group;
   leftForearm: THREE.Group;
   leftHand: THREE.Group;
@@ -55,6 +57,19 @@ export class LowPolyCharacter {
   public currentMotion: ActorAction = "walk";
 
   private baseHipY: number = 0.88;
+  private raycaster = new THREE.Raycaster();
+  private downVector = new THREE.Vector3(0, -1, 0);
+
+  /**
+   * Viseme update for speech formant lip-sync
+   */
+  public updateVisemes(viseme: { jawDrop: number; mouthWide: number }) {
+    if (!this.joints.mouth) return;
+    const jd = Math.max(0, Math.min(1, viseme.jawDrop));
+    const mw = Math.max(0, Math.min(1, viseme.mouthWide));
+    this.joints.mouth.scale.set(1.0 + mw * 0.8, 1.0 + jd * 2.5, 1.0);
+    this.joints.mouth.position.y = 0.05 - jd * 0.02;
+  }
 
   constructor(descriptor: CharacterDescriptorCompatibility | NarrativeActor) {
     this.descriptor = descriptor as CharacterDescriptorCompatibility;
@@ -181,6 +196,16 @@ export class LowPolyCharacter {
       const visor = new THREE.Mesh(visorGeo, visorMat);
       visor.position.set(0, 0.14, 0.13);
       head.add(visor);
+
+      // Robot speaker / mouth bar (for lip-sync visemes)
+      var mouth = new THREE.Group();
+      mouth.position.set(0, 0.05, 0.142);
+      head.add(mouth);
+
+      const mouthMat = createLowPolyMaterial("#0284c7", { emissive: "#0284c7", emissiveIntensity: 0.8 });
+      const mouthGeo = new THREE.BoxGeometry(0.1, 0.02, 0.015);
+      const mouthMesh = new THREE.Mesh(mouthGeo, mouthMat);
+      mouth.add(mouthMesh);
     } else {
       const eyeMat = createLowPolyMaterial("#09090b");
       const eyeGeo = new THREE.BoxGeometry(0.04, 0.04, 0.02);
@@ -191,6 +216,16 @@ export class LowPolyCharacter {
       const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
       eyeR.position.set(0.07, 0.14, 0.145);
       head.add(eyeR);
+
+      // Mouth (for lip-sync visemes)
+      var mouth = new THREE.Group();
+      mouth.position.set(0, 0.05, 0.145);
+      head.add(mouth);
+
+      const mouthMat = createLowPolyMaterial("#881337");
+      const mouthGeo = new THREE.BoxGeometry(0.08, 0.025, 0.015);
+      const mouthMesh = new THREE.Mesh(mouthGeo, mouthMat);
+      mouth.add(mouthMesh);
 
       // Hair cap
       const hairGeo = new THREE.BoxGeometry(0.31, 0.12, 0.31);
@@ -331,6 +366,7 @@ export class LowPolyCharacter {
         chest,
         neck,
         head,
+        mouth,
         leftArm,
         leftForearm,
         leftHand,
@@ -474,7 +510,11 @@ export class LowPolyCharacter {
   // -------------------------------------------------------------
   // Update at Timeline Progress [0, 1]
   // -------------------------------------------------------------
-  public updateAtProgress(progress: number, totalDurationSec: number = 6) {
+  public updateAtProgress(
+    progress: number,
+    totalDurationSec: number = 6,
+    terrainObject?: THREE.Object3D | null
+  ) {
     const clampedProgress = Math.min(Math.max(progress, 0), 1);
     const currentTimeSec = clampedProgress * totalDurationSec;
 
@@ -488,6 +528,18 @@ export class LowPolyCharacter {
         const targetLook = position.clone().add(tangent);
         targetLook.y = position.y; // Keep upright on ground plane
         this.group.lookAt(targetLook);
+      }
+    }
+
+    // Terrain Height Conformity via Downward Raycasting
+    if (terrainObject) {
+      const rayOrigin = this.group.position.clone();
+      rayOrigin.y += 10.0;
+      this.raycaster.set(rayOrigin, this.downVector);
+      this.raycaster.far = 30.0;
+      const hits = this.raycaster.intersectObject(terrainObject, true);
+      if (hits.length > 0) {
+        this.group.position.y = hits[0].point.y;
       }
     }
 
@@ -511,6 +563,26 @@ export class LowPolyCharacter {
         this.evaluateIdleKinematics(currentTimeSec);
         break;
     }
+  }
+
+  /**
+   * Two-Bone Analytical IK leg solve for terrain surface adaptation
+   */
+  public solveLegIK(
+    legSide: "left" | "right",
+    targetWorldFootPos: THREE.Vector3,
+    poleTarget: THREE.Vector3
+  ) {
+    const isLeft = legSide === "left";
+    const leg = isLeft ? this.joints.leftLeg : this.joints.rightLeg;
+    const knee = isLeft ? this.joints.leftKnee : this.joints.rightKnee;
+
+    const rootWorld = new THREE.Vector3();
+    leg.getWorldPosition(rootWorld);
+
+    const ik = TwoBoneIKSolver.solve(rootWorld, targetWorldFootPos, poleTarget, 0.4, 0.38);
+    leg.rotation.x = -ik.hipElevationAngle;
+    knee.rotation.x = ik.kneeFlexionAngle;
   }
 
   public setMotion(action: ActorAction) {

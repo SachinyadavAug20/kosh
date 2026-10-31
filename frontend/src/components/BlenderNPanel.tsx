@@ -71,8 +71,10 @@ interface BlenderNPanelProps {
   isOpen: boolean;
   onToggleOpen: () => void;
   selectedMeshName: string | null;
+  selectedMeshNames?: string[];
   meshList: MeshNodeItem[];
   onSelectMesh: (name: string | null) => void;
+  onToggleSelectMesh?: (name: string) => void;
   onToggleMeshVisibility: (name: string) => void;
   lockedMeshes: Set<string>;
   onToggleMeshLock: (name: string) => void;
@@ -95,6 +97,7 @@ interface BlenderNPanelProps {
   onSubdivide?: () => void;
   isWireframe?: boolean;
   onToggleWireframe?: () => void;
+  onApplyModifier?: (modifierType: string, params: Record<string, any>) => void;
 
   // Material
   currentRoughness?: number;
@@ -122,8 +125,10 @@ export function BlenderNPanel({
   isOpen,
   onToggleOpen,
   selectedMeshName,
+  selectedMeshNames = [],
   meshList = [],
   onSelectMesh,
+  onToggleSelectMesh,
   onToggleMeshVisibility,
   lockedMeshes,
   onToggleMeshLock,
@@ -138,6 +143,7 @@ export function BlenderNPanel({
   onSubdivide,
   isWireframe = false,
   onToggleWireframe,
+  onApplyModifier,
   currentRoughness = 0.5,
   currentMetalness = 0.5,
   currentColor = "#94a3b8",
@@ -157,6 +163,16 @@ export function BlenderNPanel({
   const [copiedHtml, setCopiedHtml] = useState(false);
   const [editableScript, setEditableScript] = useState(script || "");
   const [isEditingScript, setIsEditingScript] = useState(false);
+
+  // Non-Destructive Modifier Stack States
+  const [subsurfLevel, setSubsurfLevel] = useState(1);
+  const [booleanOp, setBooleanOp] = useState<"union" | "difference" | "intersect">("difference");
+  const [booleanTarget, setBooleanTarget] = useState("");
+  const [bevelWidth, setBevelWidth] = useState(0.04);
+  const [bevelSegments, setBevelSegments] = useState(3);
+  const [mirrorAxes, setMirrorAxes] = useState({ x: true, y: false, z: false });
+  const [arrayCount, setArrayCount] = useState(3);
+  const [arrayOffset, setArrayOffset] = useState({ x: 1.5, y: 0, z: 0 });
 
   // Sync script changes
   React.useEffect(() => {
@@ -292,7 +308,7 @@ export function BlenderNPanel({
     <div className="flex h-full pointer-events-auto select-none">
       {/* 1. Blender Collapsible Drawer Body (280px) */}
       {isOpen && (
-        <aside className="w-[280px] bg-[#18181b]/95 backdrop-blur-md border-l border-[#27272a] shadow-2xl flex flex-col h-full overflow-hidden text-xs text-[#f4f4f5] animate-in slide-in-from-right-2 duration-150">
+        <aside className="w-[280px] bg-[#18181b] border-l border-[#27272a] shadow-2xl flex flex-col h-full overflow-hidden text-xs text-[#f4f4f5] animate-in slide-in-from-right-2 duration-150">
           {/* Header */}
           <div className="h-8 shrink-0 flex items-center justify-between px-3 border-b border-[#27272a] bg-[#141416]/90">
             <div className="flex items-center space-x-1.5 font-mono text-[11px] text-[#f4f4f5] uppercase font-bold tracking-wider">
@@ -319,7 +335,9 @@ export function BlenderNPanel({
                   <div className="flex items-center space-x-2 truncate">
                     <Box className="w-3.5 h-3.5 text-[#ea580c] shrink-0" />
                     <span className="font-mono text-[11px] font-semibold truncate text-[#f4f4f5]">
-                      {selectedMeshName || "No Mesh Selected"}
+                      {selectedMeshNames.length > 1
+                        ? `${selectedMeshNames.length} Objects Selected (${selectedMeshName || "Active"})`
+                        : selectedMeshName || "No Mesh Selected"}
                     </span>
                   </div>
                   {selectedMeshName && (
@@ -511,7 +529,12 @@ export function BlenderNPanel({
 
                 {/* Mesh Count Summary */}
                 <div className="flex items-center justify-between text-[10px] font-mono text-[#71717a]">
-                  <span>Total Meshes: {meshList.length}</span>
+                  <span>
+                    Total Meshes: {meshList.length}
+                    {selectedMeshNames.length > 1 && (
+                      <span className="ml-1 text-[#ea580c] font-bold">({selectedMeshNames.length} selected)</span>
+                    )}
+                  </span>
                   <span>{meshList.reduce((acc, m) => acc + (m.triangles || 0), 0).toLocaleString()} Tris</span>
                 </div>
 
@@ -520,7 +543,8 @@ export function BlenderNPanel({
                   {meshList
                     .filter((m) => m.name.toLowerCase().includes(outlinerFilter.toLowerCase()))
                     .map((mesh) => {
-                      const isSelected = selectedMeshName === mesh.name;
+                      const isSelected = selectedMeshName === mesh.name || (selectedMeshNames && selectedMeshNames.includes(mesh.name));
+                      const isActive = selectedMeshName === mesh.name;
                       const isLocked = lockedMeshes.has(mesh.name);
                       const isVisible = mesh.visible !== false;
 
@@ -529,17 +553,28 @@ export function BlenderNPanel({
                           key={mesh.id}
                           className={`flex items-center justify-between px-2 py-1.5 rounded font-mono text-[11px] border transition-colors ${
                             isSelected
-                              ? "bg-[#ea580c]/15 border-[#ea580c] text-white"
+                              ? isActive
+                                ? "bg-[#ea580c]/20 border-[#ea580c] text-white"
+                                : "bg-[#ea580c]/10 border-[#d97706]/70 text-[#f4f4f5]"
                               : "bg-[#141416] border-[#27272a] hover:bg-[#202024] text-[#a1a1aa]"
                           }`}
                         >
                           <button
                             type="button"
-                            onClick={() => onSelectMesh(isSelected ? null : mesh.name)}
+                            onClick={(e) => {
+                              if (e.ctrlKey || e.shiftKey) {
+                                onToggleSelectMesh?.(mesh.name);
+                              } else {
+                                onSelectMesh(isSelected ? null : mesh.name);
+                              }
+                            }}
                             className="flex-1 flex items-center space-x-1.5 text-left truncate min-w-0"
                           >
-                            <Box className={`w-3.5 h-3.5 shrink-0 ${isSelected ? "text-[#ea580c]" : "text-[#71717a]"}`} />
+                            <Box className={`w-3.5 h-3.5 shrink-0 ${isActive ? "text-[#f59e0b]" : isSelected ? "text-[#ea580c]" : "text-[#71717a]"}`} />
                             <span className="truncate font-semibold">{mesh.name}</span>
+                            {isSelected && !isActive && (
+                              <span className="ml-1 text-[8px] px-1 py-0.2 rounded bg-[#d97706]/30 text-[#f59e0b]">SEL</span>
+                            )}
                           </button>
 
                           <div className="flex items-center space-x-2 shrink-0 ml-2">
@@ -574,66 +609,248 @@ export function BlenderNPanel({
               </div>
             )}
 
-            {/* TAB 3: TOPOLOGY MODIFIERS */}
+            {/* TAB 3: NON-DESTRUCTIVE MODIFIER STACK */}
             {activeTab === "modifiers" && (
-              <div className="space-y-4">
-                {/* Decimate / Simplify Modifier */}
-                <div className="p-3 bg-[#202024] border border-[#27272a] rounded space-y-2.5">
+              <div className="space-y-3 font-mono">
+                {/* Header info */}
+                <div className="flex items-center justify-between text-[10px] text-[#71717a] border-b border-[#27272a] pb-1">
+                  <span className="uppercase font-bold">Modifier Stack</span>
+                  <span className="text-[#ea580c]">{selectedMeshName || "Active Mesh"}</span>
+                </div>
+
+                {/* 1. Subdivision Surface Modifier */}
+                <div className="p-2.5 bg-[#202024] border border-[#27272a] rounded space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-[11px] font-semibold text-[#f4f4f5]">Decimate / Simplify</span>
-                    <span className="font-mono text-[10px] text-[#ea580c]">
-                      {Math.round(simplifyRatio * 100)}% Poly
+                    <span className="text-[11px] font-semibold text-[#f4f4f5] flex items-center space-x-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Subdivision Surface</span>
                     </span>
+                    <span className="text-[10px] text-[#ea580c] font-bold">Level {subsurfLevel}</span>
                   </div>
-                  <p className="text-[10px] text-[#71717a]">
-                    Reduce polygon count dynamically while preserving silhouette edge flow.
-                  </p>
+                  <div className="flex items-center space-x-1">
+                    {[1, 2, 3].map((lvl) => (
+                      <button
+                        key={lvl}
+                        type="button"
+                        onClick={() => {
+                          setSubsurfLevel(lvl);
+                          onSubdivide?.();
+                        }}
+                        className={`flex-1 py-1 rounded text-[10px] border transition-colors ${
+                          subsurfLevel === lvl
+                            ? "bg-[#ea580c] border-[#ea580c] text-white font-bold"
+                            : "bg-[#141416] border-[#27272a] text-[#a1a1aa] hover:text-white"
+                        }`}
+                      >
+                        Level {lvl}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onApplyModifier?.("subdivide", { levels: subsurfLevel })}
+                    className="w-full py-1 bg-[#141416] hover:bg-[#27272a] border border-[#27272a] rounded text-[10px] text-[#f4f4f5] transition-colors"
+                  >
+                    Apply Subdivision
+                  </button>
+                </div>
+
+                {/* 2. Boolean Modifier (Union, Difference, Intersect) */}
+                <div className="p-2.5 bg-[#202024] border border-[#27272a] rounded space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-[#f4f4f5] flex items-center space-x-1.5">
+                      <Box className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Boolean CSG</span>
+                    </span>
+                    <span className="text-[10px] text-amber-400 uppercase">{booleanOp}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(["difference", "union", "intersect"] as const).map((op) => (
+                      <button
+                        key={op}
+                        type="button"
+                        onClick={() => setBooleanOp(op)}
+                        className={`py-1 text-[9px] uppercase rounded border transition-colors ${
+                          booleanOp === op
+                            ? "bg-[#ea580c] border-[#ea580c] text-white font-bold"
+                            : "bg-[#141416] border-[#27272a] text-[#a1a1aa] hover:text-white"
+                        }`}
+                      >
+                        {op}
+                      </button>
+                    ))}
+                  </div>
+                  {meshList.length > 1 && (
+                    <select
+                      value={booleanTarget}
+                      onChange={(e) => setBooleanTarget(e.target.value)}
+                      className="w-full bg-[#141416] border border-[#27272a] px-2 py-1 text-[10px] text-[#f4f4f5] rounded outline-none"
+                    >
+                      <option value="">Select Operand Mesh...</option>
+                      {meshList
+                        .filter((m) => m.name !== selectedMeshName)
+                        .map((m) => (
+                          <option key={m.id} value={m.name}>
+                            {m.name}
+                          </option>
+                        ))}
+                    </select>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onApplyModifier?.("boolean", { operation: booleanOp, target: booleanTarget })
+                    }
+                    className="w-full py-1 bg-[#141416] hover:bg-[#27272a] border border-[#27272a] rounded text-[10px] text-[#f4f4f5] transition-colors"
+                  >
+                    Apply Boolean
+                  </button>
+                </div>
+
+                {/* 3. Bevel Modifier */}
+                <div className="p-2.5 bg-[#202024] border border-[#27272a] rounded space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-[#f4f4f5]">Bevel Edges</span>
+                    <span className="text-[10px] text-[#ea580c]">{bevelWidth.toFixed(3)}m</span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[9px] text-[#71717a]">
+                      <span>Width / Chamfer</span>
+                      <span>{bevelSegments} Segments</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.01"
+                      max="0.2"
+                      step="0.01"
+                      value={bevelWidth}
+                      onChange={(e) => setBevelWidth(parseFloat(e.target.value))}
+                      className="w-full accent-[#ea580c] h-1.5 bg-[#141416] rounded cursor-pointer"
+                    />
+                    <div className="flex items-center space-x-1 pt-0.5">
+                      {[1, 2, 3, 4, 6].map((seg) => (
+                        <button
+                          key={seg}
+                          type="button"
+                          onClick={() => setBevelSegments(seg)}
+                          className={`flex-1 py-0.5 text-[9px] rounded border ${
+                            bevelSegments === seg
+                              ? "bg-[#ea580c] border-[#ea580c] text-white font-bold"
+                              : "bg-[#141416] border-[#27272a] text-[#71717a]"
+                          }`}
+                        >
+                          {seg}s
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onApplyModifier?.("bevel", { width: bevelWidth, segments: bevelSegments })
+                    }
+                    className="w-full py-1 bg-[#141416] hover:bg-[#27272a] border border-[#27272a] rounded text-[10px] text-[#f4f4f5] transition-colors"
+                  >
+                    Apply Bevel
+                  </button>
+                </div>
+
+                {/* 4. Mirror Modifier */}
+                <div className="p-2.5 bg-[#202024] border border-[#27272a] rounded space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-[#f4f4f5]">Mirror Geometry</span>
+                    <span className="text-[10px] text-emerald-400">Symmetry</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(["x", "y", "z"] as const).map((axis) => (
+                      <button
+                        key={axis}
+                        type="button"
+                        onClick={() =>
+                          setMirrorAxes((prev) => ({ ...prev, [axis]: !prev[axis] }))
+                        }
+                        className={`py-1 text-[10px] font-bold uppercase rounded border transition-colors ${
+                          mirrorAxes[axis]
+                            ? "bg-emerald-500/20 border-emerald-500 text-emerald-400"
+                            : "bg-[#141416] border-[#27272a] text-[#71717a]"
+                        }`}
+                      >
+                        {axis.toUpperCase()} Axis
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onApplyModifier?.("mirror", { axes: mirrorAxes })}
+                    className="w-full py-1 bg-[#141416] hover:bg-[#27272a] border border-[#27272a] rounded text-[10px] text-[#f4f4f5] transition-colors"
+                  >
+                    Apply Mirror
+                  </button>
+                </div>
+
+                {/* 5. Array Modifier */}
+                <div className="p-2.5 bg-[#202024] border border-[#27272a] rounded space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-[#f4f4f5]">Array Pattern</span>
+                    <span className="text-[10px] text-[#ea580c]">{arrayCount} Instances</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-[9px] text-[#71717a] shrink-0">Count:</span>
+                    <input
+                      type="range"
+                      min="2"
+                      max="12"
+                      step="1"
+                      value={arrayCount}
+                      onChange={(e) => setArrayCount(parseInt(e.target.value, 10))}
+                      className="flex-1 accent-[#ea580c] h-1.5 bg-[#141416] rounded cursor-pointer"
+                    />
+                    <span className="text-[10px] text-white w-4 text-right">{arrayCount}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onApplyModifier?.("array", { count: arrayCount, offset: arrayOffset })
+                    }
+                    className="w-full py-1 bg-[#141416] hover:bg-[#27272a] border border-[#27272a] rounded text-[10px] text-[#f4f4f5] transition-colors"
+                  >
+                    Apply Array
+                  </button>
+                </div>
+
+                {/* 6. Decimate / Simplify Modifier */}
+                <div className="p-2.5 bg-[#202024] border border-[#27272a] rounded space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-[#f4f4f5]">Decimate / Simplify</span>
+                    <span className="text-[10px] text-[#ea580c]">{Math.round(simplifyRatio * 100)}% Poly</span>
+                  </div>
                   <input
                     type="range"
                     min="0.1"
                     max="1.0"
                     step="0.05"
                     value={simplifyRatio}
-                    onChange={(e) => onDecimate && onDecimate(parseFloat(e.target.value))}
+                    onChange={(e) => onDecimate?.(parseFloat(e.target.value))}
                     className="w-full accent-[#ea580c] h-1.5 bg-[#141416] rounded cursor-pointer"
                   />
-                  <div className="flex justify-between text-[9px] font-mono text-[#52525b]">
+                  <div className="flex justify-between text-[9px] text-[#52525b]">
                     <span>10% (Low-Poly)</span>
                     <span>100% (Original)</span>
                   </div>
                 </div>
 
-                {/* Subdivide Surface */}
-                <div className="p-3 bg-[#202024] border border-[#27272a] rounded space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[11px] font-semibold text-[#f4f4f5]">Subdivision Surface</span>
-                    <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                  </div>
-                  <p className="text-[10px] text-[#71717a]">
-                    Subdivide polygon faces to create ultra-smooth curvature.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={onSubdivide}
-                    className="w-full py-1.5 bg-[#141416] hover:bg-[#27272a] border border-[#27272a] rounded font-mono text-[10px] text-[#f4f4f5] flex items-center justify-center space-x-1.5 transition-colors"
-                  >
-                    <Plus className="w-3 h-3 text-[#ea580c]" />
-                    <span>Subdivide Mesh (Loop Split)</span>
-                  </button>
-                </div>
-
                 {/* Wireframe Overlay */}
-                <div className="p-3 bg-[#202024] border border-[#27272a] rounded flex items-center justify-between">
+                <div className="p-2.5 bg-[#202024] border border-[#27272a] rounded flex items-center justify-between">
                   <div>
-                    <div className="font-mono text-[11px] font-semibold text-[#f4f4f5]">Wireframe Edges</div>
-                    <div className="text-[9px] text-[#71717a]">Overlay topology quad/triangle lines</div>
+                    <div className="text-[11px] font-semibold text-[#f4f4f5]">Wireframe Edges</div>
+                    <div className="text-[9px] text-[#71717a]">Quad & triangle edge lines</div>
                   </div>
                   <button
                     type="button"
                     onClick={onToggleWireframe}
-                    className={`px-2.5 py-1 font-mono text-[10px] rounded border transition-colors ${
+                    className={`px-2.5 py-1 text-[10px] rounded border transition-colors ${
                       isWireframe
-                        ? "bg-[#ea580c] border-[#ea580c] text-white"
+                        ? "bg-[#ea580c] border-[#ea580c] text-white font-bold"
                         : "bg-[#141416] border-[#27272a] text-[#71717a] hover:text-[#f4f4f5]"
                     }`}
                   >

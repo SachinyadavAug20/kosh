@@ -53,7 +53,7 @@ export function CommunityShowcaseDrawer({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-end z-50 select-none font-sans text-xs">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-end z-50 select-none font-sans text-xs">
       <div className="w-full max-w-md h-full bg-[#18181b] border-l border-[#333338] shadow-2xl flex flex-col">
         {/* Header */}
         <div className="p-4 border-b border-[#333338] bg-[#1f1f23] flex items-center justify-between">

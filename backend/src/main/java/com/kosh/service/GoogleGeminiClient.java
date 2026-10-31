@@ -384,6 +384,58 @@ public class GoogleGeminiClient {
                   * Manifold geometry suitable for CNC milling or 3D printing export (STL and GLB).
                   * Chamfered bevels for industrial metallic reflections.
                 """;
+        } else if ("create_parametric_primitive".equals(normalizedTool)) {
+            specializedDirective = """
+                
+                SPECIALIZED DIRECTIVE FOR PARAMETRIC CAD PRIMITIVES (create_parametric_primitive):
+                - Construct precise parametric solid bodies (cube, cylinder, cone, sphere, torus, plane, grid):
+                  * High-fidelity segment resolution (32-64 segments for circular profiles).
+                  * Apply edge beveling (modifier or bmesh bevel with 3 segments, 0.02-0.05m radius).
+                  * Recalculate face normals outward; ensure watertight closed manifold.
+                  * Ground flush at Z=0 with base origin.
+                """;
+        } else if ("apply_boolean_op".equals(normalizedTool)) {
+            specializedDirective = """
+                
+                SPECIALIZED DIRECTIVE FOR CONSTRUCTIVE SOLID GEOMETRY (apply_boolean_op):
+                - Execute clean CSG Boolean operations (UNION, DIFFERENCE, INTERSECT):
+                  * Use modifier 'BOOLEAN' with solver='EXACT'.
+                  * Apply modifier via bpy.ops.object.modifier_apply().
+                  * Clean coplanar/overlapping vertices via bmesh.ops.remove_doubles(bm, dist=0.0005).
+                  * Recalculate face normals; verify zero non-manifold edges.
+                """;
+        } else if ("extrude_profile_2d".equals(normalizedTool)) {
+            specializedDirective = """
+                
+                SPECIALIZED DIRECTIVE FOR 2D PROFILE EXTRUSION (extrude_profile_2d):
+                - Create 2D closed polygon curve or BMesh face and extrude along Z vector:
+                  * Add top and bottom cap faces.
+                  * Apply bevel modifier on boundary perimeter edges (width=0.02, segments=3).
+                  * Assign distinct materials to extruded perimeter vs top/bottom end caps.
+                """;
+        } else if ("inspect_geometry".equals(normalizedTool)) {
+            specializedDirective = """
+                
+                SPECIALIZED DIRECTIVE FOR GEOMETRY TOPOLOGY INSPECTION (inspect_geometry):
+                - Compute exact bounding box extents, total volume, polygon count, and vertex count.
+                - Print JSON telemetry into console stdout: {"triangles": tris, "vertices": verts, "dimensions": [dx, dy, dz], "watertight": True}.
+                """;
+        } else if ("apply_pbr_material".equals(normalizedTool)) {
+            specializedDirective = """
+                
+                SPECIALIZED DIRECTIVE FOR PBR CAD SHADING (apply_pbr_material):
+                - Configure Principled BSDF 2.0 with physical PBR values:
+                  * Base color, roughness, metalness, and optional clearcoat or emission.
+                  * Enable smooth shading with auto-smoothed normals (35-degree angle).
+                """;
+        } else if ("export_cad_artifact".equals(normalizedTool)) {
+            specializedDirective = """
+                
+                SPECIALIZED DIRECTIVE FOR WATERTIGHT CAD EXPORT (export_cad_artifact):
+                - Export manifold geometry cleanly aligned to model base:
+                  * Apply all rotation and scale transforms (bpy.ops.object.transform_apply).
+                  * Export to GLB, OBJ, or binary STL format with clean vertex normals.
+                """;
         }
 
         return """
@@ -467,14 +519,590 @@ public class GoogleGeminiClient {
                     bpy.ops.export_mesh.stl(filepath=output_path)
                 """;
         }
+        if ("blend".equalsIgnoreCase(format)) {
+            return "bpy.ops.wm.save_as_mainfile(filepath=output_path)";
+        }
+        if ("obj".equalsIgnoreCase(format)) {
+            return """
+                try:
+                    bpy.ops.wm.obj_export(filepath=output_path)
+                except Exception:
+                    bpy.ops.export_scene.obj(filepath=output_path)
+                """;
+        }
         return "bpy.ops.export_scene.gltf(filepath=output_path, export_format='GLB')";
     }
 
     public String generateProceduralModelScript(String prompt, String toolType, String exportFormat) {
-        String format = (exportFormat != null && exportFormat.equalsIgnoreCase("stl")) ? "stl" : "glb";
+        String format = (exportFormat != null && (exportFormat.equalsIgnoreCase("stl") || exportFormat.equalsIgnoreCase("blend") || exportFormat.equalsIgnoreCase("obj"))) ? exportFormat.toLowerCase() : "glb";
         String exportCmd = getExportStatement(format);
         String lowerPrompt = (prompt != null) ? prompt.toLowerCase() : "";
         String normalizedTool = (toolType != null) ? toolType.toLowerCase() : "blender_mesh";
+
+        // =============================================================
+        // CAD & Object Modeling Generators (Multi-mesh, PBR, High-Detail)
+        // =============================================================
+
+        // 1. Sci-Fi Cargo Container Crate
+        if (lowerPrompt.contains("crate") || lowerPrompt.contains("cargo") || lowerPrompt.contains("box") || lowerPrompt.contains("container")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, color, roughness=0.35, metallic=0.2, emission=None, emission_strength=1.0):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        bsdf.inputs["Base Color"].default_value = color
+                        bsdf.inputs["Roughness"].default_value = roughness
+                        bsdf.inputs["Metallic"].default_value = metallic
+                        if emission:
+                            if "Emission Color" in bsdf.inputs:
+                                bsdf.inputs["Emission Color"].default_value = emission
+                                bsdf.inputs["Emission Strength"].default_value = emission_strength
+                            elif "Emission" in bsdf.inputs:
+                                bsdf.inputs["Emission"].default_value = emission
+                    return mat
+
+                mat_hull = make_mat("Crate_Hull_Orange", (0.92, 0.35, 0.05, 1.0), roughness=0.3, metallic=0.15)
+                mat_armor = make_mat("Carbon_Armor_Dark", (0.08, 0.09, 0.11, 1.0), roughness=0.5, metallic=0.92)
+                mat_brass = make_mat("Machined_Brass_Latch", (0.9, 0.72, 0.18, 1.0), roughness=0.2, metallic=0.95)
+                mat_glow = make_mat("Cyan_Holo_Display", (0.1, 0.8, 1.0, 1.0), roughness=0.1, metallic=0.1, emission=(0.0, 0.75, 1.0, 1.0), emission_strength=5.0)
+                mat_handle = make_mat("Titanium_Steel", (0.7, 0.75, 0.8, 1.0), roughness=0.25, metallic=0.9)
+                mat_rubber = make_mat("Rubber_Pads", (0.04, 0.04, 0.04, 1.0), roughness=0.85, metallic=0.0)
+
+                # Main Crate Hull
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 0.85))
+                hull = bpy.context.active_object
+                hull.name = "Crate_Main_Chassis"
+                hull.scale = (1.8, 1.4, 1.4)
+                bpy.ops.object.transform_apply(scale=True)
+                bev_h = hull.modifiers.new("Bevel", type='BEVEL')
+                bev_h.width = 0.04
+                bev_h.segments = 3
+                hull.data.materials.append(mat_hull)
+
+                # 8 Corner Armor Reinforcement Brackets
+                for sx in [-1, 1]:
+                    for sy in [-1, 1]:
+                        for sz in [-1, 1]:
+                            bx = sx * 0.9
+                            by = sy * 0.7
+                            bz = 0.85 + sz * 0.7
+                            bpy.ops.mesh.primitive_cube_add(size=0.32, location=(bx, by, bz))
+                            bracket = bpy.context.active_object
+                            bracket.name = f"Armor_Bracket_{sx}_{sy}_{sz}"
+                            bev_b = bracket.modifiers.new("Bevel", type='BEVEL')
+                            bev_b.width = 0.02
+                            bev_b.segments = 2
+                            bracket.data.materials.append(mat_armor)
+
+                # Outer Reinforcement Ribs (Sides)
+                for sy in [-0.72, 0.72]:
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, sy, 0.85))
+                    rib = bpy.context.active_object
+                    rib.name = f"Reinforcement_Rim_{sy}"
+                    rib.scale = (1.6, 0.06, 1.2)
+                    bpy.ops.object.transform_apply(scale=True)
+                    rib.data.materials.append(mat_armor)
+
+                # Center Holographic Status Screen
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, -0.73, 0.95))
+                disp = bpy.context.active_object
+                disp.name = "Holographic_Status_Display"
+                disp.scale = (0.5, 0.04, 0.25)
+                bpy.ops.object.transform_apply(scale=True)
+                disp.data.materials.append(mat_glow)
+
+                # Golden Brass Locking Latches
+                for sx in [-0.45, 0.45]:
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.06, depth=0.3, location=(sx, -0.73, 0.65))
+                    latch = bpy.context.active_object
+                    latch.name = f"Brass_Locking_Latch_{sx}"
+                    latch.rotation_euler = (math.pi / 2, 0, 0)
+                    latch.data.materials.append(mat_brass)
+
+                # Top Tubular Carry Handles
+                for sx in [-0.5, 0.5]:
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.035, depth=0.5, location=(sx, 0, 1.62))
+                    handle = bpy.context.active_object
+                    handle.name = f"Top_Handle_{sx}"
+                    handle.rotation_euler = (0, math.pi / 2, 0)
+                    handle.data.materials.append(mat_handle)
+
+                # 4 Bottom Rubberized Grip Pads
+                for sx in [-0.75, 0.75]:
+                    for sy in [-0.55, 0.55]:
+                        bpy.ops.mesh.primitive_cylinder_add(radius=0.1, depth=0.08, location=(sx, sy, 0.04))
+                        pad = bpy.context.active_object
+                        pad.name = f"Rubber_Foot_{sx}_{sy}"
+                        pad.data.materials.append(mat_rubber)
+
+                # Key and Fill Studio Lights
+                klight = bpy.data.lights.new("KeyLight", type='AREA')
+                klight.energy = 1200
+                kobj = bpy.data.objects.new("KeyLight", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (4, -4, 6)
+
+                flight = bpy.data.lights.new("FillLight", type='AREA')
+                flight.energy = 600
+                fobj = bpy.data.objects.new("FillLight", flight)
+                bpy.context.collection.objects.link(fobj)
+                fobj.location = (-4, 4, 3)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
+        // 2. Aerodynamic Hover Drone
+        if (lowerPrompt.contains("drone") || lowerPrompt.contains("hover") || lowerPrompt.contains("aircraft") || lowerPrompt.contains("copter")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, color, roughness=0.35, metallic=0.2, emission=None, emission_strength=1.0):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        bsdf.inputs["Base Color"].default_value = color
+                        bsdf.inputs["Roughness"].default_value = roughness
+                        bsdf.inputs["Metallic"].default_value = metallic
+                        if emission:
+                            if "Emission Color" in bsdf.inputs:
+                                bsdf.inputs["Emission Color"].default_value = emission
+                                bsdf.inputs["Emission Strength"].default_value = emission_strength
+                            elif "Emission" in bsdf.inputs:
+                                bsdf.inputs["Emission"].default_value = emission
+                    return mat
+
+                mat_body = make_mat("Gloss_White_Hull", (0.95, 0.95, 0.98, 1.0), roughness=0.15, metallic=0.1)
+                mat_carbon = make_mat("Carbon_Fiber_Black", (0.08, 0.09, 0.11, 1.0), roughness=0.5, metallic=0.85)
+                mat_rotor = make_mat("Racing_Orange_Accents", (0.95, 0.35, 0.05, 1.0), roughness=0.25, metallic=0.4)
+                mat_eye = make_mat("Glow_Cyan_Optics", (0.1, 0.8, 1.0, 1.0), roughness=0.05, metallic=0.1, emission=(0.0, 0.8, 1.0, 1.0), emission_strength=5.0)
+
+                # Aerodynamic Main Fuselage
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 0.65))
+                fuse = bpy.context.active_object
+                fuse.name = "Drone_Main_Fuselage"
+                fuse.scale = (0.9, 1.4, 0.35)
+                bpy.ops.object.transform_apply(scale=True)
+                bev = fuse.modifiers.new("Bevel", type='BEVEL')
+                bev.width = 0.08
+                bev.segments = 3
+                fuse.data.materials.append(mat_body)
+
+                # Cockpit Polarized Canopy
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.35, depth=0.18, location=(0, 0.1, 0.88))
+                canopy = bpy.context.active_object
+                canopy.name = "Canopy_Cockpit"
+                canopy.data.materials.append(mat_carbon)
+
+                # Front Gimbal Camera Sphere
+                bpy.ops.mesh.primitive_uv_sphere_add(radius=0.18, location=(0, 0.72, 0.52))
+                gimbal = bpy.context.active_object
+                gimbal.name = "Gimbal_Camera_Sphere"
+                gimbal.data.materials.append(mat_carbon)
+
+                # Sensor Lens Eye
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.08, depth=0.05, location=(0, 0.88, 0.52))
+                lens = bpy.context.active_object
+                lens.name = "Sensor_Eye_Lens"
+                lens.rotation_euler = (math.pi / 2, 0, 0)
+                lens.data.materials.append(mat_eye)
+
+                # 4 Ducted Rotor Nacelles
+                arms = [(-1.0, 0.9), (1.0, 0.9), (-1.0, -0.9), (1.0, -0.9)]
+                for idx, (ax, ay) in enumerate(arms):
+                    # Carbon Strut
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.045, depth=1.1, location=(ax * 0.5, ay * 0.5, 0.65))
+                    arm = bpy.context.active_object
+                    arm.name = f"Rotor_Strut_{idx}"
+                    arm.rotation_euler = (0, math.pi / 2, math.atan2(ay, ax))
+                    arm.data.materials.append(mat_carbon)
+
+                    # Circular Ducted Nacelle Housing
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.42, depth=0.16, location=(ax, ay, 0.72))
+                    duct = bpy.context.active_object
+                    duct.name = f"Ducted_Nacelle_{idx}"
+                    duct.data.materials.append(mat_body)
+
+                    # Orange Racing Rotor Disc
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.36, depth=0.02, location=(ax, ay, 0.75))
+                    prop = bpy.context.active_object
+                    prop.name = f"Rotor_Disc_{idx}"
+                    prop.data.materials.append(mat_rotor)
+
+                # Landing Skids
+                for sx in [-0.55, 0.55]:
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.03, depth=1.6, location=(sx, 0, 0.12))
+                    skid = bpy.context.active_object
+                    skid.name = f"Landing_Skid_{sx}"
+                    skid.rotation_euler = (math.pi / 2, 0, 0)
+                    skid.data.materials.append(mat_carbon)
+
+                # Studio Lighting
+                klight = bpy.data.lights.new("KeyLight", type='AREA')
+                klight.energy = 1200
+                kobj = bpy.data.objects.new("KeyLight", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (4, -4, 6)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
+        // 3. Medieval Battleaxe
+        if (lowerPrompt.contains("axe") || lowerPrompt.contains("battleaxe") || lowerPrompt.contains("hatchet")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, color, roughness=0.35, metallic=0.2):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        bsdf.inputs["Base Color"].default_value = color
+                        bsdf.inputs["Roughness"].default_value = roughness
+                        bsdf.inputs["Metallic"].default_value = metallic
+                    return mat
+
+                mat_wood = make_mat("Rich_Walnut_Wood", (0.35, 0.18, 0.08, 1.0), roughness=0.75, metallic=0.05)
+                mat_grip = make_mat("Dark_Leather_Wrap", (0.18, 0.08, 0.04, 1.0), roughness=0.85, metallic=0.1)
+                mat_blade = make_mat("Damascus_Polished_Steel", (0.8, 0.85, 0.9, 1.0), roughness=0.15, metallic=0.98)
+                mat_iron = make_mat("Dark_Forged_Iron", (0.15, 0.16, 0.18, 1.0), roughness=0.4, metallic=0.9)
+                mat_brass = make_mat("Royal_Brass_Rings", (0.88, 0.70, 0.2, 1.0), roughness=0.25, metallic=0.9)
+
+                # Wooden Haft
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.05, depth=2.2, location=(0, 0, 1.1))
+                haft = bpy.context.active_object
+                haft.name = "Axe_Walnut_Haft"
+                haft.data.materials.append(mat_wood)
+
+                # Leather Bound Grip
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.065, depth=0.6, location=(0, 0, 0.55))
+                grip = bpy.context.active_object
+                grip.name = "Leather_Grip"
+                grip.data.materials.append(mat_grip)
+
+                # Central Forged Iron Collar
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.09, depth=0.45, location=(0, 0, 1.95))
+                collar = bpy.context.active_object
+                collar.name = "Forged_Iron_Collar"
+                collar.data.materials.append(mat_iron)
+
+                # Dual Crescent Damascus Blades
+                for sx in [-1, 1]:
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(sx * 0.45, 0, 1.95))
+                    blade = bpy.context.active_object
+                    blade.name = f"Damascus_Blade_{sx}"
+                    blade.scale = (0.75, 0.04, 0.55)
+                    bpy.ops.object.transform_apply(scale=True)
+                    blade.rotation_euler = (0, 0, sx * 0.08)
+                    blade.data.materials.append(mat_blade)
+
+                # Brass Reinforcement Rings
+                for sz in [1.75, 2.15]:
+                    bpy.ops.mesh.primitive_torus_add(major_radius=0.09, minor_radius=0.02, location=(0, 0, sz))
+                    ring = bpy.context.active_object
+                    ring.name = f"Brass_Ring_{sz}"
+                    ring.data.materials.append(mat_brass)
+
+                # Top Armor-Piercing Spike
+                bpy.ops.mesh.primitive_cone_add(radius1=0.06, depth=0.35, location=(0, 0, 2.35))
+                spike = bpy.context.active_object
+                spike.name = "Armor_Piercing_Spike"
+                spike.data.materials.append(mat_blade)
+
+                # Lighting
+                klight = bpy.data.lights.new("KeyLight", type='AREA')
+                klight.energy = 1000
+                kobj = bpy.data.objects.new("KeyLight", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (4, -4, 5)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
+        // 4. Medieval Longsword
+        if (lowerPrompt.contains("sword") || lowerPrompt.contains("blade") || lowerPrompt.contains("dagger") || lowerPrompt.contains("saber")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, color, roughness=0.35, metallic=0.2):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        bsdf.inputs["Base Color"].default_value = color
+                        bsdf.inputs["Roughness"].default_value = roughness
+                        bsdf.inputs["Metallic"].default_value = metallic
+                    return mat
+
+                mat_steel = make_mat("Damascus_Polished_Steel", (0.82, 0.86, 0.9, 1.0), roughness=0.15, metallic=0.98)
+                mat_brass = make_mat("Royal_Brass", (0.88, 0.70, 0.2, 1.0), roughness=0.25, metallic=0.9)
+                mat_grip = make_mat("Dark_Leather_Wrap", (0.1, 0.1, 0.12, 1.0), roughness=0.8, metallic=0.1)
+
+                # Blade
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 1.35))
+                blade = bpy.context.active_object
+                blade.name = "Longsword_Steel_Blade"
+                blade.scale = (0.18, 0.03, 1.8)
+                bpy.ops.object.transform_apply(scale=True)
+                blade.data.materials.append(mat_steel)
+
+                # Crossguard
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 0.45))
+                guard = bpy.context.active_object
+                guard.name = "Engraved_Crossguard"
+                guard.scale = (0.7, 0.08, 0.08)
+                bpy.ops.object.transform_apply(scale=True)
+                guard.data.materials.append(mat_brass)
+
+                # Leather Grip
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.04, depth=0.35, location=(0, 0, 0.25))
+                grip = bpy.context.active_object
+                grip.name = "Leather_Grip"
+                grip.data.materials.append(mat_grip)
+
+                # Crown Pommel
+                bpy.ops.mesh.primitive_uv_sphere_add(radius=0.07, location=(0, 0, 0.05))
+                pommel = bpy.context.active_object
+                pommel.name = "Crown_Pommel"
+                pommel.data.materials.append(mat_brass)
+
+                klight = bpy.data.lights.new("KeyLight", type='AREA')
+                klight.energy = 950
+                kobj = bpy.data.objects.new("KeyLight", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (4, -4, 5)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
+        // 5. Mechanical Bevel Gear
+        if (lowerPrompt.contains("gear")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, color, roughness=0.35, metallic=0.2):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        bsdf.inputs["Base Color"].default_value = color
+                        bsdf.inputs["Roughness"].default_value = roughness
+                        bsdf.inputs["Metallic"].default_value = metallic
+                    return mat
+
+                mat_teeth = make_mat("Polished_Gold_Bronze", (0.85, 0.65, 0.12, 1.0), roughness=0.2, metallic=0.88)
+                mat_hub = make_mat("Dark_Machined_Iron", (0.2, 0.22, 0.25, 1.0), roughness=0.35, metallic=0.9)
+
+                # Central Hub
+                bpy.ops.mesh.primitive_cylinder_add(radius=1.6, depth=0.9, location=(0, 0, 0.45))
+                hub = bpy.context.active_object
+                hub.name = "Gear_Hub_Core"
+                hub.data.materials.append(mat_hub)
+
+                # 24 Bevel Teeth
+                for i in range(24):
+                    ang = (i / 24) * math.pi * 2
+                    tx = math.cos(ang) * 1.6
+                    ty = math.sin(ang) * 1.6
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(tx, ty, 0.5))
+                    tooth = bpy.context.active_object
+                    tooth.name = f"Involute_Tooth_{i}"
+                    tooth.scale = (0.22, 0.65, 0.75)
+                    bpy.ops.object.transform_apply(scale=True)
+                    tooth.rotation_euler = (0, 0, ang)
+                    tooth.data.materials.append(mat_teeth)
+
+                # Central Keyed Bore Difference
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.5, depth=1.2, location=(0, 0, 0.45))
+                bore = bpy.context.active_object
+                bore.name = "Keyed_Bore_Cutter"
+                mod = hub.modifiers.new("BoreDiff", type='BOOLEAN')
+                mod.operation = 'DIFFERENCE'
+                mod.object = bore
+                bpy.context.view_layer.objects.active = hub
+                bpy.ops.object.modifier_apply(modifier="BoreDiff")
+                bpy.data.objects.remove(bore, do_unlink=True)
+
+                klight = bpy.data.lights.new("KeyLight", type='AREA')
+                klight.energy = 1100
+                kobj = bpy.data.objects.new("KeyLight", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (4, -4, 5)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
+        // 6. Ceramic Coffee Mug
+        if (lowerPrompt.contains("mug") || lowerPrompt.contains("cup") || lowerPrompt.contains("coffee") || lowerPrompt.contains("tea")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, color, roughness=0.15, metallic=0.05):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        bsdf.inputs["Base Color"].default_value = color
+                        bsdf.inputs["Roughness"].default_value = roughness
+                        bsdf.inputs["Metallic"].default_value = metallic
+                    return mat
+
+                mat_ceramic = make_mat("Cobalt_Gloss_Ceramic", (0.08, 0.45, 0.82, 1.0), roughness=0.12, metallic=0.05)
+                mat_white = make_mat("Pure_White_Porcelain", (0.96, 0.97, 0.98, 1.0), roughness=0.15, metallic=0.02)
+
+                # Outer Mug Body
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.8, depth=1.6, location=(0, 0, 0.8))
+                body = bpy.context.active_object
+                body.name = "Ceramic_Outer_Body"
+                bev = body.modifiers.new("Bevel", type='BEVEL')
+                bev.width = 0.05
+                bev.segments = 3
+                body.data.materials.append(mat_ceramic)
+
+                # Inner Porcelain Core
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.7, depth=1.5, location=(0, 0, 0.85))
+                inner = bpy.context.active_object
+                inner.name = "Porcelain_Inner_Core"
+                inner.data.materials.append(mat_white)
+
+                # Curved Ergonomic Handle
+                bpy.ops.mesh.primitive_torus_add(major_radius=0.45, minor_radius=0.1, location=(0.8, 0, 0.8))
+                handle = bpy.context.active_object
+                handle.name = "Ceramic_Curved_Handle"
+                handle.rotation_euler = (0, math.pi / 2, 0)
+                handle.data.materials.append(mat_ceramic)
+
+                klight = bpy.data.lights.new("KeyLight", type='AREA')
+                klight.energy = 950
+                kobj = bpy.data.objects.new("KeyLight", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (4, -4, 5)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
+        // 7. Turbine Flange / Default CAD Model
+        if ("cad_model".equals(normalizedTool) || lowerPrompt.contains("turbine") || lowerPrompt.contains("flange")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, color, roughness=0.35, metallic=0.2):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        bsdf.inputs["Base Color"].default_value = color
+                        bsdf.inputs["Roughness"].default_value = roughness
+                        bsdf.inputs["Metallic"].default_value = metallic
+                    return mat
+
+                mat_steel = make_mat("Brushed_Titanium_Alloy", (0.68, 0.72, 0.78, 1.0), roughness=0.2, metallic=0.95)
+                mat_blue = make_mat("Electric_Anodized_Blue", (0.1, 0.35, 0.75, 1.0), roughness=0.25, metallic=0.92)
+                mat_brass = make_mat("High_Torque_Brass_Studs", (0.88, 0.70, 0.2, 1.0), roughness=0.22, metallic=0.95)
+
+                # Flange Disc Base
+                bpy.ops.mesh.primitive_cylinder_add(radius=2.2, depth=0.45, location=(0, 0, 0.225))
+                base = bpy.context.active_object
+                base.name = "Flange_Base_Disc"
+                base.data.materials.append(mat_steel)
+
+                # Center Column Housing
+                bpy.ops.mesh.primitive_cylinder_add(radius=1.35, depth=2.4, location=(0, 0, 1.4))
+                col = bpy.context.active_object
+                col.name = "Anodized_Center_Column"
+                col.data.materials.append(mat_blue)
+
+                # 8 Metric Golden Studs
+                for i in range(8):
+                    ang = (i / 8) * math.pi * 2
+                    bx = math.cos(ang) * 1.8
+                    by = math.sin(ang) * 1.8
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.14, depth=0.6, location=(bx, by, 0.45))
+                    stud = bpy.context.active_object
+                    stud.name = f"Metric_Stud_{i}"
+                    stud.data.materials.append(mat_brass)
+
+                klight = bpy.data.lights.new("KeyLight", type='AREA')
+                klight.energy = 1100
+                kobj = bpy.data.objects.new("KeyLight", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (4, -4, 6)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
 
         // 1. Tool: blender_sculpt_op
         if ("blender_sculpt_op".equals(normalizedTool)) {
@@ -1001,7 +1629,7 @@ public class GoogleGeminiClient {
         }
 
         // 8. Tool: material_shader
-        if ("material_shader".equals(normalizedTool) || lowerPrompt.contains("shader") || lowerPrompt.contains("pbr") || lowerPrompt.contains("iridescent")) {
+        if ("material_shader".equals(normalizedTool)) {
             return """
                 import bpy, sys, math, os, json
                 import mathutils

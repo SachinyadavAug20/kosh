@@ -20,6 +20,8 @@ import {
   Compass,
 } from "lucide-react";
 import { KeyframeMarker, InterpolationType } from "./Timeline";
+import { AudioVisualizerTrack } from "./timeline/AudioVisualizerTrack";
+import { AudioVisemeSynthesizer, VisemeFrame } from "../lib/audio/AudioVisemeSynthesizer";
 
 export interface BlenderTimelineProps {
   isOpen: boolean;
@@ -45,6 +47,8 @@ export interface BlenderTimelineProps {
   onChangeInterpolation: (type: InterpolationType) => void;
   explodedFactor: number;
   onExplodedChange: (factor: number) => void;
+  audioSynthesizer?: AudioVisemeSynthesizer;
+  onAudioFramesUpdated?: (frames: VisemeFrame[]) => void;
 }
 
 export function BlenderTimeline({
@@ -71,7 +75,15 @@ export function BlenderTimeline({
   onChangeInterpolation,
   explodedFactor,
   onExplodedChange,
+  audioSynthesizer,
+  onAudioFramesUpdated,
 }: BlenderTimelineProps) {
+  const localSynthesizerRef = useRef<AudioVisemeSynthesizer | null>(null);
+  if (!localSynthesizerRef.current) {
+    localSynthesizerRef.current = new AudioVisemeSynthesizer();
+  }
+  const synth = audioSynthesizer || localSynthesizerRef.current;
+
   const trackRef = useRef<HTMLDivElement | null>(null);
   const needleRef = useRef<HTMLDivElement | null>(null);
 
@@ -206,7 +218,7 @@ export function BlenderTimeline({
   }
 
   return (
-    <div className="w-full bg-[#18181b]/98 backdrop-blur-md border-t border-[#27272a] shadow-2xl flex flex-col z-20 pointer-events-auto select-none font-sans text-xs text-[#f4f4f5]">
+    <div className="w-full bg-[#18181b] border-t border-[#27272a] shadow-2xl flex flex-col z-20 pointer-events-auto select-none font-sans text-xs text-[#f4f4f5]">
       {/* 1. Blender Standard Transport Header Bar (28px) */}
       <div className="h-7 px-3 flex items-center justify-between border-b border-[#27272a] bg-[#141416]/95">
         {/* Left: Playback Controls & Frame Indicators */}
@@ -605,6 +617,16 @@ export function BlenderTimeline({
               </div>
             </div>
           </div>
+
+          {/* Narration Lip-Sync Audio Track */}
+          <AudioVisualizerTrack
+            currentFrame={currentFrame}
+            totalFrames={totalFrames}
+            fps={fps}
+            synthesizer={synth}
+            onFramesUpdated={onAudioFramesUpdated}
+            onSeekFrame={onSeekFrame}
+          />
         </div>
       )}
     </div>

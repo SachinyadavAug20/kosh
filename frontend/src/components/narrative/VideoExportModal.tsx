@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from "react";
 import * as THREE from "three";
+import { Film, Download, Play, AlertCircle } from "lucide-react";
 import {
   VideoExportEngine,
   AspectRatioType,
@@ -105,13 +106,13 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 animate-in fade-in duration-200">
       <div className="w-full max-w-xl rounded-xl border border-zinc-800 bg-[#141416] text-zinc-100 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-800/80 px-5 py-4 bg-zinc-900/40">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-orange-600/20 border border-orange-500/30 flex items-center justify-center text-orange-400 text-sm">
-              🎬
+              <Film className="w-4 h-4" />
             </div>
             <div>
               <h2 className="text-sm font-semibold tracking-wide text-zinc-100">
@@ -313,7 +314,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
                   onClick={handleDownload}
                   className="flex-1 py-2.5 px-4 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-lg transition"
                 >
-                  <span>📥</span>
+                  <Download className="w-3.5 h-3.5" />
                   <span>Download Video (.{exportedFormat})</span>
                 </button>
                 <button
@@ -328,8 +329,9 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
 
           {/* Error notice */}
           {errorMessage && (
-            <div className="p-3 rounded-lg border border-red-800 bg-red-950/40 text-red-300 text-xs">
-              ⚠️ {errorMessage}
+            <div className="p-3 rounded-lg border border-red-800 bg-red-950/40 text-red-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMessage}</span>
             </div>
           )}
         </div>
@@ -351,7 +353,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
                 onClick={handleStartExport}
                 className="px-4 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md transition"
               >
-                <span>🎬</span>
+                <Film className="w-3.5 h-3.5" />
                 <span>Start Deterministic Render</span>
               </button>
             </div>

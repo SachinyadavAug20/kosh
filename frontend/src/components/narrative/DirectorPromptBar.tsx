@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { FramingMode } from "./AspectRatioFramer";
 import { AspectRatioType } from "../../lib/video/VideoExportEngine";
 import { PRESET_STORYBOARDS } from "../../lib/narrative/NarrativePromptParser";
+import { Film, Sparkles, Crop, Play, Pause } from "lucide-react";
 
 interface DirectorPromptBarProps {
   onGenerate: (prompt: string) => void;
@@ -60,12 +61,12 @@ export const DirectorPromptBar: React.FC<DirectorPromptBarProps> = ({
 
   return (
     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 w-[94%] max-w-4xl transition-all duration-200">
-      <div className="rounded-xl border border-zinc-800 bg-[#141416]/92 backdrop-blur-md shadow-2xl p-2.5 space-y-2">
+      <div className="rounded-xl border border-zinc-800 bg-[#141416] shadow-2xl p-2.5 space-y-2">
         {/* Main Row: Input + Action buttons */}
         <div className="flex items-center gap-2">
           {/* Director Badge */}
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-orange-600/15 border border-orange-500/30 text-orange-400 font-mono text-xs font-semibold select-none">
-            <span>🎬</span>
+            <Film className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">DIRECTOR</span>
           </div>
 
@@ -76,7 +77,7 @@ export const DirectorPromptBar: React.FC<DirectorPromptBarProps> = ({
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Describe a 3D scene (e.g. 'A traveler walking towards a warm cabin at sunset')..."
-              className="w-full bg-zinc-900/90 border border-zinc-700/80 rounded-lg px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-orange-500 transition shadow-inner font-sans"
+              className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-orange-500 transition shadow-inner font-sans"
               disabled={isGenerating}
             />
           </form>
@@ -94,7 +95,7 @@ export const DirectorPromptBar: React.FC<DirectorPromptBarProps> = ({
               </>
             ) : (
               <>
-                <span>🪄</span>
+                <Sparkles className="w-3.5 h-3.5" />
                 <span>Generate</span>
               </>
             )}
@@ -104,9 +105,9 @@ export const DirectorPromptBar: React.FC<DirectorPromptBarProps> = ({
           <button
             onClick={cycleFramingMode}
             title="Cycle Aspect Ratio Framing (Full, 16:9, 9:16, 1:1, 4:3)"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/70 text-zinc-300 hover:text-white hover:border-zinc-700 text-xs font-mono transition shrink-0"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white hover:border-zinc-700 text-xs font-mono transition shrink-0"
           >
-            <span>📐</span>
+            <Crop className="w-3.5 h-3.5" />
             <span className="uppercase font-semibold">{framingMode}</span>
           </button>
 
@@ -117,7 +118,7 @@ export const DirectorPromptBar: React.FC<DirectorPromptBarProps> = ({
               title="Export Deterministic Video Clip"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-600/50 bg-amber-600/15 text-amber-300 hover:bg-amber-600/25 text-xs font-semibold shadow-sm transition shrink-0"
             >
-              <span>🎥</span>
+              <Film className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Export Video</span>
             </button>
           )}
@@ -141,25 +142,25 @@ export const DirectorPromptBar: React.FC<DirectorPromptBarProps> = ({
                 onClick={() => handleSelectPreset("sunset_cabin")}
                 className="px-2 py-0.5 rounded-md border border-zinc-800 bg-zinc-900/40 text-zinc-300 hover:border-orange-500/50 hover:text-orange-300 transition whitespace-nowrap"
               >
-                🌅 Sunset Cabin
+                Sunset Cabin
               </button>
               <button
                 onClick={() => handleSelectPreset("starry_ruins")}
                 className="px-2 py-0.5 rounded-md border border-zinc-800 bg-zinc-900/40 text-zinc-300 hover:border-indigo-500/50 hover:text-indigo-300 transition whitespace-nowrap"
               >
-                🌌 Starry Ruins
+                Starry Ruins
               </button>
               <button
                 onClick={() => handleSelectPreset("misty_street")}
                 className="px-2 py-0.5 rounded-md border border-zinc-800 bg-zinc-900/40 text-zinc-300 hover:border-slate-500/50 hover:text-slate-200 transition whitespace-nowrap"
               >
-                🌫️ Misty Street
+                Misty Street
               </button>
               <button
                 onClick={() => handleSelectPreset("robot_desert")}
                 className="px-2 py-0.5 rounded-md border border-zinc-800 bg-zinc-900/40 text-zinc-300 hover:border-amber-500/50 hover:text-amber-300 transition whitespace-nowrap"
               >
-                🤖 Desert Robot
+                Desert Robot
               </button>
             </div>
 

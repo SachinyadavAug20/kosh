@@ -34,7 +34,7 @@ export interface McpToolDefinition {
   };
 }
 
-export type ExportFormat = "glb" | "stl" | "obj" | "fbx" | "usdz";
+export type ExportFormat = "glb" | "stl" | "obj" | "fbx" | "usdz" | "blend";
 
 export interface ToolExecutionResult {
   success: boolean;

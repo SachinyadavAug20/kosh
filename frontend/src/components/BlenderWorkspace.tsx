@@ -21,9 +21,10 @@ import {
   Camera,
   RotateCcw,
   Sparkles,
+  TrendingUp,
 } from "lucide-react";
 
-export type EditorType = "viewport" | "timeline" | "director" | "outliner" | "properties" | "mcp_console" | "script";
+export type EditorType = "viewport" | "timeline" | "graph_editor" | "director" | "outliner" | "properties" | "mcp_console" | "script";
 export type SplitDirection = "horizontal" | "vertical"; // horizontal = left/right columns, vertical = top/bottom rows
 export type WorkspacePreset = "default" | "modeling" | "animation" | "director" | "render" | "scripting";
 
@@ -46,32 +47,21 @@ export interface LeafNode {
 
 export type WorkspaceNode = SplitNode | LeafNode;
 
-const STORAGE_KEY = "kosh_blender_workspace_layout";
+const STORAGE_KEY = "kosh_cad_workspace_v3";
 
 // Default Preset Layouts
 export const PRESETS: Record<WorkspacePreset, WorkspaceNode> = {
-  // 1. Default (Classic DCC Layout): Viewport + Outliner/Properties right + Bottom Timeline
+  // 1. Default (Pure 3D Model Studio): Full-Height Viewport + Outliner/Properties right
   default: {
     id: "root_split_h",
     type: "split",
     direction: "horizontal",
-    ratio: 0.76,
+    ratio: 0.78,
     first: {
-      id: "split_vp_tl",
-      type: "split",
-      direction: "vertical",
-      ratio: 0.82,
-      first: {
-        id: "leaf_viewport",
-        type: "leaf",
-        editorType: "viewport",
-        subView: "persp",
-      },
-      second: {
-        id: "leaf_timeline",
-        type: "leaf",
-        editorType: "timeline",
-      },
+      id: "leaf_viewport",
+      type: "leaf",
+      editorType: "viewport",
+      subView: "persp",
     },
     second: {
       id: "split_out_prop",
@@ -367,6 +357,8 @@ function AreaHeader({
         return { label: "3D Viewport", icon: <Box className="w-3.5 h-3.5 text-[#ea580c]" /> };
       case "timeline":
         return { label: "Timeline / Dope Sheet", icon: <Film className="w-3.5 h-3.5 text-amber-400" /> };
+      case "graph_editor":
+        return { label: "Graph Editor (F-Curves)", icon: <TrendingUp className="w-3.5 h-3.5 text-emerald-400" /> };
       case "director":
         return { label: "Director AI Studio", icon: <Sparkles className="w-3.5 h-3.5 text-orange-400" /> };
       case "outliner":
@@ -400,7 +392,7 @@ function AreaHeader({
 
           {isTypeDropdownOpen && (
             <div className="absolute top-7 left-0 w-48 bg-[#18181b] border border-[#3f3f46] shadow-2xl rounded-sm p-1 z-50 space-y-0.5">
-              {(["viewport", "timeline", "director", "outliner", "properties", "mcp_console", "script"] as const).map((t) => {
+              {(["viewport", "timeline", "graph_editor", "director", "outliner", "properties", "mcp_console", "script"] as const).map((t) => {
                 const meta = getEditorMeta(t);
                 const isActive = leaf.editorType === t;
                 return (
@@ -532,6 +524,9 @@ function AreaHeader({
 
           {leaf.editorType === "timeline" && (
             <span className="text-[#52525b] text-[10px]">Transport & Dope Sheet</span>
+          )}
+          {leaf.editorType === "graph_editor" && (
+            <span className="text-[#52525b] text-[10px]">Mathematical Bézier F-Curves</span>
           )}
           {leaf.editorType === "outliner" && (
             <span className="text-[#52525b] text-[10px]">Scene Tree</span>
@@ -807,7 +802,7 @@ export function BlenderWorkspace({
     if (typeof window !== "undefined") {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) return JSON.parse(saved);
+        if (saved && !saved.includes("timeline")) return JSON.parse(saved);
       } catch (e) {
         console.warn("Failed to load saved workspace:", e);
       }

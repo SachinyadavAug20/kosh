@@ -38,7 +38,14 @@ public class McpToolRegistry {
             "kosh_svg_to_3d",
             "kosh_audio_reactive",
             "kosh_ascii_to_voxel",
-            "kosh_cad_export_step"
+            "kosh_cad_export_step",
+            // Pure CAD & Parametric Modeling Suite
+            "create_parametric_primitive",
+            "apply_boolean_op",
+            "extrude_profile_2d",
+            "inspect_geometry",
+            "apply_pbr_material",
+            "export_cad_artifact"
     );
 
     private final GoogleGeminiClient googleGeminiClient;
@@ -73,8 +80,8 @@ public class McpToolRegistry {
         ));
         properties.put("format", Map.of(
                 "type", "string",
-                "description", "Export format: 'glb' (default), 'stl', 'obj', 'fbx', or 'usdz'",
-                "enum", List.of("glb", "stl", "obj", "fbx", "usdz")
+                "description", "Export format: 'glb' (default), 'blend', 'stl', 'obj', 'fbx', or 'usdz'",
+                "enum", List.of("glb", "blend", "stl", "obj", "fbx", "usdz")
         ));
 
         if (extraProperties != null) {
@@ -265,6 +272,76 @@ public class McpToolRegistry {
                 )
         ));
 
+        // 21. create_parametric_primitive
+        tools.add(createToolSchema(
+                "create_parametric_primitive",
+                "Creates parametric CAD primitives (cube, cylinder, cone, sphere, torus, plane, grid) with dimensional constraints, bevel radius, and segment counts.",
+                Map.of(
+                        "primitive_type", Map.of("type", "string", "enum", List.of("cube", "cylinder", "cone", "sphere", "torus", "plane", "grid")),
+                        "radius", Map.of("type", "number", "description", "Radius or half-width in meters"),
+                        "depth", Map.of("type", "number", "description", "Height or extrusion depth in meters"),
+                        "segments", Map.of("type", "integer", "description", "Radial resolution segment count (e.g. 32, 64)"),
+                        "bevel_radius", Map.of("type", "number", "description", "Corner chamfer or bevel radius in meters")
+                )
+        ));
+
+        // 22. apply_boolean_op
+        tools.add(createToolSchema(
+                "apply_boolean_op",
+                "Applies Constructive Solid Geometry (CSG) operations: difference (A - B), union (A ∪ B), or intersection (A ∩ B) with exact manifold solver.",
+                Map.of(
+                        "operation", Map.of("type", "string", "enum", List.of("difference", "union", "intersect")),
+                        "target_mesh", Map.of("type", "string", "description", "Base object to modify"),
+                        "tool_mesh", Map.of("type", "string", "description", "Cutter or joiner object"),
+                        "solver", Map.of("type", "string", "enum", List.of("EXACT", "FAST"))
+                )
+        ));
+
+        // 23. extrude_profile_2d
+        tools.add(createToolSchema(
+                "extrude_profile_2d",
+                "Extrudes 2D coordinate polyline/polygon profiles along an axis vector with customizable bevel depth, taper, and watertight end caps.",
+                Map.of(
+                        "profile_name", Map.of("type", "string", "description", "Descriptive profile geometry name"),
+                        "extrude_height", Map.of("type", "number", "description", "Extrusion height in meters (default 0.5m)"),
+                        "bevel_depth", Map.of("type", "number", "description", "Edge bevel depth in meters (default 0.02m)"),
+                        "taper", Map.of("type", "number", "description", "Taper scaling factor along extrusion axis")
+                )
+        ));
+
+        // 24. inspect_geometry
+        tools.add(createToolSchema(
+                "inspect_geometry",
+                "Analyzes 3D mesh manifold topology: calculates volume, surface area, bounding box extents [min, max], vertex count, and watertight status.",
+                Map.of(
+                        "target_mesh", Map.of("type", "string", "description", "Name of mesh to inspect"),
+                        "include_volume", Map.of("type", "boolean", "description", "Whether to compute exact numerical volume")
+                )
+        ));
+
+        // 25. apply_pbr_material
+        tools.add(createToolSchema(
+                "apply_pbr_material",
+                "Configures and assigns PBR Principled BSDF shader attributes (albedo color, roughness, metalness, clearcoat, transmission, and emission).",
+                Map.of(
+                        "target_mesh", Map.of("type", "string", "description", "Target object name"),
+                        "color", Map.of("type", "string", "description", "Hex color string (e.g. '#ea580c') or RGB"),
+                        "roughness", Map.of("type", "number", "description", "Surface roughness from 0.0 (mirror) to 1.0 (diffuse)"),
+                        "metalness", Map.of("type", "number", "description", "Metallic reflection from 0.0 (dielectric) to 1.0 (metal)"),
+                        "emission", Map.of("type", "string", "description", "Optional emissive glow color")
+                )
+        ));
+
+        // 26. export_cad_artifact
+        tools.add(createToolSchema(
+                "export_cad_artifact",
+                "Exports active CAD model or selected mesh to watertight .GLB, .OBJ, or .STL with clean normals and origin centered at model base.",
+                Map.of(
+                        "export_format", Map.of("type", "string", "enum", List.of("glb", "stl", "obj")),
+                        "triangulate", Map.of("type", "boolean", "description", "Whether to triangulate mesh faces before export")
+                )
+        ));
+
         return tools;
     }
 
@@ -314,6 +391,31 @@ public class McpToolRegistry {
             } else if ("kosh_cad_export_step".equals(normalizedName)) {
                 String part = arguments != null && arguments.get("part_type") != null ? arguments.get("part_type").toString() : "flange_bearing";
                 prompt = String.format("Model precision watertight mechanical CAD %s with metric bores, bolt holes, chamfered bevels", part);
+            } else if ("create_parametric_primitive".equals(normalizedName)) {
+                String prim = arguments != null && arguments.get("primitive_type") != null ? arguments.get("primitive_type").toString() : "cylinder";
+                Object rad = arguments != null && arguments.get("radius") != null ? arguments.get("radius") : "1.0";
+                Object dep = arguments != null && arguments.get("depth") != null ? arguments.get("depth") : "2.0";
+                Object seg = arguments != null && arguments.get("segments") != null ? arguments.get("segments") : "32";
+                Object bev = arguments != null && arguments.get("bevel_radius") != null ? arguments.get("bevel_radius") : "0.05";
+                prompt = String.format("Model parametric CAD %s with radius %sm, depth %sm, %s radial segments, and %sm bevel chamfer with clean manifold topology", prim, rad, dep, seg, bev);
+            } else if ("apply_boolean_op".equals(normalizedName)) {
+                String op = arguments != null && arguments.get("operation") != null ? arguments.get("operation").toString() : "difference";
+                String solver = arguments != null && arguments.get("solver") != null ? arguments.get("solver").toString() : "EXACT";
+                prompt = String.format("Execute Constructive Solid Geometry (CSG) %s between primary target and cutter mesh using %s solver with sharp manifold edges", op, solver);
+            } else if ("extrude_profile_2d".equals(normalizedName)) {
+                Object height = arguments != null && arguments.get("extrude_height") != null ? arguments.get("extrude_height") : "0.5";
+                Object bev = arguments != null && arguments.get("bevel_depth") != null ? arguments.get("bevel_depth") : "0.02";
+                prompt = String.format("Extrude 2D parametric sketch profile with height %sm, bevel depth %sm, solid end caps, and smooth face normals", height, bev);
+            } else if ("inspect_geometry".equals(normalizedName)) {
+                prompt = "Analyze 3D mesh geometry topology: calculate bounding box dimensions, vertex count, face count, volume, and manifold watertightness";
+            } else if ("apply_pbr_material".equals(normalizedName)) {
+                String color = arguments != null && arguments.get("color") != null ? arguments.get("color").toString() : "#ea580c";
+                Object rough = arguments != null && arguments.get("roughness") != null ? arguments.get("roughness") : "0.3";
+                Object metal = arguments != null && arguments.get("metalness") != null ? arguments.get("metalness") : "0.8";
+                prompt = String.format("Create and assign studio PBR Principled BSDF material with base color %s, roughness %s, metalness %s, and subtle normal micro-facets", color, rough, metal);
+            } else if ("export_cad_artifact".equals(normalizedName)) {
+                String expFmt = arguments != null && arguments.get("export_format") != null ? arguments.get("export_format").toString() : format;
+                prompt = String.format("Prepare and export clean watertight CAD geometry artifact to %s format with origin set to model base", expFmt);
             }
         }
 

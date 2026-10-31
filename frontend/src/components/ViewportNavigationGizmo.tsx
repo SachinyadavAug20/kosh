@@ -283,19 +283,16 @@ export function ViewportNavigationGizmo({
   return (
     <div
       ref={containerRef}
-      className={`absolute top-12 right-3 z-30 flex flex-col items-center select-none ${className}`}
-      style={{ width: GIZMO_SIZE }}
+      className={`absolute top-3 right-3 z-30 select-none ${className}`}
+      style={{ width: GIZMO_SIZE, height: GIZMO_SIZE }}
     >
-      {/* 3D Navigation Disc */}
+      {/* 3D Navigation Triad - Completely Transparent (No dark disc, no blur) */}
       <div
-        className="relative cursor-grab active:cursor-grabbing rounded-full shadow-2xl p-1 group"
+        className="relative cursor-grab active:cursor-grabbing group"
         style={{
           width: GIZMO_SIZE,
           height: GIZMO_SIZE,
-          background: "radial-gradient(circle, rgba(30, 30, 36, 0.85) 0%, rgba(18, 18, 22, 0.92) 80%)",
-          backdropFilter: "blur(8px)",
-          border: "1px solid rgba(82, 82, 91, 0.45)",
-          boxShadow: "0 8px 32px -4px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
+          background: "transparent",
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -317,17 +314,6 @@ export function ViewportNavigationGizmo({
               <stop offset="100%" stopColor="#27272a" />
             </radialGradient>
           </defs>
-
-          {/* Reference subtle outer guide ring */}
-          <circle
-            cx={CENTER}
-            cy={CENTER}
-            r={ARM_RADIUS + 4}
-            fill="none"
-            stroke="rgba(63, 63, 70, 0.3)"
-            strokeWidth="0.75"
-            strokeDasharray="2, 4"
-          />
 
           {/* Central Hub Base (Iso Click Target) */}
           <circle
@@ -460,23 +446,12 @@ export function ViewportNavigationGizmo({
         </svg>
       </div>
 
-      {/* Floating Tooltip Pill (Appears cleanly below gizmo on hover) */}
-      <div className="h-5 flex items-center justify-center mt-1">
-        {activeTooltip ? (
-          <div className="bg-[#18181b]/95 border border-[#ea580c] px-2 py-0.5 rounded-sm shadow-xl font-mono text-[10px] text-[#f4f4f5] whitespace-nowrap animate-in fade-in zoom-in-95 duration-100">
-            {activeTooltip}
-          </div>
-        ) : (
-          <button
-            onClick={onToggleOrtho}
-            title="Click to toggle Perspective / Orthographic Projection (Numpad 5)"
-            className="flex items-center space-x-1 px-1.5 py-0.5 rounded-sm bg-[#18181b]/80 border border-[#3f3f46]/60 hover:border-[#ea580c] hover:bg-[#27272a] text-[9px] font-mono text-[#a1a1aa] hover:text-[#f4f4f5] transition-all"
-          >
-            <span>{getViewLabel()}</span>
-            <span className="text-[#ea580c] font-bold">({isOrtho ? "ORTHO" : "PERSP"})</span>
-          </button>
-        )}
-      </div>
+      {/* Floating Tooltip Pill on Hover Only */}
+      {activeTooltip && (
+        <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 bg-[#18181b] border border-[#3f3f46] px-2 py-0.5 rounded text-[10px] font-mono text-[#f4f4f5] whitespace-nowrap shadow-lg pointer-events-none">
+          {activeTooltip}
+        </div>
+      )}
     </div>
   );
 }

@@ -60,6 +60,8 @@ public class AssetController {
             mediaType = MediaType.parseMediaType("model/gltf+json");
         } else if (filename.toLowerCase().endsWith(".stl")) {
             mediaType = MediaType.parseMediaType("model/stl");
+        } else if (filename.toLowerCase().endsWith(".blend")) {
+            mediaType = MediaType.parseMediaType("application/x-blender");
         } else if (filename.toLowerCase().endsWith(".png")) {
             mediaType = MediaType.IMAGE_PNG;
         } else if (filename.toLowerCase().endsWith(".json")) {
@@ -79,6 +81,35 @@ public class AssetController {
     }
 
     /**
+     * Converts uploaded GLB scene buffer directly into a native Blender mainfile (.blend).
+     */
+    @org.springframework.web.bind.annotation.PostMapping(
+            value = "/export-blend",
+            consumes = {MediaType.APPLICATION_OCTET_STREAM_VALUE, "model/gltf-binary", MediaType.ALL_VALUE}
+    )
+    public ResponseEntity<Resource> exportToBlend(
+            @org.springframework.web.bind.annotation.RequestBody byte[] glbBytes,
+            @org.springframework.web.bind.annotation.RequestParam(value = "name", defaultValue = "model") String name) {
+        try {
+            if (glbBytes == null || glbBytes.length == 0) {
+                return ResponseEntity.badRequest().build();
+            }
+            Path blendPath = blenderExecutionService.convertGlbToBlend(glbBytes, name);
+            File file = blendPath.toFile();
+            Resource resource = new FileSystemResource(file);
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.getName() + "\"")
+                    .contentType(MediaType.parseMediaType("application/x-blender"))
+                    .contentLength(file.length())
+                    .body(resource);
+        } catch (Exception e) {
+            log.error("Failed to convert GLB to native .blend file: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
      * Lists all generated 3D assets in storage.
      */
     @GetMapping
@@ -89,7 +120,10 @@ public class AssetController {
         if (Files.exists(storageDir)) {
             try (Stream<Path> stream = Files.list(storageDir)) {
                 stream.filter(Files::isRegularFile)
-                        .filter(p -> p.toString().endsWith(".glb") || p.toString().endsWith(".stl") || p.toString().endsWith(".gltf"))
+                        .filter(p -> {
+                            String s = p.toString().toLowerCase();
+                            return s.endsWith(".glb") || s.endsWith(".blend") || s.endsWith(".stl") || s.endsWith(".gltf") || s.endsWith(".obj");
+                        })
                         .sorted(Comparator.comparingLong((Path p) -> {
                             try {
                                 return Files.getLastModifiedTime(p).toMillis();

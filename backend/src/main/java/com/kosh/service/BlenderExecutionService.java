@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -89,7 +90,7 @@ public class BlenderExecutionService {
     public BlenderRunResult executeScript(String script, String format) {
         String requestedExt = (format != null) ? format.trim().toLowerCase() : "glb";
         String ext;
-        if (java.util.Set.of("stl", "obj", "fbx", "usdz", "usd").contains(requestedExt)) {
+        if (java.util.Set.of("stl", "obj", "fbx", "usdz", "usd", "blend").contains(requestedExt)) {
             ext = requestedExt;
         } else {
             ext = "glb";
@@ -104,6 +105,7 @@ public class BlenderExecutionService {
         try {
             String executableScript = script;
             boolean hasExport = script.contains("export_scene.gltf") ||
+                    script.contains("save_as_mainfile") ||
                     script.contains("wm.stl_export") ||
                     script.contains("export_mesh.stl") ||
                     script.contains("obj_export") ||
@@ -161,22 +163,27 @@ public class BlenderExecutionService {
                         except Exception:
                             pass
                         
-                        if _out.lower().endswith(".stl"):
+                        if _out.lower().endsWith(".blend"):
+                            try:
+                                bpy.ops.wm.save_as_mainfile(filepath=_out)
+                            except Exception as _be:
+                                print(f"Error saving blend file: {_be}")
+                        elif _out.lower().endsWith(".stl"):
                             try:
                                 bpy.ops.wm.stl_export(filepath=_out)
                             except Exception:
                                 bpy.ops.export_mesh.stl(filepath=_out)
-                        elif _out.lower().endswith(".obj"):
+                        elif _out.lower().endsWith(".obj"):
                             try:
                                 bpy.ops.wm.obj_export(filepath=_out)
                             except Exception:
                                 bpy.ops.export_scene.obj(filepath=_out)
-                        elif _out.lower().endswith(".fbx"):
+                        elif _out.lower().endsWith(".fbx"):
                             try:
                                 bpy.ops.export_scene.fbx(filepath=_out)
                             except Exception:
                                 pass
-                        elif _out.lower().endswith(".usdz") or _out.lower().endswith(".usd"):
+                        elif _out.lower().endsWith(".usdz") or _out.lower().endsWith(".usd"):
                             try:
                                 bpy.ops.wm.usd_export(filepath=_out)
                             except Exception:
@@ -283,6 +290,82 @@ public class BlenderExecutionService {
             } catch (Exception ignored) {
             }
         }
+    }
+
+    /**
+     * Converts raw GLB scene bytes into a native .blend mainfile using headless Blender.
+     */
+    public Path convertGlbToBlend(byte[] glbBytes, String baseName) throws IOException, InterruptedException {
+        String assetId = UUID.randomUUID().toString().substring(0, 12);
+        String name = (baseName != null && !baseName.isBlank())
+                ? baseName.replaceAll("[^a-zA-Z0-9_\\-]", "_")
+                : "kosh_scene_" + assetId;
+        Path tempGlb = storagePath.resolve("temp_" + assetId + ".glb");
+        Path outputBlend = storagePath.resolve(name + ".blend");
+        Path convertScript = storagePath.resolve("convert_" + assetId + ".py");
+
+        Files.write(tempGlb, glbBytes);
+
+        String pythonScript = """
+            import bpy, sys
+            argv = sys.argv
+            glb_path = argv[argv.index("--") + 1]
+            blend_path = argv[argv.index("--") + 2]
+            
+            # Reset factory scene to clear default cube/lights
+            bpy.ops.wm.read_factory_settings(use_empty=True)
+            
+            # Import GLTF / GLB scene
+            bpy.ops.import_scene.gltf(filepath=glb_path)
+            
+            # Ensure studio camera and light exist if scene is empty of them
+            has_camera = any(o.type == 'CAMERA' for o in bpy.data.objects)
+            if not has_camera:
+                cam_data = bpy.data.cameras.new(name="Camera")
+                cam_obj = bpy.data.objects.new("Camera", cam_data)
+                bpy.context.collection.objects.link(cam_obj)
+                cam_obj.location = (4.0, -4.0, 3.0)
+                cam_obj.rotation_euler = (1.1, 0.0, 0.785)
+                bpy.context.scene.camera = cam_obj
+                
+            has_light = any(o.type == 'LIGHT' for o in bpy.data.objects)
+            if not has_light:
+                light_data = bpy.data.lights.new(name="Studio_Sun", type='SUN')
+                light_data.energy = 3.5
+                light_obj = bpy.data.objects.new("Studio_Sun", light_data)
+                bpy.context.collection.objects.link(light_obj)
+                light_obj.location = (5.0, -5.0, 8.0)
+                light_obj.rotation_euler = (0.785, 0.3, 0.5)
+
+            # Save full native .blend mainfile
+            bpy.ops.wm.save_as_mainfile(filepath=blend_path)
+            """;
+
+        Files.writeString(convertScript, pythonScript);
+
+        ProcessBuilder pb = new ProcessBuilder(
+                blenderExecutable,
+                "-b",
+                "-P", convertScript.toString(),
+                "--", tempGlb.toString(), outputBlend.toString()
+        );
+        Process process = pb.start();
+        boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            throw new RuntimeException("Blender GLB to BLEND conversion timed out");
+        }
+
+        try {
+            Files.deleteIfExists(tempGlb);
+            Files.deleteIfExists(convertScript);
+        } catch (Exception ignored) {}
+
+        if (!Files.exists(outputBlend) || Files.size(outputBlend) == 0) {
+            throw new RuntimeException("Failed to generate .blend file from GLB");
+        }
+
+        return outputBlend;
     }
 
     private String readStream(InputStream inputStream) {

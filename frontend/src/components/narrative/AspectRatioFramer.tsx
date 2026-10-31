@@ -71,15 +71,15 @@ export const AspectRatioFramer: React.FC<AspectRatioFramerProps> = ({
     <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden select-none">
       {/* Matte Letterbox Bars (Top, Bottom, Left, Right) */}
       <div
-        className="absolute bg-black/75 backdrop-blur-[1px] transition-all duration-150"
+        className="absolute bg-black/85 transition-all duration-150"
         style={{ top: 0, left: 0, right: 0, height: `${bounds.top}px` }}
       />
       <div
-        className="absolute bg-black/75 backdrop-blur-[1px] transition-all duration-150"
+        className="absolute bg-black/85 transition-all duration-150"
         style={{ bottom: 0, left: 0, right: 0, height: `${bounds.top}px` }}
       />
       <div
-        className="absolute bg-black/75 backdrop-blur-[1px] transition-all duration-150"
+        className="absolute bg-black/85 transition-all duration-150"
         style={{
           top: `${bounds.top}px`,
           bottom: `${bounds.top}px`,
@@ -88,7 +88,7 @@ export const AspectRatioFramer: React.FC<AspectRatioFramerProps> = ({
         }}
       />
       <div
-        className="absolute bg-black/75 backdrop-blur-[1px] transition-all duration-150"
+        className="absolute bg-black/85 transition-all duration-150"
         style={{
           top: `${bounds.top}px`,
           bottom: `${bounds.top}px`,

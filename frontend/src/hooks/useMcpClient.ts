@@ -99,11 +99,8 @@ export function useMcpClient() {
       if (token && token.trim()) {
         const cleanToken = token.trim();
         headers["Authorization"] = `Bearer ${cleanToken}`;
-        if (cleanToken.startsWith("AIzaSy") || cleanToken.startsWith("AIza")) {
-          headers["X-Google-Key"] = cleanToken;
-        } else {
-          headers["X-BharatCode-Token"] = cleanToken;
-        }
+        headers["X-Google-Key"] = cleanToken;
+        headers["X-BharatCode-Token"] = cleanToken;
       }
 
       try {

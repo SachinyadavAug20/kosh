@@ -166,7 +166,7 @@ export function ShareModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4 select-none font-sans text-xs">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 select-none font-sans text-xs">
       <div className="bg-[#1a1a1e] border border-[#333338] w-full max-w-lg rounded-lg shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#333338] bg-[#202024]">

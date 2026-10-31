@@ -6,15 +6,15 @@ import {
   PropType,
 } from "./NarrativeSceneSchema";
 
-// Material Helper with Low-Poly Flat Shading
+// Material Helper with Clean CAD Studio Shading
 export function createLowPolyMaterial(
-  color: string | number,
+  color: string | number = "#858b97",
   options?: Partial<THREE.MeshStandardMaterialParameters>
 ): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
     color: new THREE.Color(color),
-    flatShading: true,
-    roughness: 0.85,
+    flatShading: false,
+    roughness: 0.52,
     metalness: 0.1,
     ...options,
   });
@@ -611,3 +611,521 @@ export function instantiateLowPolyEntity(type: PropType | string): THREE.Object3
       return createLowPolyRock();
   }
 }
+
+// -------------------------------------------------------------
+// Procedural CAD Models (Turbine Flange, Bevel Gear, Mug, Crate)
+// -------------------------------------------------------------
+export function createProceduralTurbineFlange(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Turbine_Base_Flange";
+  const steelMat = createLowPolyMaterial("#94a3b8", { metalness: 0.85, roughness: 0.25 });
+  const darkMetal = createLowPolyMaterial("#475569", { metalness: 0.9, roughness: 0.2 });
+
+  // Flange disc base
+  const baseGeo = new THREE.CylinderGeometry(2.2, 2.2, 0.4, 32);
+  baseGeo.computeVertexNormals();
+  const baseMesh = new THREE.Mesh(baseGeo, steelMat);
+  baseMesh.name = "Flange_Base_Disc";
+  baseMesh.position.y = 0.2;
+  baseMesh.castShadow = true;
+  group.add(baseMesh);
+
+  // Central column
+  const colGeo = new THREE.CylinderGeometry(1.3, 1.45, 2.4, 32);
+  colGeo.computeVertexNormals();
+  const colMesh = new THREE.Mesh(colGeo, darkMetal);
+  colMesh.name = "Central_Column";
+  colMesh.position.y = 1.4;
+  colMesh.castShadow = true;
+  group.add(colMesh);
+
+  // Inner central bore
+  const boreGeo = new THREE.CylinderGeometry(0.85, 0.85, 2.6, 24);
+  boreGeo.computeVertexNormals();
+  const boreMat = createLowPolyMaterial("#1e293b", { roughness: 0.8 });
+  const boreMesh = new THREE.Mesh(boreGeo, boreMat);
+  boreMesh.name = "Center_Bore";
+  boreMesh.position.y = 1.4;
+  group.add(boreMesh);
+
+  // 8 Metric bolt holes around perimeter
+  const boltGeo = new THREE.CylinderGeometry(0.14, 0.14, 0.45, 12);
+  boltGeo.computeVertexNormals();
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2;
+    const bx = Math.cos(angle) * 1.8;
+    const bz = Math.sin(angle) * 1.8;
+    const bolt = new THREE.Mesh(boltGeo, boreMat);
+    bolt.name = `Perimeter_Bolt_${i + 1}`;
+    bolt.position.set(bx, 0.22, bz);
+    group.add(bolt);
+  }
+
+  return group;
+}
+
+export function createProceduralBevelGear(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Mechanical_Bevel_Gear";
+  const brassMat = createLowPolyMaterial("#eab308", { metalness: 0.8, roughness: 0.25 });
+  const coreMat = createLowPolyMaterial("#ca8a04", { metalness: 0.85, roughness: 0.3 });
+
+  // Cone Gear Hub
+  const hubGeo = new THREE.CylinderGeometry(1.4, 1.8, 0.9, 32);
+  hubGeo.computeVertexNormals();
+  const hubMesh = new THREE.Mesh(hubGeo, coreMat);
+  hubMesh.name = "Gear_Cone_Hub";
+  hubMesh.position.y = 0.45;
+  hubMesh.castShadow = true;
+  group.add(hubMesh);
+
+  // 24 Gear Teeth
+  const toothGeo = new THREE.BoxGeometry(0.22, 0.75, 0.65);
+  toothGeo.computeVertexNormals();
+  for (let i = 0; i < 24; i++) {
+    const angle = (i / 24) * Math.PI * 2;
+    const tx = Math.cos(angle) * 1.7;
+    const tz = Math.sin(angle) * 1.7;
+    const tooth = new THREE.Mesh(toothGeo, brassMat);
+    tooth.name = `Bevel_Tooth_${String(i + 1).padStart(2, "0")}`;
+    tooth.position.set(tx, 0.5, tz);
+    tooth.rotation.y = -angle;
+    tooth.rotation.z = -0.15;
+    tooth.castShadow = true;
+    group.add(tooth);
+  }
+
+  // Center Keyed Bore
+  const boreGeo = new THREE.CylinderGeometry(0.5, 0.5, 1.0, 24);
+  boreGeo.computeVertexNormals();
+  const boreMat = createLowPolyMaterial("#1e293b");
+  const boreMesh = new THREE.Mesh(boreGeo, boreMat);
+  boreMesh.name = "Shaft_Keyway_Bore";
+  boreMesh.position.y = 0.45;
+  group.add(boreMesh);
+
+  return group;
+}
+
+export function createProceduralCoffeeMug(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Ceramic_Coffee_Mug";
+  const ceramicMat = createLowPolyMaterial("#0284c7", { roughness: 0.15, metalness: 0.05 });
+  const insideMat = createLowPolyMaterial("#f8fafc", { roughness: 0.2 });
+
+  // Outer Mug Body
+  const bodyGeo = new THREE.CylinderGeometry(0.8, 0.75, 1.6, 32);
+  bodyGeo.computeVertexNormals();
+  const body = new THREE.Mesh(bodyGeo, ceramicMat);
+  body.name = "Mug_Exterior_Body";
+  body.position.y = 0.8;
+  body.castShadow = true;
+  group.add(body);
+
+  // Inner Cup (white ceramic)
+  const insideGeo = new THREE.CylinderGeometry(0.7, 0.65, 1.5, 32);
+  insideGeo.computeVertexNormals();
+  const inside = new THREE.Mesh(insideGeo, insideMat);
+  inside.name = "Mug_Interior_Cavity";
+  inside.position.y = 0.85;
+  group.add(inside);
+
+  // Handle (Torus cutout)
+  const handleGeo = new THREE.TorusGeometry(0.45, 0.1, 16, 32, Math.PI);
+  handleGeo.computeVertexNormals();
+  const handle = new THREE.Mesh(handleGeo, ceramicMat);
+  handle.name = "Ergonomic_Handle";
+  handle.position.set(0.8, 0.8, 0);
+  handle.rotation.z = -Math.PI / 2;
+  handle.castShadow = true;
+  group.add(handle);
+
+  return group;
+}
+
+export function createProceduralSciFiCrate(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "SciFi_Cargo_Crate";
+  const crateMat = createLowPolyMaterial("#ea580c", { roughness: 0.35, metalness: 0.2 });
+  const armorMat = createLowPolyMaterial("#0f172a", { roughness: 0.45, metalness: 0.85 });
+  const brassMat = createLowPolyMaterial("#eab308", { roughness: 0.25, metalness: 0.95 });
+  const handleMat = createLowPolyMaterial("#94a3b8", { roughness: 0.2, metalness: 0.9 });
+  const rubberMat = createLowPolyMaterial("#18181b", { roughness: 0.85, metalness: 0.05 });
+  const glowMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color("#38bdf8"),
+    emissive: new THREE.Color("#0284c7"),
+    emissiveIntensity: 0.45,
+    roughness: 0.15,
+  });
+
+  // 1. Main Crate Hull
+  const cubeGeo = new THREE.BoxGeometry(1.8, 1.4, 1.4);
+  cubeGeo.computeVertexNormals();
+  const cube = new THREE.Mesh(cubeGeo, crateMat);
+  cube.name = "Crate_Main_Hull";
+  cube.position.y = 0.85;
+  cube.castShadow = true;
+  group.add(cube);
+
+  // 2. 8 Corner Armor Reinforcement Brackets
+  const bracketGeo = new THREE.BoxGeometry(0.35, 0.35, 0.35);
+  bracketGeo.computeVertexNormals();
+  let bIdx = 0;
+  for (const sx of [-1, 1]) {
+    for (const sy of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        bIdx++;
+        const bx = sx * 0.85;
+        const by = 0.85 + sy * 0.65;
+        const bz = sz * 0.65;
+        const bracket = new THREE.Mesh(bracketGeo, armorMat);
+        bracket.name = `Corner_Armor_${bIdx}`;
+        bracket.position.set(bx, by, bz);
+        bracket.castShadow = true;
+        group.add(bracket);
+      }
+    }
+  }
+
+  // 3. Side Reinforcement Rim Bands
+  const rimGeo = new THREE.BoxGeometry(1.65, 0.08, 1.35);
+  rimGeo.computeVertexNormals();
+  const rim1 = new THREE.Mesh(rimGeo, armorMat);
+  rim1.name = "Upper_Reinforcement_Rim";
+  rim1.position.y = 1.15;
+  group.add(rim1);
+
+  const rim2 = new THREE.Mesh(rimGeo, armorMat);
+  rim2.name = "Lower_Reinforcement_Rim";
+  rim2.position.y = 0.55;
+  group.add(rim2);
+
+  // 4. Center Holographic Status Screen
+  const screenGeo = new THREE.BoxGeometry(0.5, 0.25, 0.05);
+  screenGeo.computeVertexNormals();
+  const screen = new THREE.Mesh(screenGeo, glowMat);
+  screen.name = "Cargo_Status_Display";
+  screen.position.set(0, 0.95, 0.72);
+  group.add(screen);
+
+  // 5. Golden Brass Locking Latches
+  const latchGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.28, 16);
+  latchGeo.computeVertexNormals();
+  for (const sx of [-0.45, 0.45]) {
+    const latch = new THREE.Mesh(latchGeo, brassMat);
+    latch.name = `Lock_Latch_${sx > 0 ? "Right" : "Left"}`;
+    latch.position.set(sx, 0.65, 0.72);
+    latch.rotation.x = Math.PI / 2;
+    group.add(latch);
+  }
+
+  // 6. Top Tubular Carry Handles
+  const handleGeo = new THREE.CylinderGeometry(0.035, 0.035, 0.5, 12);
+  handleGeo.computeVertexNormals();
+  for (const sx of [-0.45, 0.45]) {
+    const handle = new THREE.Mesh(handleGeo, handleMat);
+    handle.name = `Carry_Handle_${sx > 0 ? "Right" : "Left"}`;
+    handle.position.set(sx, 1.58, 0);
+    handle.rotation.z = Math.PI / 2;
+    group.add(handle);
+  }
+
+  // 7. 4 Bottom Rubberized Grip Pads
+  const padGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.08, 12);
+  padGeo.computeVertexNormals();
+  let pIdx = 0;
+  for (const sx of [-0.75, 0.75]) {
+    for (const sz of [-0.55, 0.55]) {
+      pIdx++;
+      const pad = new THREE.Mesh(padGeo, rubberMat);
+      pad.name = `Grip_Foot_${pIdx}`;
+      pad.position.set(sx, 0.04, sz);
+      group.add(pad);
+    }
+  }
+
+  return group;
+}
+
+export function createProceduralBattleaxe(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Medieval_Battleaxe";
+  const woodMat = createLowPolyMaterial("#78350f", { roughness: 0.8, metalness: 0.05 });
+  const steelMat = createLowPolyMaterial("#cbd5e1", { roughness: 0.25, metalness: 0.9 });
+  const darkSteel = createLowPolyMaterial("#475569", { roughness: 0.35, metalness: 0.85 });
+  const brassMat = createLowPolyMaterial("#eab308", { roughness: 0.25, metalness: 0.8 });
+
+  // Wooden Haft
+  const haftGeo = new THREE.CylinderGeometry(0.05, 0.06, 2.2, 16);
+  haftGeo.computeVertexNormals();
+  const haft = new THREE.Mesh(haftGeo, woodMat);
+  haft.name = "Axe_Wooden_Haft";
+  haft.position.y = 1.1;
+  haft.castShadow = true;
+  group.add(haft);
+
+  // Grip leather bands
+  const gripGeo = new THREE.CylinderGeometry(0.065, 0.065, 0.6, 16);
+  gripGeo.computeVertexNormals();
+  const gripMat = createLowPolyMaterial("#3f1e09", { roughness: 0.9 });
+  const grip = new THREE.Mesh(gripGeo, gripMat);
+  grip.name = "Axe_Leather_Grip";
+  grip.position.y = 0.55;
+  group.add(grip);
+
+  // Central Axe Collar
+  const collarGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.45, 16);
+  collarGeo.computeVertexNormals();
+  const collar = new THREE.Mesh(collarGeo, darkSteel);
+  collar.name = "Reinforced_Collar";
+  collar.position.y = 1.95;
+  group.add(collar);
+
+  // Main Crescent Blades (Left & Right)
+  const bladeGeo = new THREE.BoxGeometry(0.7, 0.55, 0.04);
+  bladeGeo.computeVertexNormals();
+  const leftBlade = new THREE.Mesh(bladeGeo, steelMat);
+  leftBlade.name = "Left_Crescent_Blade";
+  leftBlade.position.set(-0.42, 1.95, 0);
+  leftBlade.rotation.z = 0.05;
+  leftBlade.castShadow = true;
+  group.add(leftBlade);
+
+  const rightBlade = new THREE.Mesh(bladeGeo, steelMat);
+  rightBlade.name = "Right_Crescent_Blade";
+  rightBlade.position.set(0.42, 1.95, 0);
+  rightBlade.rotation.z = -0.05;
+  rightBlade.castShadow = true;
+  group.add(rightBlade);
+
+  // Brass Reinforcement Rings
+  const ringGeo = new THREE.TorusGeometry(0.09, 0.02, 8, 16);
+  ringGeo.computeVertexNormals();
+  const ring1 = new THREE.Mesh(ringGeo, brassMat);
+  ring1.name = "Collar_Brass_Ring_Bottom";
+  ring1.position.y = 1.75;
+  ring1.rotation.x = Math.PI / 2;
+  group.add(ring1);
+
+  const ring2 = new THREE.Mesh(ringGeo, brassMat);
+  ring2.name = "Collar_Brass_Ring_Top";
+  ring2.position.y = 2.15;
+  ring2.rotation.x = Math.PI / 2;
+  group.add(ring2);
+
+  // Top Spike
+  const spikeGeo = new THREE.ConeGeometry(0.06, 0.35, 12);
+  spikeGeo.computeVertexNormals();
+  const spike = new THREE.Mesh(spikeGeo, steelMat);
+  spike.name = "Armor_Piercing_Spike";
+  spike.position.y = 2.35;
+  group.add(spike);
+
+  return group;
+}
+
+export function createProceduralHoverDrone(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Aerodynamic_Hover_Drone";
+  const bodyMat = createLowPolyMaterial("#f8fafc", { roughness: 0.35, metalness: 0.2 });
+  const darkMat = createLowPolyMaterial("#0f172a", { roughness: 0.5, metalness: 0.8 });
+  const rotorMat = createLowPolyMaterial("#ea580c", { roughness: 0.25, metalness: 0.5 });
+  const lensMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color("#38bdf8"),
+    emissive: new THREE.Color("#0284c7"),
+    emissiveIntensity: 0.4,
+    roughness: 0.15,
+  });
+
+  // Central Aerodynamic Fuselage
+  const bodyGeo = new THREE.BoxGeometry(0.9, 0.35, 1.2);
+  bodyGeo.computeVertexNormals();
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.name = "Fuselage_Main_Body";
+  body.position.y = 0.7;
+  body.castShadow = true;
+  group.add(body);
+
+  // Top Canopy
+  const canopyGeo = new THREE.CylinderGeometry(0.3, 0.45, 0.2, 16);
+  canopyGeo.computeVertexNormals();
+  const canopy = new THREE.Mesh(canopyGeo, darkMat);
+  canopy.name = "Sensor_Dome_Canopy";
+  canopy.position.set(0, 0.95, 0);
+  group.add(canopy);
+
+  // Front Camera Gimbal
+  const gimbalGeo = new THREE.SphereGeometry(0.18, 16, 16);
+  gimbalGeo.computeVertexNormals();
+  const gimbal = new THREE.Mesh(gimbalGeo, darkMat);
+  gimbal.name = "Gimbal_Camera_Turret";
+  gimbal.position.set(0, 0.55, 0.65);
+  group.add(gimbal);
+
+  const lensGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.06, 16);
+  lensGeo.computeVertexNormals();
+  const lens = new THREE.Mesh(lensGeo, lensMat);
+  lens.name = "Optical_Sensor_Lens";
+  lens.position.set(0, 0.55, 0.82);
+  lens.rotation.x = Math.PI / 2;
+  group.add(lens);
+
+  // 4 Rotor Arms & Ducted Nacelles
+  const armOffsets = [
+    { label: "FL", x: 0.9, z: 0.8 },
+    { label: "BL", x: -0.9, z: 0.8 },
+    { label: "FR", x: 0.9, z: -0.8 },
+    { label: "BR", x: -0.9, z: -0.8 },
+  ];
+
+  const armGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.0, 8);
+  armGeo.computeVertexNormals();
+  const nacelleGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.15, 24, 1, true);
+  nacelleGeo.computeVertexNormals();
+  const propGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.02, 16);
+  propGeo.computeVertexNormals();
+
+  armOffsets.forEach((pos) => {
+    // Arm
+    const arm = new THREE.Mesh(armGeo, darkMat);
+    arm.name = `Rotor_Boom_${pos.label}`;
+    arm.position.set(pos.x * 0.5, 0.7, pos.z * 0.5);
+    arm.rotation.z = Math.PI / 2;
+    arm.rotation.y = Math.atan2(pos.z, pos.x);
+    group.add(arm);
+
+    // Ducted Nacelle
+    const nacelle = new THREE.Mesh(nacelleGeo, bodyMat);
+    nacelle.name = `Ducted_Shroud_${pos.label}`;
+    nacelle.position.set(pos.x, 0.75, pos.z);
+    group.add(nacelle);
+
+    // Spinning Rotor Blade Disc
+    const prop = new THREE.Mesh(propGeo, rotorMat);
+    prop.name = `Rotor_Blades_${pos.label}`;
+    prop.position.set(pos.x, 0.78, pos.z);
+    group.add(prop);
+  });
+
+  // Landing Skids
+  const skidGeo = new THREE.BoxGeometry(0.06, 0.06, 1.6);
+  skidGeo.computeVertexNormals();
+  const leftSkid = new THREE.Mesh(skidGeo, darkMat);
+  leftSkid.name = "Landing_Skid_Left";
+  leftSkid.position.set(-0.5, 0.2, 0);
+  group.add(leftSkid);
+
+  const rightSkid = new THREE.Mesh(skidGeo, darkMat);
+  rightSkid.name = "Landing_Skid_Right";
+  rightSkid.position.set(0.5, 0.2, 0);
+  group.add(rightSkid);
+
+  // Skid Struts
+  const strutGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.45, 8);
+  strutGeo.computeVertexNormals();
+  const strut1 = new THREE.Mesh(strutGeo, darkMat);
+  strut1.name = "Skid_Strut_FL";
+  strut1.position.set(-0.45, 0.45, 0.4);
+  strut1.rotation.z = -0.25;
+  group.add(strut1);
+
+  const strut2 = new THREE.Mesh(strutGeo, darkMat);
+  strut2.name = "Skid_Strut_BL";
+  strut2.position.set(-0.45, 0.45, -0.4);
+  strut2.rotation.z = -0.25;
+  group.add(strut2);
+
+  const strut3 = new THREE.Mesh(strutGeo, darkMat);
+  strut3.name = "Skid_Strut_FR";
+  strut3.position.set(0.45, 0.45, 0.4);
+  strut3.rotation.z = 0.25;
+  group.add(strut3);
+
+  const strut4 = new THREE.Mesh(strutGeo, darkMat);
+  strut4.name = "Skid_Strut_BR";
+  strut4.position.set(0.45, 0.45, -0.4);
+  strut4.rotation.z = 0.25;
+  group.add(strut4);
+
+  return group;
+}
+
+export function createProceduralSword(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Medieval_Longsword";
+  const steelMat = createLowPolyMaterial("#cbd5e1", { roughness: 0.2, metalness: 0.95 });
+  const goldMat = createLowPolyMaterial("#ca8a04", { roughness: 0.3, metalness: 0.8 });
+  const gripMat = createLowPolyMaterial("#18181b", { roughness: 0.8, metalness: 0.1 });
+
+  // Blade
+  const bladeGeo = new THREE.BoxGeometry(0.18, 1.8, 0.03);
+  bladeGeo.computeVertexNormals();
+  const blade = new THREE.Mesh(bladeGeo, steelMat);
+  blade.name = "Steel_Blade";
+  blade.position.y = 1.35;
+  blade.castShadow = true;
+  group.add(blade);
+
+  // Crossguard
+  const guardGeo = new THREE.BoxGeometry(0.65, 0.08, 0.08);
+  guardGeo.computeVertexNormals();
+  const guard = new THREE.Mesh(guardGeo, goldMat);
+  guard.name = "Gilded_Crossguard";
+  guard.position.y = 0.45;
+  group.add(guard);
+
+  // Grip
+  const gripGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.35, 12);
+  gripGeo.computeVertexNormals();
+  const grip = new THREE.Mesh(gripGeo, gripMat);
+  grip.name = "Leather_Handle_Grip";
+  grip.position.y = 0.25;
+  group.add(grip);
+
+  // Pommel
+  const pommelGeo = new THREE.SphereGeometry(0.07, 12, 12);
+  pommelGeo.computeVertexNormals();
+  const pommel = new THREE.Mesh(pommelGeo, goldMat);
+  pommel.name = "Counterweight_Pommel";
+  pommel.position.y = 0.05;
+  group.add(pommel);
+
+  return group;
+}
+
+export function generateProceduralModelFromPrompt(prompt: string): THREE.Object3D {
+  const p = prompt.toLowerCase();
+  if (p.includes("axe") || p.includes("battleaxe") || p.includes("hatchet")) {
+    return createProceduralBattleaxe();
+  }
+  if (p.includes("drone") || p.includes("hover") || p.includes("aircraft") || p.includes("copter")) {
+    return createProceduralHoverDrone();
+  }
+  if (p.includes("sword") || p.includes("blade") || p.includes("dagger") || p.includes("saber")) {
+    return createProceduralSword();
+  }
+  if (p.includes("cabin") || p.includes("house") || p.includes("building") || p.includes("home")) {
+    return generateLowPolyBuilding(1, "medieval");
+  }
+  if (p.includes("gear")) {
+    return createProceduralBevelGear();
+  }
+  if (p.includes("mug") || p.includes("cup") || p.includes("coffee") || p.includes("tea")) {
+    return createProceduralCoffeeMug();
+  }
+  if (p.includes("crate") || p.includes("cargo") || p.includes("box") || p.includes("container")) {
+    return createProceduralSciFiCrate();
+  }
+  if (p.includes("table") || p.includes("desk")) {
+    return generateLowPolyProp("table");
+  }
+  if (p.includes("chair") || p.includes("seat") || p.includes("stool")) {
+    return generateLowPolyProp("chair");
+  }
+  if (p.includes("lamp") || p.includes("lantern") || p.includes("light")) {
+    return generateLowPolyProp("lantern");
+  }
+  // Default CAD model: High precision turbine flange
+  return createProceduralTurbineFlange();
+}
+

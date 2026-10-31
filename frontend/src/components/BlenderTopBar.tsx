@@ -29,9 +29,13 @@ import {
   PanelLeft,
   PanelRight,
   ChevronDown,
+  Flashlight,
   Sparkles,
   RefreshCw,
   Code2,
+  Download,
+  RotateCcw,
+  Trash2,
 } from "lucide-react";
 
 export type InteractionMode = "object" | "edit" | "sculpt" | "paint" | "weight";
@@ -41,7 +45,7 @@ export type TransformOrientation = "global" | "local" | "normal" | "view";
 export type PivotPoint = "median" | "cursor" | "bounding_box" | "individual";
 export type SnapElement = "increment" | "vertex" | "edge" | "face" | "volume";
 
-interface BlenderTopBarProps {
+export interface BlenderTopBarProps {
   health: BackendHealth | null;
   isHealthChecking: boolean;
   onRefreshHealth: () => void;
@@ -56,12 +60,18 @@ interface BlenderTopBarProps {
   onOpenPasteBpy: () => void;
   onOpenShare: () => void;
   onOpenShowcase: () => void;
+  onOpenKeyModal?: () => void;
+  onExport?: (format: "glb" | "stl" | "obj" | "blend") => void;
+  selectedCount?: number;
+  onClearCanvas?: () => void;
 
   // Blender DCC Viewport States
   interactionMode: InteractionMode;
   onSetInteractionMode: (mode: InteractionMode) => void;
   shadingMode: ShadingMode;
   onSetShadingMode: (mode: ShadingMode) => void;
+  isPostProcessing?: boolean;
+  onTogglePostProcessing?: () => void;
   matcap: MatcapPreset;
   onSetMatcap: (m: MatcapPreset) => void;
   isXRay: boolean;
@@ -103,6 +113,12 @@ interface BlenderTopBarProps {
   onToggleWireframeOverlay?: () => void;
   showNormals?: boolean;
   onToggleNormals?: () => void;
+
+  // CAD Studio Lighting Rig & Inspection Headlamp
+  headlampEnabled?: boolean;
+  onToggleHeadlamp?: () => void;
+  lightingPreset?: "cad_studio" | "matcap" | "high_contrast";
+  onSelectLightingPreset?: (preset: "cad_studio" | "matcap" | "high_contrast") => void;
 }
 
 export function BlenderTopBar({
@@ -119,10 +135,16 @@ export function BlenderTopBar({
   onOpenPasteBpy,
   onOpenShare,
   onOpenShowcase,
+  headlampEnabled = true,
+  onToggleHeadlamp,
+  lightingPreset = "cad_studio",
+  onSelectLightingPreset,
   interactionMode,
   onSetInteractionMode,
   shadingMode,
   onSetShadingMode,
+  isPostProcessing,
+  onTogglePostProcessing,
   matcap,
   onSetMatcap,
   isXRay,
@@ -148,6 +170,10 @@ export function BlenderTopBar({
   isOrtho,
   onToggleOrtho,
   onFocus,
+  onOpenKeyModal,
+  onExport,
+  selectedCount,
+  onClearCanvas,
   workspacePreset = "default",
   onSelectWorkspacePreset,
   showGrid = true,
@@ -166,6 +192,7 @@ export function BlenderTopBar({
   // Dropdown states
   const [isModeOpen, setIsModeOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
   const [isOverlaysOpen, setIsOverlaysOpen] = useState(false);
   const overlaysRef = useRef<HTMLDivElement>(null);
   const [isOrientationOpen, setIsOrientationOpen] = useState(false);
@@ -178,6 +205,7 @@ export function BlenderTopBar({
 
   const modeMenuRef = useRef<HTMLDivElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
   const orientationRef = useRef<HTMLDivElement>(null);
   const pivotRef = useRef<HTMLDivElement>(null);
   const snapRef = useRef<HTMLDivElement>(null);
@@ -190,6 +218,7 @@ export function BlenderTopBar({
       const target = e.target as Node;
       if (modeMenuRef.current && !modeMenuRef.current.contains(target)) setIsModeOpen(false);
       if (addMenuRef.current && !addMenuRef.current.contains(target)) setIsAddOpen(false);
+      if (exportRef.current && !exportRef.current.contains(target)) setIsExportOpen(false);
       if (orientationRef.current && !orientationRef.current.contains(target)) setIsOrientationOpen(false);
       if (pivotRef.current && !pivotRef.current.contains(target)) setIsPivotOpen(false);
       if (snapRef.current && !snapRef.current.contains(target)) setIsSnapOpen(false);
@@ -219,12 +248,12 @@ export function BlenderTopBar({
   const isBackendUp = health?.status === "UP";
 
   return (
-    <header className="h-[38px] bg-[#18181b] border-b border-[#27272a] px-2 flex items-center justify-between select-none z-30 shrink-0 text-xs font-sans">
+    <header className="h-[32px] bg-[#141416] border-b border-[#27272a] px-2 flex items-center justify-between select-none z-30 shrink-0 text-xs font-sans">
       {/* LEFT: Logo + T-Shelf Toggle + Mode Switcher + Add Primitives */}
       <div className="flex items-center space-x-1.5">
         {/* Kosh Minimal Isometric Logo SVG Mark */}
         <div className="flex items-center space-x-1.5 pr-1">
-          <svg className="w-5 h-5" viewBox="0 0 512 512" fill="none">
+          <svg className="w-4 h-4" viewBox="0 0 512 512" fill="none">
             <polygon points="256,76 412,166 256,256 100,166" fill="#2e323b" stroke="#3f434d" strokeWidth="12" />
             <polygon points="100,166 256,256 256,436 100,346" fill="#22252c" stroke="#333740" strokeWidth="12" />
             <polygon points="256,256 412,166 412,346 256,436" fill="#1b1d22" stroke="#272a32" strokeWidth="12" />
@@ -247,7 +276,7 @@ export function BlenderTopBar({
               : "text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a]"
           }`}
         >
-          <PanelLeft className="w-4 h-4" />
+          <PanelLeft className="w-3.5 h-3.5" />
         </button>
 
         <div className="w-px h-4 bg-[#27272a]" />
@@ -258,17 +287,17 @@ export function BlenderTopBar({
             type="button"
             onClick={() => setIsModeOpen(!isModeOpen)}
             title={`Interaction Mode (${interactionMode}) [Tab]`}
-            className="flex items-center space-x-1 px-1.5 py-1 rounded bg-[#202024] hover:bg-[#27272a] border border-[#333338] transition-colors"
+            className="flex items-center space-x-1 px-1.5 py-0.5 rounded bg-[#202024] hover:bg-[#27272a] border border-[#333338] transition-colors"
           >
             {getModeIcon(interactionMode)}
-            <span className="capitalize text-[11px] font-mono font-semibold text-[#f4f4f5] hidden sm:inline">
+            <span className="capitalize text-[10px] font-mono font-semibold text-[#f4f4f5] hidden sm:inline">
               {interactionMode}
             </span>
-            <ChevronDown className="w-3 h-3 text-[#71717a]" />
+            <ChevronDown className="w-2.5 h-2.5 text-[#71717a]" />
           </button>
 
           {isModeOpen && (
-            <div className="absolute top-9 left-0 w-36 bg-[#18181b] border border-[#3f3f46] shadow-2xl rounded-sm p-1 z-50 space-y-0.5">
+            <div className="absolute top-8 left-0 w-36 bg-[#18181b] border border-[#3f3f46] shadow-2xl rounded-sm p-1 z-50 space-y-0.5">
               {(["object", "edit", "sculpt", "paint", "weight"] as const).map((m) => (
                 <button
                   key={m}
@@ -297,17 +326,17 @@ export function BlenderTopBar({
             type="button"
             onClick={() => setIsAddOpen(!isAddOpen)}
             title="Add Mesh Primitive [Shift + A]"
-            className={`p-1.5 rounded transition-colors ${
+            className={`p-1 rounded transition-colors ${
               isAddOpen
                 ? "bg-[#ea580c] text-white"
                 : "text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a]"
             }`}
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5" />
           </button>
 
           {isAddOpen && (
-            <div className="absolute top-9 left-0 w-44 bg-[#18181b] border border-[#3f3f46] shadow-2xl rounded-sm p-1 z-50 text-[11px] space-y-0.5">
+            <div className="absolute top-8 left-0 w-44 bg-[#18181b] border border-[#3f3f46] shadow-2xl rounded-sm p-1 z-50 text-[11px] space-y-0.5">
               <div className="text-[9px] font-mono uppercase text-[#71717a] px-2 py-0.5 border-b border-[#27272a]">
                 Add Mesh Primitive
               </div>
@@ -336,43 +365,15 @@ export function BlenderTopBar({
           )}
         </div>
 
-        {/* Selected Mesh Name Chip */}
-        {selectedMeshName && (
-          <div className="hidden md:flex items-center space-x-1.5 px-2 py-0.5 bg-[#202024] border border-[#ea580c]/60 rounded text-[10px] text-[#f4f4f5] font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#ea580c] animate-pulse" />
-            <span className="max-w-[120px] truncate">{selectedMeshName}</span>
-          </div>
-        )}
-
-        {/* Workspace Presets Tabs (Layout, Animation, Modeling, Scripting) */}
-        {onSelectWorkspacePreset && (
-          <div className="hidden lg:flex items-center space-x-0.5 ml-2 border-l border-[#27272a] pl-2 font-mono text-[11px]">
-            {[
-              { id: "default", label: "Layout" },
-              { id: "modeling", label: "Modeling" },
-              { id: "animation", label: "Animation" },
-              { id: "director", label: "Director AI" },
-              { id: "render", label: "Render" },
-            ].map((p) => {
-              const isActive = workspacePreset === p.id;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => onSelectWorkspacePreset(p.id as any)}
-                  className={`px-2 py-0.5 rounded-xs transition-colors ${
-                    isActive
-                      ? "bg-[#27272a] text-[#ea580c] font-bold shadow-xs border-b border-[#ea580c]"
-                      : "text-[#71717a] hover:text-[#f4f4f5] hover:bg-[#202024]"
-                  }`}
-                  title={`Switch to ${p.label} Workspace`}
-                >
-                  {p.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {/* Selected Mesh Name / Multi-Select Chip */}
+        <div className="hidden md:flex items-center space-x-1.5 px-2 py-0.5 bg-[#202024] border border-[#27272a] rounded text-[10px] text-[#f4f4f5] font-mono">
+          <span className={`w-1.5 h-1.5 rounded-full ${selectedCount && selectedCount > 0 ? "bg-[#ea580c] animate-pulse" : "bg-[#71717a]"}`} />
+          <span className="max-w-[140px] truncate">
+            {selectedCount && selectedCount > 1
+              ? `${selectedCount} Objects Selected`
+              : selectedMeshName || "Scene Root"}
+          </span>
+        </div>
       </div>
 
       {/* CENTER: Transform Orientation & Pivot Point Selectors */}
@@ -610,6 +611,82 @@ export function BlenderTopBar({
           </button>
         </div>
 
+        {/* CAD Studio Lighting Presets Strip */}
+        {onSelectLightingPreset && (
+          <div className="hidden sm:flex items-center bg-[#202024] border border-[#333338] p-0.5 rounded text-[10px] font-mono space-x-0.5">
+            <button
+              type="button"
+              onClick={() => onSelectLightingPreset("cad_studio")}
+              title="CAD Studio Lighting: Balanced 3-Point Studio Rig"
+              className={`px-1.5 py-0.5 rounded-xs transition-colors ${
+                lightingPreset === "cad_studio"
+                  ? "bg-[#333338] text-white font-bold"
+                  : "text-[#71717a] hover:text-[#f4f4f5]"
+              }`}
+            >
+              Studio
+            </button>
+            <button
+              type="button"
+              onClick={() => onSelectLightingPreset("matcap")}
+              title="MatCap Evaluation: Zero-Lighting Normal & Surface Inspection"
+              className={`px-1.5 py-0.5 rounded-xs transition-colors ${
+                lightingPreset === "matcap"
+                  ? "bg-[#333338] text-amber-400 font-bold"
+                  : "text-[#71717a] hover:text-[#f4f4f5]"
+              }`}
+            >
+              MatCap
+            </button>
+            <button
+              type="button"
+              onClick={() => onSelectLightingPreset("high_contrast")}
+              title="High Contrast: Strong Key Light & Crisp Specular Edges"
+              className={`px-1.5 py-0.5 rounded-xs transition-colors ${
+                lightingPreset === "high_contrast"
+                  ? "bg-[#333338] text-sky-400 font-bold"
+                  : "text-[#71717a] hover:text-[#f4f4f5]"
+              }`}
+            >
+              Contrast
+            </button>
+          </div>
+        )}
+
+        {/* CAD Inspection Headlamp Button (Alt + L) */}
+        {onToggleHeadlamp && (
+          <button
+            type="button"
+            onClick={onToggleHeadlamp}
+            title={headlampEnabled ? "CAD Inspection Headlamp ON [Alt + L]" : "CAD Inspection Headlamp OFF [Alt + L]"}
+            className={`flex items-center space-x-1 px-1.5 py-1 rounded-xs border text-[10px] font-mono transition-colors ${
+              headlampEnabled
+                ? "bg-amber-500/20 border-amber-500/50 text-amber-400 font-bold"
+                : "bg-[#202024] border-[#27272a] text-[#71717a] hover:text-[#a1a1aa]"
+            }`}
+          >
+            <Flashlight className="w-3 h-3" />
+            <span className="hidden xl:inline">Headlamp</span>
+          </button>
+        )}
+
+        {/* Post-Processing (SSAO & Bloom) High-Fidelity Button */}
+        {onTogglePostProcessing && (
+          <button
+            type="button"
+            onClick={onTogglePostProcessing}
+            title={isPostProcessing ? "Post-Processing Active (SSAO & Bloom ON)" : "Enable Post-Processing (SSAO & Bloom)"}
+            className={`flex items-center space-x-1 px-1.5 py-0.5 rounded-xs border text-[10px] font-mono transition-colors ${
+              isPostProcessing
+                ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400 font-bold"
+                : "bg-[#202024] border-[#27272a] text-[#71717a] hover:text-[#a1a1aa]"
+            }`}
+          >
+            <Sparkles className="w-3 h-3 text-emerald-400" />
+            <span className="hidden lg:inline">SSAO+Bloom</span>
+          </button>
+        )}
+
         {/* Solid Matcap Swatch Popover */}
         {shadingMode === "solid" && (
           <div ref={matcapRef} className="relative">
@@ -834,14 +911,74 @@ export function BlenderTopBar({
           )}
         </div>
 
+        {/* Clear Canvas / Reset Scene */}
+        {onClearCanvas && (
+          <button
+            type="button"
+            onClick={onClearCanvas}
+            title="Clear Canvas / Reset Scene"
+            className="p-1 rounded text-[#a1a1aa] hover:text-red-400 hover:bg-[#27272a] transition-colors"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        {/* Export CAD Mesh Dropdown */}
+        <div ref={exportRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setIsExportOpen(!isExportOpen)}
+            title="Export 3D CAD Mesh (.GLB, .OBJ, .STL)"
+            className={`p-1 rounded flex items-center space-x-0.5 transition-colors ${
+              isExportOpen ? "bg-[#ea580c] text-white" : "text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a]"
+            }`}
+          >
+            <Download className="w-3.5 h-3.5" />
+            <ChevronDown className="w-2.5 h-2.5" />
+          </button>
+
+          {isExportOpen && (
+            <div className="absolute top-8 right-0 w-32 bg-[#18181b] border border-[#3f3f46] shadow-2xl rounded-sm p-1 z-50 space-y-0.5 text-[11px] font-mono">
+              <div className="text-[9px] uppercase font-bold text-[#71717a] px-2 py-0.5 border-b border-[#27272a]">
+                Export CAD
+              </div>
+              {(["glb", "blend", "obj", "stl"] as const).map((fmt) => (
+                <button
+                  key={fmt}
+                  type="button"
+                  onClick={() => {
+                    onExport?.(fmt);
+                    setIsExportOpen(false);
+                  }}
+                  className="w-full text-left px-2 py-1 rounded-xs text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#f4f4f5] uppercase transition-colors"
+                >
+                  .{fmt === "blend" ? "BLEND (Blender)" : fmt.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="w-px h-4 bg-[#27272a]" />
+
+        {/* Hotkeys Modal Trigger (F1) */}
+        <button
+          type="button"
+          onClick={onOpenShortcuts}
+          title="Keyboard Shortcuts Cheat Sheet [F1]"
+          className="p-1 rounded text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a] transition-colors"
+        >
+          <Keyboard className="w-3.5 h-3.5" />
+        </button>
+
         {/* Paste bpy Code Modal Trigger */}
         <button
           type="button"
           onClick={onOpenPasteBpy}
           title="Paste Blender Python Script [bpy]"
-          className="p-1.5 rounded text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a] transition-colors"
+          className="p-1 rounded text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a] transition-colors"
         >
-          <Code2 className="w-4 h-4" />
+          <Code2 className="w-3.5 h-3.5" />
         </button>
 
         {/* Community Showcase Drawer Trigger */}
@@ -849,9 +986,9 @@ export function BlenderTopBar({
           type="button"
           onClick={onOpenShowcase}
           title="Community 3D Model Showcase"
-          className="p-1.5 rounded text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a] transition-colors"
+          className="p-1 rounded text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a] transition-colors"
         >
-          <Shapes className="w-4 h-4" />
+          <Shapes className="w-3.5 h-3.5" />
         </button>
 
         {/* Share 3D Model Modal Trigger */}
@@ -859,89 +996,31 @@ export function BlenderTopBar({
           type="button"
           onClick={onOpenShare}
           title="Share 3D Creation Link / Standalone HTML"
-          className="p-1.5 rounded text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a] transition-colors"
+          className="p-1 rounded text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a] transition-colors"
         >
-          <Share2 className="w-4 h-4" />
+          <Share2 className="w-3.5 h-3.5" />
         </button>
 
-        {/* Hotkeys Modal Trigger (F1) */}
+        {/* BYOK API Key & Server Connection Pill */}
         <button
           type="button"
-          onClick={onOpenShortcuts}
-          title="Keyboard Shortcuts Cheat Sheet [F1]"
-          className="p-1.5 rounded text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a] transition-colors"
+          onClick={onOpenKeyModal ? onOpenKeyModal : () => setIsKeyDrawerOpen(!isKeyDrawerOpen)}
+          title={
+            token
+              ? `API Key Active (${token === "demo" ? "Demo" : "Custom"}) | Server: ${isBackendUp ? "Online" : "Standby"}`
+              : `Configure API Key (BYOK) | Server: ${isBackendUp ? "Online" : "Standby"}`
+          }
+          className="flex items-center space-x-1.5 px-2 py-0.5 rounded border border-[#27272a] hover:border-[#3f3f46] bg-[#202024] text-[10px] font-mono transition-colors"
         >
-          <Keyboard className="w-4 h-4" />
+          <Key className={`w-3 h-3 ${token ? "text-emerald-400" : "text-[#71717a]"}`} />
+          <span className="hidden xl:inline text-[#a1a1aa]">
+            {token ? (token === "demo" ? "Demo Key" : "BYOK") : "API Key"}
+          </span>
+          <span className={`w-1.5 h-1.5 rounded-full ${isBackendUp ? "bg-emerald-400" : "bg-amber-400 animate-pulse"}`} />
+          <span className="hidden sm:inline text-[#71717a]">
+            {isBackendUp ? "Server: Connected" : "Server: Standby"}
+          </span>
         </button>
-
-        {/* BYOK Key Drawer Trigger */}
-        <button
-          type="button"
-          onClick={() => setIsKeyDrawerOpen(!isKeyDrawerOpen)}
-          title={`Gemini API Key: ${token ? "Configured" : "None"}`}
-          className={`p-1.5 rounded transition-colors relative ${
-            token ? "text-emerald-400" : "text-[#71717a] hover:text-[#f4f4f5]"
-          }`}
-        >
-          <Key className="w-4 h-4" />
-          <span
-            className={`absolute top-1 right-1 w-1.5 h-1.5 rounded-full ${
-              token ? "bg-emerald-400" : "bg-amber-400"
-            }`}
-          />
-        </button>
-
-        {/* Key Drawer Dialog */}
-        {isKeyDrawerOpen && (
-          <div className="absolute top-10 right-2 w-72 bg-[#18181b] border border-[#ea580c] shadow-2xl p-3 z-50 rounded-sm font-mono text-xs space-y-2">
-            <div className="flex items-center justify-between pb-1 border-b border-[#27272a]">
-              <span className="font-bold text-[#f4f4f5] flex items-center">
-                <Key className="w-3.5 h-3.5 mr-1 text-[#ea580c]" />
-                API Key (BYOK)
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsKeyDrawerOpen(false)}
-                className="text-[#71717a] hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-            <p className="text-[10px] text-[#a1a1aa] leading-tight">
-              Bring Your Own Key for generative Blender scripts. Stored only in local browser memory.
-            </p>
-            <input
-              type="password"
-              placeholder="AIzaSy..."
-              value={keyInput}
-              onChange={(e) => setKeyInput(e.target.value)}
-              className="w-full bg-[#141416] border border-[#333338] px-2 py-1 text-xs text-white rounded focus:border-[#ea580c] outline-none"
-            />
-            <div className="flex justify-between pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  onSaveToken(keyInput);
-                  setIsKeyDrawerOpen(false);
-                }}
-                className="px-2.5 py-1 bg-[#ea580c] text-white font-bold text-[10px] rounded hover:bg-[#c2410c]"
-              >
-                Save Key
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setKeyInput("demo");
-                  onSaveToken("demo");
-                  setIsKeyDrawerOpen(false);
-                }}
-                className="px-2 py-1 bg-[#27272a] text-[#a1a1aa] hover:text-white text-[10px] rounded"
-              >
-                Use Demo
-              </button>
-            </div>
-          </div>
-        )}
 
         <div className="w-px h-4 bg-[#27272a]" />
 
@@ -950,13 +1029,13 @@ export function BlenderTopBar({
           type="button"
           onClick={onToggleNPanel}
           title={`Right Properties Panel (${isNOpen ? "Close" : "Open"}) [N]`}
-          className={`p-1.5 rounded transition-colors ${
+          className={`p-1 rounded transition-colors ${
             isNOpen
               ? "bg-[#27272a] text-[#ea580c]"
               : "text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a]"
           }`}
         >
-          <PanelRight className="w-4 h-4" />
+          <PanelRight className="w-3.5 h-3.5" />
         </button>
       </div>
     </header>
