@@ -1001,25 +1001,23 @@ export function BlenderTopBar({
           <Share2 className="w-3.5 h-3.5" />
         </button>
 
-        {/* BYOK API Key & Server Connection Pill */}
+        {/* Generation Mode Pill */}
         <button
           type="button"
           onClick={onOpenKeyModal ? onOpenKeyModal : () => setIsKeyDrawerOpen(!isKeyDrawerOpen)}
           title={
             token
-              ? `API Key Active (${token === "demo" ? "Demo" : "Custom"}) | Server: ${isBackendUp ? "Online" : "Standby"}`
-              : `Configure API Key (BYOK) | Server: ${isBackendUp ? "Online" : "Standby"}`
+              ? `Generation Mode: ${token === "demo" ? "Demo (Procedural)" : "Procedural (Instant)"}`
+              : "Generation Mode: Procedural (Instant)"
           }
-          className="flex items-center space-x-1.5 px-2 py-0.5 rounded border border-[#27272a] hover:border-[#3f3f46] bg-[#202024] text-[10px] font-mono transition-colors"
+          className="flex items-center space-x-1.5 px-2 py-0.5 rounded border border-[#27272a] bg-[#202024] text-[10px] font-mono transition-colors"
         >
-          <Key className={`w-3 h-3 ${token ? "text-emerald-400" : "text-[#71717a]"}`} />
+          <Key className={`w-3 h-3 ${token ? "text-emerald-400" : "text-[#ea580c]"}`} />
           <span className="hidden xl:inline text-[#a1a1aa]">
-            {token ? (token === "demo" ? "Demo Key" : "BYOK") : "API Key"}
+            {token ? (token === "demo" ? "Demo Mode" : "Instant Gen") : "Instant Gen"}
           </span>
-          <span className={`w-1.5 h-1.5 rounded-full ${isBackendUp ? "bg-emerald-400" : "bg-amber-400 animate-pulse"}`} />
-          <span className="hidden sm:inline text-[#71717a]">
-            {isBackendUp ? "Server: Connected" : "Server: Standby"}
-          </span>
+          <span className="w-1.5 h-1.5 rounded-full bg-[#ea580c]" />
+          <span className="hidden sm:inline text-[#ea580c] font-bold">Procedural</span>
         </button>
 
         <div className="w-px h-4 bg-[#27272a]" />

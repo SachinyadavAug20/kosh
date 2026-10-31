@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Key, X, ExternalLink, Check, ShieldCheck, Zap, Server, Activity } from "lucide-react";
+import React, { useState } from "react";
+import { Key, X, ExternalLink, Check, ShieldCheck, Zap } from "lucide-react";
 
 export interface ApiKeyModalProps {
   isOpen: boolean;
@@ -19,50 +19,13 @@ export function ApiKeyModal({
   onClearToken,
 }: ApiKeyModalProps) {
   const [inputVal, setInputVal] = useState(token);
-  const [serverEndpoint, setServerEndpoint] = useState("http://localhost:8080/mcp");
-  const [pingStatus, setPingStatus] = useState<string | null>(null);
-  const [isPinging, setIsPinging] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
-  useEffect(() => {
-    setInputVal(token);
-    try {
-      const savedEndpoint = localStorage.getItem("kosh_mcp_endpoint");
-      if (savedEndpoint) setServerEndpoint(savedEndpoint);
-    } catch {
-      // ignore
-    }
-  }, [token, isOpen]);
-
   if (!isOpen) return null;
-
-  const handlePingServer = async () => {
-    setIsPinging(true);
-    setPingStatus("Pinging MCP server...");
-    try {
-      const baseUrl = serverEndpoint.replace(/\/mcp\/?$/, "");
-      const res = await fetch(`${baseUrl}/api/health`);
-      if (res.ok) {
-        const data = await res.json();
-        setPingStatus(`Connected: ${data.status} (${data.toolsCount || 26} tools, ${data.blender?.version || "Blender"})`);
-      } else {
-        setPingStatus(`Server error: HTTP ${res.status}`);
-      }
-    } catch (err: any) {
-      setPingStatus(`Connection failed: ${err.message || "Unreachable"}`);
-    } finally {
-      setIsPinging(false);
-    }
-  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     onSaveToken(inputVal.trim());
-    try {
-      localStorage.setItem("kosh_mcp_endpoint", serverEndpoint.trim());
-    } catch {
-      // ignore
-    }
     setIsSaved(true);
     setTimeout(() => {
       setIsSaved(false);
@@ -93,7 +56,7 @@ export function ApiKeyModal({
           <div className="flex items-center space-x-2 text-[#ea580c] font-bold">
             <Key className="w-4 h-4" />
             <span className="text-white uppercase tracking-wider text-[11px]">
-              API Key & Server Connection
+              API Key
             </span>
           </div>
           <button
@@ -108,11 +71,10 @@ export function ApiKeyModal({
         {/* Body */}
         <form onSubmit={handleSave} className="p-4 space-y-4">
           <div className="text-[11px] text-[#a1a1aa] leading-relaxed">
-            Zero configuration 3D studio. Bring your Google Gemini API key or use Demo mode.
-            Your key stays local to your browser.
+            Enter your Google Gemini API key to enable AI model generation, or use Demo mode. Your key stays local to your browser.
           </div>
 
-          {/* Input 1: API Key */}
+          {/* Input: API Key */}
           <div className="space-y-1.5">
             <label className="text-[10px] text-[#71717a] uppercase font-bold tracking-wider flex justify-between">
               <span>Google Gemini API Key</span>
@@ -134,37 +96,6 @@ export function ApiKeyModal({
               placeholder="Paste AIzaSy... API key"
               className="w-full bg-[#141416] border border-[#27272a] focus:border-[#ea580c] rounded px-3 py-2 text-xs text-[#f4f4f5] placeholder-[#52525b] outline-none font-mono"
             />
-          </div>
-
-          {/* Input 2: MCP Server Endpoint */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-[10px] text-[#71717a] uppercase font-bold tracking-wider flex items-center space-x-1">
-                <Server className="w-3 h-3 text-[#ea580c]" />
-                <span>MCP Server Endpoint</span>
-              </label>
-              <button
-                type="button"
-                onClick={handlePingServer}
-                disabled={isPinging}
-                className="text-[10px] text-[#ea580c] hover:underline flex items-center space-x-1"
-              >
-                <Activity className={`w-2.5 h-2.5 ${isPinging ? "animate-spin" : ""}`} />
-                <span>Ping Server</span>
-              </button>
-            </div>
-            <input
-              type="text"
-              value={serverEndpoint}
-              onChange={(e) => setServerEndpoint(e.target.value)}
-              placeholder="http://localhost:8080/mcp"
-              className="w-full bg-[#141416] border border-[#27272a] focus:border-[#ea580c] rounded px-3 py-2 text-xs text-[#f4f4f5] placeholder-[#52525b] outline-none font-mono"
-            />
-            {pingStatus && (
-              <div className="text-[10px] text-[#a1a1aa] bg-[#141416] px-2 py-1 rounded border border-[#27272a]">
-                {pingStatus}
-              </div>
-            )}
           </div>
 
           {/* Key Status Pill */}

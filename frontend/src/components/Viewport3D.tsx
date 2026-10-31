@@ -3367,7 +3367,7 @@ export function Viewport3D({
   }, [onMeshSelect, showUndoToast, meshList, onMeshListUpdate, pushUndo, refreshMeshList]);
 
   const handleGenerateModelFromPrompt = useCallback(
-    (promptText: string, _format: ExportFormat = "glb") => {
+    async (promptText: string, _format: ExportFormat = "glb") => {
       if (!sceneRef.current) return;
       setIsLoadingModel(true);
 
@@ -3388,68 +3388,75 @@ export function Viewport3D({
         : [];
       const prevMeshList = meshList;
 
-      // Instant procedural CAD generation (0ms) — full multi-mesh named model
+      // Instant procedural CAD generation — full multi-mesh named model
+      let proceduralMesh: THREE.Object3D | null = null;
       try {
-        const proceduralMesh = generateProceduralModelFromPrompt(promptText);
-        if (proceduralMesh && rootModelGroupRef.current) {
-          // Clear prior children WITHOUT disposing (kept alive for undo)
-          while (rootModelGroupRef.current.children.length > 0) {
-            rootModelGroupRef.current.remove(rootModelGroupRef.current.children[0]);
-          }
-
-          rootModelGroupRef.current.add(proceduralMesh);
-          currentModelRef.current = proceduralMesh;
-
-          // Find first mesh in hierarchy for selection
-          let firstMesh: THREE.Mesh | null = null;
-          if (proceduralMesh instanceof THREE.Mesh) {
-            firstMesh = proceduralMesh;
-          } else {
-            proceduralMesh.traverse((child) => {
-              if (!firstMesh && child instanceof THREE.Mesh) {
-                firstMesh = child;
-              }
-            });
-          }
-
-          refreshMeshList();
-          if (firstMesh) {
-            setSelectedMesh(firstMesh);
-            onMeshSelect?.(firstMesh.name);
-          } else {
-            setSelectedMesh(null);
-            onMeshSelect?.(null);
-          }
-          handleFocus();
-          setIsLoadingModel(false);
-
-          const nextChildren: THREE.Object3D[] = [...rootModelGroupRef.current.children];
-          const nextModel = proceduralMesh;
-          pushUndo({
-            label: `Generate "${promptText.slice(0, 20)}"`,
-            undo: () => {
-              if (!rootModelGroupRef.current) return;
-              for (const c of nextChildren) c.removeFromParent();
-              for (const c of prevChildren) rootModelGroupRef.current.add(c);
-              currentModelRef.current = prevChildren[0] || null;
-              refreshMeshList();
-              setSelectedMeshes([]);
-              onMeshSelect?.(null);
-            },
-            redo: () => {
-              if (!rootModelGroupRef.current) return;
-              for (const c of prevChildren) c.removeFromParent();
-              rootModelGroupRef.current.add(nextModel);
-              currentModelRef.current = nextModel;
-              refreshMeshList();
-            },
-          });
-
-          showUndoToast(`Generated: ${promptText.slice(0, 24)}...`);
-        }
+        proceduralMesh = generateProceduralModelFromPrompt(promptText);
       } catch (err) {
         console.warn("Procedural generation failed:", err);
+      }
+
+      // Keep loading visible briefly so user gets clear feedback
+      await new Promise((r) => setTimeout(r, 500));
+
+      if (proceduralMesh && rootModelGroupRef.current) {
+        // Clear prior children WITHOUT disposing (kept alive for undo)
+        while (rootModelGroupRef.current.children.length > 0) {
+          rootModelGroupRef.current.remove(rootModelGroupRef.current.children[0]);
+        }
+
+        rootModelGroupRef.current.add(proceduralMesh);
+        currentModelRef.current = proceduralMesh;
+
+        // Find first mesh in hierarchy for selection
+        let firstMesh: THREE.Mesh | null = null;
+        if (proceduralMesh instanceof THREE.Mesh) {
+          firstMesh = proceduralMesh;
+        } else {
+          proceduralMesh.traverse((child) => {
+            if (!firstMesh && child instanceof THREE.Mesh) {
+              firstMesh = child;
+            }
+          });
+        }
+
+        refreshMeshList();
+        if (firstMesh) {
+          setSelectedMesh(firstMesh);
+          onMeshSelect?.(firstMesh.name);
+        } else {
+          setSelectedMesh(null);
+          onMeshSelect?.(null);
+        }
+        handleFocus();
         setIsLoadingModel(false);
+
+        const nextChildren: THREE.Object3D[] = [...rootModelGroupRef.current.children];
+        const nextModel = proceduralMesh;
+        pushUndo({
+          label: `Generate "${promptText.slice(0, 20)}"`,
+          undo: () => {
+            if (!rootModelGroupRef.current) return;
+            for (const c of nextChildren) c.removeFromParent();
+            for (const c of prevChildren) rootModelGroupRef.current.add(c);
+            currentModelRef.current = prevChildren[0] || null;
+            refreshMeshList();
+            setSelectedMeshes([]);
+            onMeshSelect?.(null);
+          },
+          redo: () => {
+            if (!rootModelGroupRef.current) return;
+            for (const c of prevChildren) c.removeFromParent();
+            rootModelGroupRef.current.add(nextModel);
+            currentModelRef.current = nextModel;
+            refreshMeshList();
+          },
+        });
+
+        showUndoToast(`Generated: ${promptText.slice(0, 24)}...`);
+      } else {
+        setIsLoadingModel(false);
+        showUndoToast("Generation failed");
       }
     },
     [refreshMeshList, handleFocus, onMeshSelect, showUndoToast, meshList, pushUndo]

@@ -27,6 +27,8 @@ export const PRESET_CAD_CHIPS = [
   { label: "Battleaxe", prompt: "A medieval iron battleaxe with double-beveled crescent blades, reinforced central spine, and carved wooden haft" },
   { label: "Hover Drone", prompt: "A compact aerodynamic surveillance drone with 4 ducted rotor nacelles, gimbal sensor array, and landing skids" },
   { label: "Coffee Mug", prompt: "A ceramic coffee mug with smooth curved handle, rounded lip, and glossy ceramic finish" },
+  { label: "Cow", prompt: "A low-poly cow with brown body, dark spots, head and four legs" },
+  { label: "Sheep", prompt: "A fluffy white sheep with woolly body, dark face and four legs" },
 ];
 
 const SYNTHESIS_STEPS = ["Generating geometry..."];

@@ -1093,6 +1093,104 @@ export function createProceduralSword(): THREE.Group {
   return group;
 }
 
+export function createProceduralCow(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Cow";
+  const bodyMat = createLowPolyMaterial("#d97706", { roughness: 0.8, metalness: 0.1 });
+  const spotMat = createLowPolyMaterial("#374151", { roughness: 0.9, metalness: 0.0 });
+
+  // Body
+  const bodyGeo = new THREE.CylinderGeometry(0.9, 0.7, 1.6, 24);
+  bodyGeo.computeVertexNormals();
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.name = "Cow_Body";
+  body.position.y = 0.8;
+  body.rotation.z = Math.PI / 2;
+  body.castShadow = true;
+  group.add(body);
+
+  // Head
+  const headGeo = new THREE.CylinderGeometry(0.35, 0.25, 0.5, 16);
+  headGeo.computeVertexNormals();
+  const head = new THREE.Mesh(headGeo, bodyMat);
+  head.name = "Cow_Head";
+  head.position.set(-0.95, 0.8, 0);
+  head.rotation.z = Math.PI / 2;
+  head.castShadow = true;
+  group.add(head);
+
+  // Legs
+  const legGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.6, 8);
+  legGeo.computeVertexNormals();
+  const legPositions = [
+    new THREE.Vector3(-0.5, 0.4, 0.45),
+    new THREE.Vector3(0.5, 0.4, 0.45),
+    new THREE.Vector3(-0.5, 0.4, -0.45),
+    new THREE.Vector3(0.5, 0.4, -0.45),
+  ];
+  legPositions.forEach((pos, i) => {
+    const leg = new THREE.Mesh(legGeo, spotMat);
+    leg.name = `Cow_Leg_${i + 1}`;
+    leg.position.copy(pos);
+    leg.castShadow = true;
+    group.add(leg);
+  });
+
+  // Spots
+  [new THREE.Vector3(-0.3, 0.85, 0.5), new THREE.Vector3(0.4, 0.75, -0.3)].forEach((pos, i) => {
+    const spot = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), spotMat);
+    spot.name = `Cow_Spot_${i + 1}`;
+    spot.position.copy(pos);
+    group.add(spot);
+  });
+
+  return group;
+}
+
+export function createProceduralSheep(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Sheep";
+  const woolMat = createLowPolyMaterial("#f3f4f6", { roughness: 0.95, metalness: 0.0 });
+  const faceMat = createLowPolyMaterial("#4b5563", { roughness: 0.9, metalness: 0.0 });
+
+  // Woolly body
+  const bodyGeo = new THREE.SphereGeometry(0.6, 16, 12);
+  bodyGeo.computeVertexNormals();
+  const body = new THREE.Mesh(bodyGeo, woolMat);
+  body.name = "Sheep_Body";
+  body.position.set(0, 0.6, 0);
+  body.castShadow = true;
+  group.add(body);
+
+  // Head
+  const headGeo = new THREE.SphereGeometry(0.22, 12, 10);
+  headGeo.computeVertexNormals();
+  const head = new THREE.Mesh(headGeo, faceMat);
+  head.name = "Sheep_Head";
+  head.position.set(-0.65, 0.6, 0);
+  head.castShadow = true;
+  group.add(head);
+
+  // Legs
+  const legGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.45, 6);
+  legGeo.computeVertexNormals();
+  const legPositions = [
+    new THREE.Vector3(-0.25, 0.35, 0.25),
+    new THREE.Vector3(0.25, 0.35, 0.25),
+    new THREE.Vector3(-0.25, 0.35, -0.25),
+    new THREE.Vector3(0.25, 0.35, -0.25),
+  ];
+  legPositions.forEach((pos, i) => {
+    const leg = new THREE.Mesh(legGeo, faceMat);
+    leg.name = `Sheep_Leg_${i + 1}`;
+    leg.position.copy(pos);
+    leg.castShadow = true;
+    group.add(leg);
+  });
+
+  return group;
+}
+
 export function generateProceduralModelFromPrompt(prompt: string): THREE.Object3D {
   const p = prompt.toLowerCase();
   if (p.includes("axe") || p.includes("battleaxe") || p.includes("hatchet")) {
@@ -1124,6 +1222,12 @@ export function generateProceduralModelFromPrompt(prompt: string): THREE.Object3
   }
   if (p.includes("lamp") || p.includes("lantern") || p.includes("light")) {
     return generateLowPolyProp("lantern");
+  }
+  if (p.includes("cow") || p.includes("bull") || p.includes("ox")) {
+    return createProceduralCow();
+  }
+  if (p.includes("sheep") || p.includes("ram")) {
+    return createProceduralSheep();
   }
   // Default CAD model: High precision turbine flange
   return createProceduralTurbineFlange();
