@@ -46,11 +46,12 @@ export function ModelPromptBar({
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!prompt.trim() || isLoading) return;
+    if (!prompt.trim() || isLoading || !token) return;
     onGenerate(prompt.trim(), format);
   };
 
   const handleSelectChip = (chipPrompt: string) => {
+    if (isLoading || !token) return;
     setPrompt(chipPrompt);
     onGenerate(chipPrompt, format);
   };
@@ -127,10 +128,12 @@ export function ModelPromptBar({
           {/* Generate Button */}
           <button
             type="submit"
-            disabled={!prompt.trim() || isLoading}
+            disabled={!prompt.trim() || isLoading || !token}
             className="flex items-center space-x-1 px-3 py-1 bg-[#ea580c] hover:bg-[#c2410c] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded font-bold text-[11px] transition-colors shrink-0 shadow-sm"
           >
-            {isLoading ? (
+            {!token ? (
+              <span className="text-xs opacity-90">API Key Required</span>
+            ) : isLoading ? (
               <>
                 <Loader2 className="w-3 h-3 animate-spin" />
                 <span>Synthesizing</span>

@@ -3396,8 +3396,8 @@ export function Viewport3D({
         console.warn("Procedural generation failed:", err);
       }
 
-      // Keep loading visible briefly so user gets clear feedback
-      await new Promise((r) => setTimeout(r, 500));
+      // Keep loading visible so user gets clear feedback that generation is working
+      await new Promise((r) => setTimeout(r, 1500));
 
       if (proceduralMesh && rootModelGroupRef.current) {
         // Clear prior children WITHOUT disposing (kept alive for undo)

@@ -1191,6 +1191,242 @@ export function createProceduralSheep(): THREE.Group {
   return group;
 }
 
+export function createProceduralRocketShip(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_RocketShip";
+  const hullMat = createLowPolyMaterial("#374151", { roughness: 0.6, metalness: 0.3 });
+  const accentMat = createLowPolyMaterial("#fbbf24", { roughness: 0.4, metalness: 0.8 });
+  const windowMat = createLowPolyMaterial("#60a5fa", { roughness: 0.2, metalness: 0.1 });
+
+  // Main hull (cone pointing up)
+  const hullGeo = new THREE.ConeGeometry(0.6, 2.4, 16);
+  hullGeo.computeVertexNormals();
+  const hull = new THREE.Mesh(hullGeo, hullMat);
+  hull.name = "Rocket_Hull";
+  hull.position.y = 1.2;
+  hull.rotation.x = Math.PI / 2;
+  hull.castShadow = true;
+  group.add(hull);
+
+  // Nose cone (smaller cone on top)
+  const noseGeo = new THREE.ConeGeometry(0.45, 0.8, 12);
+  noseGeo.computeVertexNormals();
+  const nose = new THREE.Mesh(noseGeo, accentMat);
+  nose.name = "Rocket_Nose";
+  nose.position.y = 2.45;
+  nose.rotation.x = Math.PI / 2;
+  nose.castShadow = true;
+  group.add(nose);
+
+  // Fins (3 around base)
+  const finGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.5, 6);
+  finGeo.computeVertexNormals();
+  [0, 120, 240].forEach((angle, i) => {
+    const fin = new THREE.Mesh(finGeo, accentMat);
+    fin.name = `Rocket_Fin_${i + 1}`;
+    const rad = (angle * Math.PI) / 180;
+    fin.position.set(Math.cos(rad) * 0.85, 0.05, Math.sin(rad) * 0.85);
+    fin.rotation.x = Math.PI / 2;
+    fin.rotation.z = rad;
+    fin.castShadow = true;
+    group.add(fin);
+  });
+
+  // Window
+  const windowGeo = new THREE.SphereGeometry(0.15, 12, 10);
+  windowGeo.computeVertexNormals();
+  const window = new THREE.Mesh(windowGeo, windowMat);
+  window.name = "Rocket_Window";
+  window.position.set(0, 1.5, 0.5);
+  group.add(window);
+
+  return group;
+}
+
+export function createProceduralTank(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Tank";
+  const bodyMat = createLowPolyMaterial("#4b5563", { roughness: 0.8, metalness: 0.2 });
+  const barrelMat = createLowPolyMaterial("#374151", { roughness: 0.7, metalness: 0.3 });
+
+  // Chassis (rounded box)
+  const chassisGeo = new THREE.BoxGeometry(1.4, 0.5, 0.9);
+  chassisGeo.computeVertexNormals();
+  const chassis = new THREE.Mesh(chassisGeo, bodyMat);
+  chassis.name = "Tank_Chassis";
+  chassis.position.y = 0.35;
+  chassis.castShadow = true;
+  group.add(chassis);
+
+  // Turret
+  const turretGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.4, 12);
+  turretGeo.computeVertexNormals();
+  const turret = new THREE.Mesh(turretGeo, bodyMat);
+  turret.name = "Tank_Turret";
+  turret.position.y = 0.6;
+  turret.castShadow = true;
+  group.add(turret);
+
+  // Barrel
+  const barrelGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.2, 8);
+  barrelGeo.computeVertexNormals();
+  const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+  barrel.name = "Tank_Barrel";
+  barrel.position.set(0.5, 0.6, 0);
+  barrel.rotation.z = -Math.PI / 2;
+  barrel.castShadow = true;
+  group.add(barrel);
+
+  // Tracks
+  const trackGeo = new THREE.CylinderGeometry(0.45, 0.45, 0.5, 16);
+  trackGeo.computeVertexNormals();
+  [new THREE.Vector3(-0.75, 0.25, 0), new THREE.Vector3(0.75, 0.25, 0)].forEach((pos, i) => {
+    const track = new THREE.Mesh(trackGeo, bodyMat);
+    track.name = `Tank_Track_${i + 1}`;
+    track.position.copy(pos);
+    track.rotation.z = Math.PI / 2;
+    track.castShadow = true;
+    group.add(track);
+  });
+
+  return group;
+}
+
+export function createProceduralCastle(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Castle";
+  const stoneMat = createLowPolyMaterial("#9ca3af", { roughness: 0.9, metalness: 0.1 });
+
+  // Keep (main tower)
+  const keepGeo = new THREE.BoxGeometry(1.2, 2.4, 1.2);
+  keepGeo.computeVertexNormals();
+  const keep = new THREE.Mesh(keepGeo, stoneMat);
+  keep.name = "Castle_Keep";
+  keep.position.y = 1.2;
+  keep.castShadow = true;
+  group.add(keep);
+
+  // Battlements on top
+  const battlementGeo = new THREE.BoxGeometry(1.4, 0.3, 1.4);
+  battlementGeo.computeVertexNormals();
+  const battlements = new THREE.Mesh(battlementGeo, stoneMat);
+  battlements.name = "Castle_Battlements";
+  battlements.position.y = 2.55;
+  group.add(battlements);
+
+  // Corner turrets
+  const turretGeo = new THREE.CylinderGeometry(0.18, 0.18, 1.6, 8);
+  turretGeo.computeVertexNormals();
+  const turretPositions = [
+    new THREE.Vector3(-0.6, 0.8, -0.6),
+    new THREE.Vector3(0.6, 0.8, -0.6),
+    new THREE.Vector3(-0.6, 0.8, 0.6),
+    new THREE.Vector3(0.6, 0.8, 0.6),
+  ];
+  turretPositions.forEach((pos, i) => {
+    const turret = new THREE.Mesh(turretGeo, stoneMat);
+    turret.name = `Castle_Turret_${i + 1}`;
+    turret.position.copy(pos);
+    turret.castShadow = true;
+    group.add(turret);
+  });
+
+  // Gate arch
+  const gateGeo = new THREE.BoxGeometry(0.6, 1.2, 0.2);
+  gateGeo.computeVertexNormals();
+  const gate = new THREE.Mesh(gateGeo, stoneMat);
+  gate.name = "Castle_Gate";
+  gate.position.set(0, 0.6, 0.61);
+  group.add(gate);
+
+  return group;
+}
+
+export function createProceduralRobot(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Robot";
+  const metalMat = createLowPolyMaterial("#e5e7eb", { roughness: 0.3, metalness: 0.6 });
+  const accentMat = createLowPolyMaterial("#3b82f6", { roughness: 0.2, metalness: 0.8 });
+
+  // Head
+  const headGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+  headGeo.computeVertexNormals();
+  const head = new THREE.Mesh(headGeo, metalMat);
+  head.name = "Robot_Head";
+  head.position.y = 1.6;
+  head.castShadow = true;
+  group.add(head);
+
+  // Body
+  const bodyGeo = new THREE.BoxGeometry(0.7, 1.0, 0.5);
+  bodyGeo.computeVertexNormals();
+  const body = new THREE.Mesh(bodyGeo, metalMat);
+  body.name = "Robot_Body";
+  body.position.y = 0.7;
+  body.castShadow = true;
+  group.add(body);
+
+  // Arms
+  const armGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.7, 8);
+  armGeo.computeVertexNormals();
+  [new THREE.Vector3(-0.5, 0.9, 0), new THREE.Vector3(0.5, 0.9, 0)].forEach((pos, i) => {
+    const arm = new THREE.Mesh(armGeo, metalMat);
+    arm.name = `Robot_Arm_${i + 1}`;
+    arm.position.copy(pos);
+    arm.castShadow = true;
+    group.add(arm);
+  });
+
+  // Legs
+  const legGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.8, 8);
+  legGeo.computeVertexNormals();
+  [new THREE.Vector3(-0.2, 0.25, 0), new THREE.Vector3(0.2, 0.25, 0)].forEach((pos, i) => {
+    const leg = new THREE.Mesh(legGeo, accentMat);
+    leg.name = `Robot_Leg_${i + 1}`;
+    leg.position.copy(pos);
+    leg.castShadow = true;
+    group.add(leg);
+  });
+
+  return group;
+}
+
+export function createProceduralPyramid(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Pyramid";
+  const stoneMat = createLowPolyMaterial("#d1d5db", { roughness: 0.85, metalness: 0.05 });
+  const goldMat = createLowPolyMaterial("#f59e0b", { roughness: 0.3, metalness: 0.9 });
+
+  // Base (square)
+  const baseGeo = new THREE.BoxGeometry(2.0, 0.4, 2.0);
+  baseGeo.computeVertexNormals();
+  const base = new THREE.Mesh(baseGeo, stoneMat);
+  base.name = "Pyramid_Base";
+  base.position.y = 0.2;
+  base.castShadow = true;
+  group.add(base);
+
+  // Pyramid (cone with 4 sides = square pyramid)
+  const pyramidGeo = new THREE.ConeGeometry(1.0, 1.8, 4);
+  pyramidGeo.computeVertexNormals();
+  const pyramid = new THREE.Mesh(pyramidGeo, stoneMat);
+  pyramid.name = "Pyramid";
+  pyramid.position.y = 1.1;
+  pyramid.castShadow = true;
+  group.add(pyramid);
+
+  // Capstone
+  const capGeo = new THREE.ConeGeometry(0.18, 0.3, 4);
+  capGeo.computeVertexNormals();
+  const cap = new THREE.Mesh(capGeo, goldMat);
+  cap.name = "Pyramid_Capstone";
+  cap.position.y = 2.0;
+  cap.castShadow = true;
+  group.add(cap);
+
+  return group;
+}
+
 export function generateProceduralModelFromPrompt(prompt: string): THREE.Object3D {
   const p = prompt.toLowerCase();
   if (p.includes("axe") || p.includes("battleaxe") || p.includes("hatchet")) {
@@ -1228,6 +1464,21 @@ export function generateProceduralModelFromPrompt(prompt: string): THREE.Object3
   }
   if (p.includes("sheep") || p.includes("ram")) {
     return createProceduralSheep();
+  }
+  if (p.includes("rocket") || p.includes("starship") || p.includes("spaceship") || p.includes("rocket ship")) {
+    return createProceduralRocketShip();
+  }
+  if (p.includes("tank")) {
+    return createProceduralTank();
+  }
+  if (p.includes("castle") || p.includes("fortress")) {
+    return createProceduralCastle();
+  }
+  if (p.includes("robot") || p.includes("android") || p.includes("mech")) {
+    return createProceduralRobot();
+  }
+  if (p.includes("pyramid")) {
+    return createProceduralPyramid();
   }
   // Default CAD model: High precision turbine flange
   return createProceduralTurbineFlange();

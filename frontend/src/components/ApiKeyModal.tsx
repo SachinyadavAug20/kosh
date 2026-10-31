@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Key, X, ExternalLink, Check, ShieldCheck, Zap } from "lucide-react";
+import { Key, X, ExternalLink, Check, ShieldCheck } from "lucide-react";
 
 export interface ApiKeyModalProps {
   isOpen: boolean;
@@ -26,16 +26,6 @@ export function ApiKeyModal({
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     onSaveToken(inputVal.trim());
-    setIsSaved(true);
-    setTimeout(() => {
-      setIsSaved(false);
-      onClose();
-    }, 600);
-  };
-
-  const handleSetDemo = () => {
-    setInputVal("demo");
-    onSaveToken("demo");
     setIsSaved(true);
     setTimeout(() => {
       setIsSaved(false);
@@ -102,33 +92,18 @@ export function ApiKeyModal({
           <div className="flex items-center justify-between p-2.5 bg-[#141416] border border-[#27272a] rounded text-[11px]">
             <span className="text-[#71717a]">Status:</span>
             {token ? (
-              token === "demo" ? (
-                <span className="text-amber-400 font-bold flex items-center space-x-1">
-                  <Zap className="w-3 h-3" />
-                  <span>Demo Mode Active</span>
-                </span>
-              ) : (
-                <span className="text-emerald-400 font-bold flex items-center space-x-1">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Connected (BYOK)</span>
-                </span>
-              )
+              <span className="text-emerald-400 font-bold flex items-center space-x-1">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Connected (BYOK)</span>
+              </span>
             ) : (
-              <span className="text-[#71717a]">No key configured (Click Demo Mode)</span>
+              <span className="text-[#71717a]">No key configured</span>
             )}
           </div>
 
           {/* Action Buttons */}
           <div className="flex items-center justify-between pt-2 border-t border-[#27272a]">
             <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={handleSetDemo}
-                className="px-2.5 py-1.5 rounded bg-[#202024] hover:bg-[#27272a] text-[#a1a1aa] hover:text-[#f4f4f5] text-[11px] transition-colors"
-                title="Use Demo mode with built-in procedural generators"
-              >
-                Demo Mode
-              </button>
               {token && (
                 <button
                   type="button"
@@ -142,7 +117,8 @@ export function ApiKeyModal({
 
             <button
               type="submit"
-              className="px-4 py-1.5 bg-[#ea580c] hover:bg-[#c2410c] text-white font-bold rounded text-[11px] flex items-center space-x-1 transition-colors"
+              disabled={!inputVal.trim()}
+              className="px-4 py-1.5 bg-[#ea580c] hover:bg-[#c2410c] text-white font-bold rounded text-[11px] flex items-center space-x-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isSaved ? <Check className="w-3.5 h-3.5" /> : null}
               <span>{isSaved ? "Saved!" : "Save & Connect"}</span>
