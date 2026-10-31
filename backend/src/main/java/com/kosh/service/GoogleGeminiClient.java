@@ -1043,8 +1043,330 @@ public class GoogleGeminiClient {
                 """.formatted(format, exportCmd);
         }
 
-        // 7. Turbine Flange / Default CAD Model
-        if ("cad_model".equals(normalizedTool) || lowerPrompt.contains("turbine") || lowerPrompt.contains("flange")) {
+        // 7. Aerodynamic Procedural Car / Vehicle
+        if (lowerPrompt.contains("car") || lowerPrompt.contains("vehicle") || lowerPrompt.contains("automobile") || lowerPrompt.contains("sedan") || lowerPrompt.contains("truck")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, color, roughness=0.35, metallic=0.2, emission=None, emission_strength=1.0):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        bsdf.inputs["Base Color"].default_value = color
+                        bsdf.inputs["Roughness"].default_value = roughness
+                        bsdf.inputs["Metallic"].default_value = metallic
+                        if emission:
+                            bsdf.inputs["Emission Color"].default_value = emission
+                            bsdf.inputs["Emission Strength"].default_value = emission_strength
+                    return mat
+
+                mat_car_paint = make_mat("Gloss_Sport_Red", (0.85, 0.08, 0.12, 1.0), roughness=0.15, metallic=0.85)
+                mat_cabin_glass = make_mat("Tinted_Obsidian_Glass", (0.05, 0.08, 0.12, 1.0), roughness=0.05, metallic=0.9)
+                mat_tire = make_mat("Vulcanized_Tire_Rubber", (0.08, 0.08, 0.09, 1.0), roughness=0.85, metallic=0.0)
+                mat_rim = make_mat("Machined_Billet_Alloy", (0.9, 0.92, 0.95, 1.0), roughness=0.2, metallic=0.98)
+                mat_headlight = make_mat("Xenon_LED_Headlight", (1.0, 1.0, 1.0, 1.0), roughness=0.1, metallic=0.1, emission=(0.95, 0.98, 1.0, 1.0), emission_strength=8.0)
+                mat_taillight = make_mat("Ruby_Taillight", (0.95, 0.05, 0.05, 1.0), roughness=0.1, metallic=0.1, emission=(1.0, 0.05, 0.05, 1.0), emission_strength=6.0)
+                mat_trim = make_mat("Carbon_Trim", (0.04, 0.04, 0.05, 1.0), roughness=0.4, metallic=0.7)
+
+                # Main Aerodynamic Chassis
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 0.55))
+                chassis = bpy.context.active_object
+                chassis.name = "Car_Chassis"
+                chassis.scale = (1.8, 3.8, 0.5)
+                bpy.ops.object.transform_apply(scale=True)
+                chassis.data.materials.append(mat_car_paint)
+
+                # Cabin / Greenhouse
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, -0.2, 1.15))
+                cabin = bpy.context.active_object
+                cabin.name = "Cabin_Greenhouse"
+                cabin.scale = (1.45, 1.9, 0.65)
+                bpy.ops.object.transform_apply(scale=True)
+                cabin.data.materials.append(mat_cabin_glass)
+
+                # Front Hood Bevel Wedge
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 1.25, 0.65))
+                hood = bpy.context.active_object
+                hood.name = "Front_Hood"
+                hood.scale = (1.65, 1.1, 0.35)
+                bpy.ops.object.transform_apply(scale=True)
+                hood.data.materials.append(mat_car_paint)
+
+                # 4 Wheels & Billet Rims
+                for wx, side in [(-0.95, "L"), (0.95, "R")]:
+                    for wy, pos in [(1.1, "Front"), (-1.1, "Rear")]:
+                        bpy.ops.mesh.primitive_cylinder_add(radius=0.42, depth=0.28, location=(wx, wy, 0.42))
+                        tire = bpy.context.active_object
+                        tire.name = f"Tire_{pos}_{side}"
+                        tire.rotation_euler = (0, math.pi / 2, 0)
+                        tire.data.materials.append(mat_tire)
+
+                        bpy.ops.mesh.primitive_cylinder_add(radius=0.28, depth=0.3, location=(wx, wy, 0.42))
+                        rim = bpy.context.active_object
+                        rim.name = f"Rim_{pos}_{side}"
+                        rim.rotation_euler = (0, math.pi / 2, 0)
+                        rim.data.materials.append(mat_rim)
+
+                # Headlights & Taillights
+                for hx in [-0.65, 0.65]:
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(hx, 1.91, 0.58))
+                    hl = bpy.context.active_object
+                    hl.name = f"Headlight_{hx}"
+                    hl.scale = (0.35, 0.08, 0.16)
+                    bpy.ops.object.transform_apply(scale=True)
+                    hl.data.materials.append(mat_headlight)
+
+                for tx in [-0.65, 0.65]:
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(tx, -1.91, 0.65))
+                    tl = bpy.context.active_object
+                    tl.name = f"Taillight_{tx}"
+                    tl.scale = (0.4, 0.08, 0.14)
+                    bpy.ops.object.transform_apply(scale=True)
+                    tl.data.materials.append(mat_taillight)
+
+                # Rear Aerodynamic Spoiler Wing
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, -1.75, 1.05))
+                wing = bpy.context.active_object
+                wing.name = "Rear_Spoiler_Wing"
+                wing.scale = (1.7, 0.35, 0.06)
+                bpy.ops.object.transform_apply(scale=True)
+                wing.data.materials.append(mat_trim)
+
+                # Studio 3-Point Lighting Rig
+                klight = bpy.data.lights.new("KeyLight", type='AREA')
+                klight.energy = 1400
+                kobj = bpy.data.objects.new("KeyLight", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (5, 8, 7)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
+        // 8. Procedural Jet Airplane / Aircraft
+        if (lowerPrompt.contains("airplane") || lowerPrompt.contains("plane") || lowerPrompt.contains("jet")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, color, roughness=0.35, metallic=0.2):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        bsdf.inputs["Base Color"].default_value = color
+                        bsdf.inputs["Roughness"].default_value = roughness
+                        bsdf.inputs["Metallic"].default_value = metallic
+                    return mat
+
+                mat_fuselage = make_mat("Aero_Titanium_White", (0.92, 0.93, 0.95, 1.0), roughness=0.2, metallic=0.7)
+                mat_wings = make_mat("Carbon_Navy_Wings", (0.08, 0.15, 0.28, 1.0), roughness=0.25, metallic=0.8)
+                mat_cockpit = make_mat("Aero_Glass_Tint", (0.05, 0.08, 0.15, 1.0), roughness=0.05, metallic=0.95)
+
+                # Fuselage
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.65, depth=7.0, location=(0, 0, 1.8))
+                fuse = bpy.context.active_object
+                fuse.name = "Fuselage_Body"
+                fuse.rotation_euler = (math.pi / 2, 0, 0)
+                fuse.data.materials.append(mat_fuselage)
+
+                # Nose Cone
+                bpy.ops.mesh.primitive_cone_add(radius1=0.65, depth=1.6, location=(0, 4.3, 1.8))
+                nose = bpy.context.active_object
+                nose.name = "Nose_Radome"
+                nose.rotation_euler = (-math.pi / 2, 0, 0)
+                nose.data.materials.append(mat_fuselage)
+
+                # Main Swept Wings
+                for sx in [-1, 1]:
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(sx * 2.8, 0.2, 1.8))
+                    wing = bpy.context.active_object
+                    wing.name = f"Main_Wing_{'L' if sx < 0 else 'R'}"
+                    wing.scale = (4.2, 1.2, 0.08)
+                    wing.rotation_euler = (0, 0, -sx * 0.2)
+                    bpy.ops.object.transform_apply(scale=True, rotation=True)
+                    wing.data.materials.append(mat_wings)
+
+                # Vertical Stabilizer Tail Fin
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, -3.0, 2.7))
+                fin = bpy.context.active_object
+                fin.name = "Vertical_Tail_Fin"
+                fin.scale = (0.08, 1.2, 1.6)
+                bpy.ops.object.transform_apply(scale=True)
+                fin.data.materials.append(mat_wings)
+
+                # Cockpit Canopy
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 2.0, 2.4))
+                canopy = bpy.context.active_object
+                canopy.name = "Cockpit_Canopy"
+                canopy.scale = (0.7, 1.8, 0.45)
+                bpy.ops.object.transform_apply(scale=True)
+                canopy.data.materials.append(mat_cockpit)
+
+                # Key Light
+                klight = bpy.data.lights.new("KeyLight", type='AREA')
+                klight.energy = 1400
+                kobj = bpy.data.objects.new("KeyLight", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (6, 6, 8)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
+        // 9. Procedural Laptop / Workstation Computer
+        if (lowerPrompt.contains("laptop") || lowerPrompt.contains("computer") || lowerPrompt.contains("notebook") || lowerPrompt.contains("macbook")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, color, roughness=0.35, metallic=0.2, emission=None, emission_strength=1.0):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        bsdf.inputs["Base Color"].default_value = color
+                        bsdf.inputs["Roughness"].default_value = roughness
+                        bsdf.inputs["Metallic"].default_value = metallic
+                        if emission:
+                            bsdf.inputs["Emission Color"].default_value = emission
+                            bsdf.inputs["Emission Strength"].default_value = emission_strength
+                    return mat
+
+                mat_body = make_mat("Anodized_Space_Grey", (0.18, 0.20, 0.22, 1.0), roughness=0.25, metallic=0.92)
+                mat_keys = make_mat("Matte_Keyboard_Caps", (0.05, 0.05, 0.06, 1.0), roughness=0.6, metallic=0.1)
+                mat_screen = make_mat("Retina_OLED_Display", (0.05, 0.12, 0.22, 1.0), roughness=0.08, metallic=0.2, emission=(0.1, 0.35, 0.65, 1.0), emission_strength=3.0)
+
+                # Base Lower Deck
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 0.08))
+                base = bpy.context.active_object
+                base.name = "Laptop_Lower_Chassis"
+                base.scale = (3.2, 2.2, 0.16)
+                bpy.ops.object.transform_apply(scale=True)
+                base.data.materials.append(mat_body)
+
+                # Keyboard Plate Inset
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, -0.15, 0.17))
+                keys = bpy.context.active_object
+                keys.name = "Keyboard_Island"
+                keys.scale = (2.7, 1.2, 0.03)
+                bpy.ops.object.transform_apply(scale=True)
+                keys.data.materials.append(mat_keys)
+
+                # Trackpad
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0.72, 0.17))
+                pad = bpy.context.active_object
+                pad.name = "Glass_Trackpad"
+                pad.scale = (1.1, 0.68, 0.02)
+                bpy.ops.object.transform_apply(scale=True)
+                pad.data.materials.append(mat_body)
+
+                # Screen Display Lid (angled 115 degrees back)
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, -1.05, 1.05))
+                lid = bpy.context.active_object
+                lid.name = "Screen_Lid_Bezel"
+                lid.scale = (3.2, 0.12, 2.1)
+                lid.rotation_euler = (0.26, 0, 0)
+                bpy.ops.object.transform_apply(scale=True, rotation=True)
+                lid.data.materials.append(mat_body)
+
+                # Screen Active Matrix Display
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, -1.0, 1.08))
+                disp = bpy.context.active_object
+                disp.name = "Active_OLED_Screen"
+                disp.scale = (2.95, 0.04, 1.85)
+                disp.rotation_euler = (0.26, 0, 0)
+                bpy.ops.object.transform_apply(scale=True, rotation=True)
+                disp.data.materials.append(mat_screen)
+
+                # Key Light
+                klight = bpy.data.lights.new("KeyLight", type='AREA')
+                klight.energy = 1100
+                kobj = bpy.data.objects.new("KeyLight", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (3, -3, 4)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
+        // 10. Procedural Low-Poly Pine Tree / Nature
+        if (lowerPrompt.contains("tree") || lowerPrompt.contains("plant") || lowerPrompt.contains("forest") || lowerPrompt.contains("pine")) {
+            return """
+                import bpy, sys, math, os, json
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, color, roughness=0.6, metallic=0.0):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        bsdf.inputs["Base Color"].default_value = color
+                        bsdf.inputs["Roughness"].default_value = roughness
+                        bsdf.inputs["Metallic"].default_value = metallic
+                    return mat
+
+                mat_wood = make_mat("Rough_Bark_Brown", (0.35, 0.20, 0.12, 1.0), roughness=0.85, metallic=0.0)
+                mat_leaves = make_mat("Alpine_Forest_Green", (0.12, 0.45, 0.22, 1.0), roughness=0.6, metallic=0.0)
+
+                # Tree Trunk
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.35, depth=2.0, location=(0, 0, 1.0))
+                trunk = bpy.context.active_object
+                trunk.name = "Tree_Trunk"
+                trunk.data.materials.append(mat_wood)
+
+                # Layered Foliage Cones
+                for i, (cz, cr, ch) in enumerate([(2.2, 1.8, 2.0), (3.3, 1.4, 1.8), (4.3, 1.0, 1.5)]):
+                    bpy.ops.mesh.primitive_cone_add(radius1=cr, depth=ch, location=(0, 0, cz))
+                    cone = bpy.context.active_object
+                    cone.name = f"Foliage_Layer_{i}"
+                    cone.data.materials.append(mat_leaves)
+
+                klight = bpy.data.lights.new("KeyLight", type='AREA')
+                klight.energy = 1200
+                kobj = bpy.data.objects.new("KeyLight", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (4, -4, 6)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
+        // 11. Turbine Flange / Mechanical Coupling
+        if (lowerPrompt.contains("turbine") || lowerPrompt.contains("flange")) {
             return """
                 import bpy, sys, math, os, json
                 import mathutils
@@ -2261,7 +2583,7 @@ public class GoogleGeminiClient {
         }
 
         // Turbine / Mechanical / CAD Flange
-        if ("cad_model".equalsIgnoreCase(toolType) || lowerPrompt.contains("turbine") || lowerPrompt.contains("gear") || lowerPrompt.contains("flange")) {
+        if (lowerPrompt.contains("turbine") || lowerPrompt.contains("gear") || lowerPrompt.contains("flange")) {
             return """
                 import bpy, sys, math, os, json
                 import mathutils

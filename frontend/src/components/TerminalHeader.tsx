@@ -251,7 +251,7 @@ export function TerminalHeader({
               <div className="flex items-center space-x-2">
                 <Shield className="w-3.5 h-3.5 text-[#a1a1aa]" />
                 <span className="font-semibold text-[#f4f4f5]">Google Gemini API Key</span>
-                <span className="text-[#71717a] text-[11px]">— Free tier (gemini-2.5-flash)</span>
+                <span className="text-[#71717a] text-[11px]">— Free tier (gemini-1.5-flash & gemini-2.0)</span>
               </div>
               <div className="flex items-center space-x-3 text-[10px]">
                 <a
