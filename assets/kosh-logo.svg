@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Vignette Gradient -->
+    <radialGradient id="kosh-bg" cx="50%" cy="50%" r="75%">
+      <stop offset="0%" stopColor="#1e2025" />
+      <stop offset="60%" stopColor="#141416" />
+      <stop offset="100%" stopColor="#0d0d0f" />
+    </radialGradient>
+
+    <!-- Outer Facet Gradients -->
+    <linearGradient id="facet-top" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#2e323b" />
+      <stop offset="50%" stopColor="#252830" />
+      <stop offset="100%" stopColor="#1c1e24" />
+    </linearGradient>
+
+    <linearGradient id="facet-left" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#22252c" />
+      <stop offset="100%" stopColor="#131518" />
+    </linearGradient>
+
+    <linearGradient id="facet-right" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#1b1d22" />
+      <stop offset="100%" stopColor="#0e1013" />
+    </linearGradient>
+
+    <!-- Glowing Kinetic Core Gradients -->
+    <linearGradient id="core-top" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#fb923c" />
+      <stop offset="100%" stopColor="#ea580c" />
+    </linearGradient>
+
+    <linearGradient id="core-left" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#ea580c" />
+      <stop offset="100%" stopColor="#c2410c" />
+    </linearGradient>
+
+    <linearGradient id="core-right" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#c2410c" />
+      <stop offset="100%" stopColor="#9a3412" />
+    </linearGradient>
+
+    <!-- Core Glow Filter -->
+    <filter id="core-glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <!-- Drop Shadow for Outer Shell -->
+    <filter id="shell-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" floodColor="#000000" floodOpacity="0.75" />
+    </filter>
+  </defs>
+
+  <!-- Dark CAD Viewport Canvas Base -->
+  <rect width="512" height="512" rx="108" fill="url(#kosh-bg)" />
+  <rect width="512" height="512" rx="108" fill="none" stroke="#27272a" stroke-width="2" />
+
+  <!-- Subtle CAD Alignment Crosshairs -->
+  <line x1="256" y1="28" x2="256" y2="48" stroke="#3f3f46" stroke-width="1.5" stroke-dasharray="2,2" />
+  <line x1="256" y1="464" x2="256" y2="484" stroke="#3f3f46" stroke-width="1.5" stroke-dasharray="2,2" />
+  <line x1="28" y1="256" x2="48" y2="256" stroke="#3f3f46" stroke-width="1.5" stroke-dasharray="2,2" />
+  <line x1="464" y1="256" x2="484" y2="256" stroke="#3f3f46" stroke-width="1.5" stroke-dasharray="2,2" />
+
+  <!-- Peripheral Coordinate Tick Rings -->
+  <circle cx="256" cy="256" r="218" fill="none" stroke="#22252b" stroke-width="1" stroke-dasharray="4, 12" />
+
+  <!-- 3D Isometric Polyhedral Outer Shell -->
+  <g filter="url(#shell-shadow)">
+    <!-- Top Face -->
+    <polygon points="256,76 412,166 256,256 100,166" fill="url(#facet-top)" stroke="#3f434d" stroke-width="2.5" stroke-linejoin="round" />
+    <!-- Left Face -->
+    <polygon points="100,166 256,256 256,436 100,346" fill="url(#facet-left)" stroke="#333740" stroke-width="2.5" stroke-linejoin="round" />
+    <!-- Right Face -->
+    <polygon points="256,256 412,166 412,346 256,436" fill="url(#facet-right)" stroke="#272a32" stroke-width="2.5" stroke-linejoin="round" />
+
+    <!-- Isometric Wireframe Accents -->
+    <line x1="256" y1="76" x2="256" y2="256" stroke="#525866" stroke-width="1.5" stroke-opacity="0.6" />
+    <line x1="100" y1="166" x2="256" y2="256" stroke="#454a57" stroke-width="1.5" stroke-opacity="0.6" />
+    <line x1="412" y1="166" x2="256" y2="256" stroke="#383c47" stroke-width="1.5" stroke-opacity="0.6" />
+  </g>
+
+  <!-- 3D Cardinal Axes (Blender Coordinates: X-Red, Y-Green, Z-Blue) -->
+  <!-- Z Axis (Blue, Top) -->
+  <line x1="256" y1="256" x2="256" y2="106" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" />
+  <circle cx="256" cy="106" r="5" fill="#3b82f6" stroke="#ffffff" stroke-width="1.5" />
+
+  <!-- X Axis (Red, Bottom Right) -->
+  <line x1="256" y1="256" x2="386" y2="331" stroke="#ef4444" stroke-width="3" stroke-linecap="round" />
+  <circle cx="386" cy="331" r="5" fill="#ef4444" stroke="#ffffff" stroke-width="1.5" />
+
+  <!-- Y Axis (Green, Bottom Left) -->
+  <line x1="256" y1="256" x2="126" y2="331" stroke="#22c55e" stroke-width="3" stroke-linecap="round" />
+  <circle cx="126" cy="331" r="5" fill="#22c55e" stroke="#ffffff" stroke-width="1.5" />
+
+  <!-- Floating Kinetic Core (The Kosh Jewel - Treasury of Generation) -->
+  <g filter="url(#core-glow)">
+    <!-- Core Top Face -->
+    <polygon points="256,186 316,221 256,256 196,221" fill="url(#core-top)" stroke="#ffedd5" stroke-width="1.2" stroke-linejoin="round" />
+    <!-- Core Left Face -->
+    <polygon points="196,221 256,256 256,326 196,291" fill="url(#core-left)" stroke="#fdba74" stroke-width="1.2" stroke-linejoin="round" />
+    <!-- Core Right Face -->
+    <polygon points="256,256 316,221 316,291 256,326" fill="url(#core-right)" stroke="#ea580c" stroke-width="1.2" stroke-linejoin="round" />
+  </g>
+
+  <!-- Center Origin Core Dot -->
+  <circle cx="256" cy="256" r="4" fill="#ffffff" />
+
+  <!-- Sub-Facet Geometric Cutlines for Parametric CAD Identity -->
+  <line x1="178" y1="121" x2="256" y2="166" stroke="#ea580c" stroke-width="1.5" stroke-opacity="0.8" />
+  <line x1="334" y1="121" x2="256" y2="166" stroke="#ea580c" stroke-width="1.5" stroke-opacity="0.8" />
+  <circle cx="256" cy="166" r="3" fill="#ea580c" />
+</svg>

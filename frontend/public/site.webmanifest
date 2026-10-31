@@ -1,0 +1,24 @@
+{
+  "name": "KOSH // Minimalist Creative MCP Studio",
+  "short_name": "Kosh",
+  "description": "Terminal-First 3D Creation Workstation & Model Context Protocol Hub for Headless Blender 5.2",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#141416",
+  "theme_color": "#ea580c",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

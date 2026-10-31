@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Vignette Gradient -->
+    <radialGradient id="kosh-bg" cx="50%" cy="50%" r="75%">
+      <stop offset="0%" stopColor="#1e2025" />
+      <stop offset="60%" stopColor="#141416" />
+      <stop offset="100%" stopColor="#0d0d0f" />
+    </radialGradient>
+
+    <!-- Outer Facet Gradients -->
+    <linearGradient id="facet-top" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#2e323b" />
+      <stop offset="50%" stopColor="#252830" />
+      <stop offset="100%" stopColor="#1c1e24" />
+    </linearGradient>
+
+    <linearGradient id="facet-left" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#22252c" />
+      <stop offset="100%" stopColor="#131518" />
+    </linearGradient>
+
+    <linearGradient id="facet-right" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#1b1d22" />
+      <stop offset="100%" stopColor="#0e1013" />
+    </linearGradient>
+
+    <!-- Glowing Kinetic Core Gradients -->
+    <linearGradient id="core-top" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#fb923c" />
+      <stop offset="100%" stopColor="#ea580c" />
+    </linearGradient>
+
+    <linearGradient id="core-left" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stopColor="#ea580c" />
+      <stop offset="100%" stopColor="#c2410c" />
+    </linearGradient>
+
+    <linearGradient id="core-right" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#c2410c" />
+      <stop offset="100%" stopColor="#9a3412" />
+    </linearGradient>
+
+    <filter id="core-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Dark Rounded Container -->
+  <rect width="512" height="512" rx="112" fill="url(#kosh-bg)" />
+  <rect width="512" height="512" rx="112" fill="none" stroke="#2a2d34" stroke-width="3" />
+
+  <!-- 3D Isometric Polyhedral Outer Shell -->
+  <g>
+    <!-- Top Face -->
+    <polygon points="256,76 412,166 256,256 100,166" fill="url(#facet-top)" stroke="#3f434d" stroke-width="2.5" stroke-linejoin="round" />
+    <!-- Left Face -->
+    <polygon points="100,166 256,256 256,436 100,346" fill="url(#facet-left)" stroke="#333740" stroke-width="2.5" stroke-linejoin="round" />
+    <!-- Right Face -->
+    <polygon points="256,256 412,166 412,346 256,436" fill="url(#facet-right)" stroke="#272a32" stroke-width="2.5" stroke-linejoin="round" />
+
+    <!-- Isometric Wireframe Accents -->
+    <line x1="256" y1="76" x2="256" y2="256" stroke="#525866" stroke-width="1.5" stroke-opacity="0.6" />
+    <line x1="100" y1="166" x2="256" y2="256" stroke="#454a57" stroke-width="1.5" stroke-opacity="0.6" />
+    <line x1="412" y1="166" x2="256" y2="256" stroke="#383c47" stroke-width="1.5" stroke-opacity="0.6" />
+  </g>
+
+  <!-- 3D Cardinal Axes (Blender Coordinates: X-Red, Y-Green, Z-Blue) -->
+  <!-- Z Axis (Blue, Top) -->
+  <line x1="256" y1="256" x2="256" y2="106" stroke="#3b82f6" stroke-width="3.5" stroke-linecap="round" />
+  <circle cx="256" cy="106" r="6" fill="#3b82f6" stroke="#ffffff" stroke-width="1.5" />
+
+  <!-- X Axis (Red, Bottom Right) -->
+  <line x1="256" y1="256" x2="386" y2="331" stroke="#ef4444" stroke-width="3.5" stroke-linecap="round" />
+  <circle cx="386" cy="331" r="6" fill="#ef4444" stroke="#ffffff" stroke-width="1.5" />
+
+  <!-- Y Axis (Green, Bottom Left) -->
+  <line x1="256" y1="256" x2="126" y2="331" stroke="#22c55e" stroke-width="3.5" stroke-linecap="round" />
+  <circle cx="126" cy="331" r="6" fill="#22c55e" stroke="#ffffff" stroke-width="1.5" />
+
+  <!-- Floating Kinetic Core (The Kosh Jewel) -->
+  <g filter="url(#core-glow)">
+    <polygon points="256,186 316,221 256,256 196,221" fill="url(#core-top)" stroke="#ffedd5" stroke-width="1.5" stroke-linejoin="round" />
+    <polygon points="196,221 256,256 256,326 196,291" fill="url(#core-left)" stroke="#fdba74" stroke-width="1.5" stroke-linejoin="round" />
+    <polygon points="256,256 316,221 316,291 256,326" fill="url(#core-right)" stroke="#ea580c" stroke-width="1.5" stroke-linejoin="round" />
+  </g>
+
+  <!-- Center Origin Core Dot -->
+  <circle cx="256" cy="256" r="5" fill="#ffffff" />
+</svg>
