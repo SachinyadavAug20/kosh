@@ -685,6 +685,45 @@ export function Viewport3D({
     }
   }, [isPostProcessingEnabled]);
 
+  const syncMeshTransformRef = useRef<((mesh: THREE.Object3D | null) => void) | null>(null);
+
+  const syncMeshTransform = useCallback(
+    (mesh: THREE.Object3D | null) => {
+      if (!mesh) return;
+      const nextPos = {
+        x: parseFloat(mesh.position.x.toFixed(2)),
+        y: parseFloat(mesh.position.y.toFixed(2)),
+        z: parseFloat(mesh.position.z.toFixed(2)),
+      };
+      const nextRot = {
+        x: parseFloat(THREE.MathUtils.radToDeg(mesh.rotation.x).toFixed(1)),
+        y: parseFloat(THREE.MathUtils.radToDeg(mesh.rotation.y).toFixed(1)),
+        z: parseFloat(THREE.MathUtils.radToDeg(mesh.rotation.z).toFixed(1)),
+      };
+      const nextScale = {
+        x: parseFloat(mesh.scale.x.toFixed(2)),
+        y: parseFloat(mesh.scale.y.toFixed(2)),
+        z: parseFloat(mesh.scale.z.toFixed(2)),
+      };
+      setSelectedTransform({
+        position: nextPos,
+        rotation: nextRot,
+        scale: nextScale,
+      });
+      setLiveTransform({
+        pos: [nextPos.x, nextPos.y, nextPos.z],
+        rot: [nextRot.x, nextRot.y, nextRot.z],
+        scale: [nextScale.x, nextScale.y, nextScale.z],
+      });
+      updateSelectionHelpers();
+    },
+    [updateSelectionHelpers]
+  );
+
+  useEffect(() => {
+    syncMeshTransformRef.current = syncMeshTransform;
+  }, [syncMeshTransform]);
+
   // Raycaster & Mouse Click Tracking (to distinguish click vs orbit drag)
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const pointerDownPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -814,26 +853,7 @@ export function Viewport3D({
     transform.addEventListener("objectChange", () => {
       const obj = transform.object;
       if (obj) {
-        setLiveTransform({
-          pos: [
-            parseFloat(obj.position.x.toFixed(2)),
-            parseFloat(obj.position.y.toFixed(2)),
-            parseFloat(obj.position.z.toFixed(2)),
-          ],
-          rot: [
-            parseFloat(THREE.MathUtils.radToDeg(obj.rotation.x).toFixed(1)),
-            parseFloat(THREE.MathUtils.radToDeg(obj.rotation.y).toFixed(1)),
-            parseFloat(THREE.MathUtils.radToDeg(obj.rotation.z).toFixed(1)),
-          ],
-          scale: [
-            parseFloat(obj.scale.x.toFixed(2)),
-            parseFloat(obj.scale.y.toFixed(2)),
-            parseFloat(obj.scale.z.toFixed(2)),
-          ],
-        });
-        if (selectionBoxHelperRef.current) {
-          selectionBoxHelperRef.current.update();
-        }
+        syncMeshTransformRef.current?.(obj);
       }
     });
     scene.add(transform.getHelper());
@@ -862,6 +882,10 @@ export function Viewport3D({
       onDragEnd: () => {
         orbit.enabled = true;
         setLiveDragBadge(null);
+        const obj = universalGizmo.getTarget();
+        if (obj) {
+          syncMeshTransformRef.current?.(obj);
+        }
         // Record undo command for this transform
         const before = gizmoSnapshotRef.current;
         if (before && before.length > 0) {
@@ -889,24 +913,7 @@ export function Viewport3D({
       onObjectChange: () => {
         const obj = universalGizmo.getTarget();
         if (obj) {
-          setLiveTransform({
-            pos: [
-              parseFloat(obj.position.x.toFixed(2)),
-              parseFloat(obj.position.y.toFixed(2)),
-              parseFloat(obj.position.z.toFixed(2)),
-            ],
-            rot: [
-              parseFloat(THREE.MathUtils.radToDeg(obj.rotation.x).toFixed(1)),
-              parseFloat(THREE.MathUtils.radToDeg(obj.rotation.y).toFixed(1)),
-              parseFloat(THREE.MathUtils.radToDeg(obj.rotation.z).toFixed(1)),
-            ],
-            scale: [
-              parseFloat(obj.scale.x.toFixed(2)),
-              parseFloat(obj.scale.y.toFixed(2)),
-              parseFloat(obj.scale.z.toFixed(2)),
-            ],
-          });
-          if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+          syncMeshTransformRef.current?.(obj);
         }
       },
     });
@@ -1192,6 +1199,16 @@ export function Viewport3D({
 
       orbit.update();
       universalGizmo.update();
+
+      // Continuous geometry tracking for any active selection helpers
+      if (selectionHelpersGroupRef.current && selectionHelpersGroupRef.current.children.length > 0) {
+        for (const h of selectionHelpersGroupRef.current.children) {
+          if (h instanceof THREE.BoxHelper) h.update();
+        }
+      }
+      if (selectionBoxHelperRef.current && selectionBoxHelperRef.current.visible) {
+        selectionBoxHelperRef.current.update();
+      }
 
       if (postPipelineRef.current && isPostProcessingEnabledRef.current) {
         postPipelineRef.current.updateCamera(activeCamera);
@@ -1827,23 +1844,7 @@ export function Viewport3D({
     }
 
     if (activeMesh) {
-      setLiveTransform({
-        pos: [
-          parseFloat(activeMesh.position.x.toFixed(2)),
-          parseFloat(activeMesh.position.y.toFixed(2)),
-          parseFloat(activeMesh.position.z.toFixed(2)),
-        ],
-        rot: [
-          parseFloat(THREE.MathUtils.radToDeg(activeMesh.rotation.x).toFixed(1)),
-          parseFloat(THREE.MathUtils.radToDeg(activeMesh.rotation.y).toFixed(1)),
-          parseFloat(THREE.MathUtils.radToDeg(activeMesh.rotation.z).toFixed(1)),
-        ],
-        scale: [
-          parseFloat(activeMesh.scale.x.toFixed(2)),
-          parseFloat(activeMesh.scale.y.toFixed(2)),
-          parseFloat(activeMesh.scale.z.toFixed(2)),
-        ],
-      });
+      syncMeshTransform(activeMesh);
 
       const mat = activeMesh.material as THREE.MeshStandardMaterial;
       if (mat && mat.color) {
@@ -1851,9 +1852,20 @@ export function Viewport3D({
         setMatRoughness(mat.roughness ?? 0.35);
         setMatMetalness(mat.metalness ?? 0.25);
       }
+    } else {
+      setSelectedTransform({
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+      });
+      setLiveTransform({
+        pos: [0, 0, 0],
+        rot: [0, 0, 0],
+        scale: [1, 1, 1],
+      });
     }
 
-    // Rebuild multi-selection helpers (Gold for active mesh, amber for other selected meshes)
+    // Rebuild multi-selection helpers
     if (selectionHelpersGroupRef.current) {
       while (selectionHelpersGroupRef.current.children.length > 0) {
         const child = selectionHelpersGroupRef.current.children[0];
@@ -1864,12 +1876,15 @@ export function Viewport3D({
         }
       }
 
-      for (const m of selectedMeshes) {
-        const isActive = m === activeMesh;
-        const color = isActive ? 0xf59e0b : 0xd97706;
-        const helper = new THREE.BoxHelper(m, color);
-        helper.visible = true;
-        selectionHelpersGroupRef.current.add(helper);
+      // Only add BoxHelper wireframe fallback if post-processing outline pass is disabled
+      if (!isPostProcessingEnabledRef.current || !postPipelineRef.current) {
+        for (const m of selectedMeshes) {
+          const isActive = m === activeMesh;
+          const color = isActive ? 0xf59e0b : 0xd97706;
+          const helper = new THREE.BoxHelper(m, color);
+          helper.visible = true;
+          selectionHelpersGroupRef.current.add(helper);
+        }
       }
     }
 
@@ -1877,7 +1892,7 @@ export function Viewport3D({
     if (postPipelineRef.current) {
       postPipelineRef.current.setOutlineTargets(selectedMeshes);
     }
-  }, [selectedMeshes, onMeshSelect]);
+  }, [selectedMeshes, onMeshSelect, syncMeshTransform]);
 
   // Sync external mesh selection (e.g. from Scene Outliner in right drawer)
   useEffect(() => {
@@ -1962,8 +1977,8 @@ export function Viewport3D({
       const bottomOffset = selectedMesh.position.y - bbox.min.y;
       selectedMesh.position.y = bottomOffset;
     }
-    if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
-  }, [selectedMesh]);
+    syncMeshTransform(selectedMesh);
+  }, [selectedMesh, syncMeshTransform]);
 
   const handleCenterToOrigin = useCallback(() => {
     if (universalGizmoRef.current) {
@@ -1971,8 +1986,8 @@ export function Viewport3D({
     } else if (selectedMesh) {
       selectedMesh.position.set(0, selectedMesh.position.y, 0);
     }
-    if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
-  }, [selectedMesh]);
+    syncMeshTransform(selectedMesh);
+  }, [selectedMesh, syncMeshTransform]);
 
   const handleResetRotation = useCallback(() => {
     if (universalGizmoRef.current) {
@@ -1980,8 +1995,8 @@ export function Viewport3D({
     } else if (selectedMesh) {
       selectedMesh.rotation.set(0, 0, 0);
     }
-    if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
-  }, [selectedMesh]);
+    syncMeshTransform(selectedMesh);
+  }, [selectedMesh, syncMeshTransform]);
 
   const handleResetScale = useCallback(() => {
     if (universalGizmoRef.current) {
@@ -1989,8 +2004,8 @@ export function Viewport3D({
     } else if (selectedMesh) {
       selectedMesh.scale.set(1, 1, 1);
     }
-    if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
-  }, [selectedMesh]);
+    syncMeshTransform(selectedMesh);
+  }, [selectedMesh, syncMeshTransform]);
 
   // -------------------------------------------------------------
   // 5. Native Blender Transform Gizmo & Snapping Engine
@@ -2100,24 +2115,7 @@ export function Viewport3D({
       target.scale.copy(preTransformSnapshotRef.current.scale);
       target.updateMatrixWorld();
 
-      setLiveTransform({
-        pos: [
-          parseFloat(target.position.x.toFixed(2)),
-          parseFloat(target.position.y.toFixed(2)),
-          parseFloat(target.position.z.toFixed(2)),
-        ],
-        rot: [
-          parseFloat(THREE.MathUtils.radToDeg(target.rotation.x).toFixed(1)),
-          parseFloat(THREE.MathUtils.radToDeg(target.rotation.y).toFixed(1)),
-          parseFloat(THREE.MathUtils.radToDeg(target.rotation.z).toFixed(1)),
-        ],
-        scale: [
-          parseFloat(target.scale.x.toFixed(2)),
-          parseFloat(target.scale.y.toFixed(2)),
-          parseFloat(target.scale.z.toFixed(2)),
-        ],
-      });
-      if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+      syncMeshTransform(target);
     }
     setIsModalTransforming(false);
     setTypedNumericBuffer("");
@@ -2468,7 +2466,7 @@ export function Viewport3D({
       }
       target.updateMatrixWorld();
     }
-    if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+    syncMeshTransform(target);
   };
 
   const refreshMeshList = useCallback(() => {
@@ -3414,6 +3412,7 @@ export function Viewport3D({
     onMeshSelect?.(mesh.name);
     setLastAddedPrimitive({ type, mesh });
     setIsAddMenuOpen(false);
+    syncMeshTransform(mesh);
 
     // Refresh mesh stats
     const list: MeshNodeInfo[] = [];
@@ -4593,7 +4592,8 @@ export function Viewport3D({
                               onChange={(e) => {
                                 const s = parseFloat(e.target.value);
                                 lastAddedPrimitive.mesh.scale.set(s, s, s);
-                                if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
+                                syncMeshTransform(lastAddedPrimitive.mesh);
+                                if (universalGizmoRef.current) universalGizmoRef.current.update();
                               }}
                               className="w-full accent-[#ea580c]"
                             />
