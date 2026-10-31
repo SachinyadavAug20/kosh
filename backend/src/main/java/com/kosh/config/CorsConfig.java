@@ -10,11 +10,11 @@ public class CorsConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOriginPatterns("*")
+                .allowedOrigins("https://kosh-puce.vercel.app")   // was: allowedOriginPatterns("*")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD")
                 .allowedHeaders("*")
                 .exposedHeaders("X-BharatCode-Token", "X-BharatCode-Key", "Content-Disposition")
-                .allowCredentials(false)
+                .allowCredentials(true)                           // was: false
                 .maxAge(3600);
     }
 }
