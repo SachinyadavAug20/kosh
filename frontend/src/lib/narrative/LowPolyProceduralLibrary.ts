@@ -1191,6 +1191,159 @@ export function createProceduralSheep(): THREE.Group {
   return group;
 }
 
+export function createProceduralCat(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Cat";
+
+  const furMat = createLowPolyMaterial("#ea580c", { roughness: 0.65, metalness: 0.05 }); // Ginger tabby
+  const bellyMat = createLowPolyMaterial("#fef3c7", { roughness: 0.7, metalness: 0.0 }); // Cream belly & muzzle
+  const earInnerMat = createLowPolyMaterial("#f472b6", { roughness: 0.5, metalness: 0.0 }); // Pink ears & nose
+  const eyeMat = createLowPolyMaterial("#10b981", { roughness: 0.1, metalness: 0.1, emissive: new THREE.Color("#059669"), emissiveIntensity: 0.5 }); // Emerald eyes
+  const collarMat = createLowPolyMaterial("#dc2626", { roughness: 0.4, metalness: 0.2 }); // Red collar
+  const bellMat = createLowPolyMaterial("#f59e0b", { roughness: 0.2, metalness: 0.95 }); // Golden bell
+
+  // 1. Torso / Body (slender, curved feline spine)
+  const bodyGeo = new THREE.CylinderGeometry(0.32, 0.38, 1.25, 16);
+  bodyGeo.rotateX(Math.PI / 2);
+  bodyGeo.computeVertexNormals();
+  const body = new THREE.Mesh(bodyGeo, furMat);
+  body.name = "Cat_Body";
+  body.position.set(0, 0.65, 0);
+  body.castShadow = true;
+  body.receiveShadow = true;
+  group.add(body);
+
+  // 2. Chest & Belly Pad
+  const bellyGeo = new THREE.BoxGeometry(0.48, 0.35, 0.95);
+  bellyGeo.computeVertexNormals();
+  const belly = new THREE.Mesh(bellyGeo, bellyMat);
+  belly.name = "Cat_Belly";
+  belly.position.set(0, 0.55, 0.05);
+  group.add(belly);
+
+  // 3. Cat Head
+  const headGeo = new THREE.SphereGeometry(0.36, 16, 12);
+  headGeo.scale(1.0, 0.92, 0.95);
+  headGeo.computeVertexNormals();
+  const head = new THREE.Mesh(headGeo, furMat);
+  head.name = "Cat_Head";
+  head.position.set(0, 0.98, 0.68);
+  head.castShadow = true;
+  group.add(head);
+
+  // 4. Pointy Triangular Ears (Left & Right)
+  for (const [side, sx] of [["Left", -0.2], ["Right", 0.2]] as const) {
+    const earGeo = new THREE.ConeGeometry(0.14, 0.28, 4);
+    earGeo.computeVertexNormals();
+    const ear = new THREE.Mesh(earGeo, furMat);
+    ear.name = `Cat_Ear_${side}`;
+    ear.position.set(sx, 1.35, 0.65);
+    ear.rotation.set(-0.15, 0, sx < 0 ? 0.3 : -0.3);
+    ear.castShadow = true;
+    group.add(ear);
+
+    // Inner pink ear
+    const innerEarGeo = new THREE.ConeGeometry(0.09, 0.2, 4);
+    innerEarGeo.computeVertexNormals();
+    const innerEar = new THREE.Mesh(innerEarGeo, earInnerMat);
+    innerEar.name = `Cat_Inner_Ear_${side}`;
+    innerEar.position.set(sx * 0.95, 1.34, 0.68);
+    innerEar.rotation.set(-0.15, 0, sx < 0 ? 0.3 : -0.3);
+    group.add(innerEar);
+  }
+
+  // 5. Snout / Muzzle
+  const muzzleGeo = new THREE.BoxGeometry(0.24, 0.14, 0.16);
+  muzzleGeo.computeVertexNormals();
+  const muzzle = new THREE.Mesh(muzzleGeo, bellyMat);
+  muzzle.name = "Cat_Muzzle";
+  muzzle.position.set(0, 0.88, 1.0);
+  group.add(muzzle);
+
+  // Pink Nose
+  const noseGeo = new THREE.ConeGeometry(0.05, 0.06, 3);
+  noseGeo.rotateZ(Math.PI);
+  noseGeo.computeVertexNormals();
+  const nose = new THREE.Mesh(noseGeo, earInnerMat);
+  nose.name = "Cat_Nose";
+  nose.position.set(0, 0.94, 1.08);
+  group.add(nose);
+
+  // 6. Eyes (Left & Right Glowing Emerald)
+  for (const [side, sx] of [["Left", -0.14], ["Right", 0.14]] as const) {
+    const eyeGeo = new THREE.SphereGeometry(0.065, 10, 8);
+    eyeGeo.computeVertexNormals();
+    const eye = new THREE.Mesh(eyeGeo, eyeMat);
+    eye.name = `Cat_Eye_${side}`;
+    eye.position.set(sx, 1.04, 0.98);
+    group.add(eye);
+  }
+
+  // 7. Four Paws & Legs
+  const legPositions = [
+    { name: "Cat_Leg_Front_Left", x: -0.22, y: 0.32, z: 0.42 },
+    { name: "Cat_Leg_Front_Right", x: 0.22, y: 0.32, z: 0.42 },
+    { name: "Cat_Leg_Back_Left", x: -0.24, y: 0.32, z: -0.42 },
+    { name: "Cat_Leg_Back_Right", x: 0.24, y: 0.32, z: -0.42 },
+  ];
+  const legGeo = new THREE.CylinderGeometry(0.08, 0.07, 0.58, 12);
+  legGeo.computeVertexNormals();
+
+  const pawGeo = new THREE.BoxGeometry(0.16, 0.09, 0.18);
+  pawGeo.computeVertexNormals();
+
+  legPositions.forEach((pos) => {
+    const leg = new THREE.Mesh(legGeo, furMat);
+    leg.name = pos.name;
+    leg.position.set(pos.x, pos.y, pos.z);
+    leg.castShadow = true;
+    leg.receiveShadow = true;
+    group.add(leg);
+
+    const paw = new THREE.Mesh(pawGeo, bellyMat);
+    paw.name = `${pos.name}_Paw`;
+    paw.position.set(pos.x, 0.05, pos.z + 0.03);
+    paw.castShadow = true;
+    group.add(paw);
+  });
+
+  // 8. Curved Arching Tail
+  const tailSegments = [
+    { x: 0, y: 0.72, z: -0.7, rx: -0.6 },
+    { x: 0, y: 0.92, z: -0.85, rx: -0.4 },
+    { x: 0, y: 1.15, z: -0.9, rx: 0.1 },
+    { x: 0, y: 1.32, z: -0.8, rx: 0.7 },
+  ];
+  const tailGeo = new THREE.CylinderGeometry(0.06, 0.05, 0.26, 10);
+  tailGeo.computeVertexNormals();
+  tailSegments.forEach((seg, i) => {
+    const tailSeg = new THREE.Mesh(tailGeo, furMat);
+    tailSeg.name = `Cat_Tail_Segment_${i + 1}`;
+    tailSeg.position.set(seg.x, seg.y, seg.z);
+    tailSeg.rotation.x = seg.rx;
+    tailSeg.castShadow = true;
+    group.add(tailSeg);
+  });
+
+  // 9. Collar & Golden Bell
+  const collarGeo = new THREE.TorusGeometry(0.35, 0.035, 8, 24);
+  collarGeo.rotateX(Math.PI / 2);
+  collarGeo.computeVertexNormals();
+  const collar = new THREE.Mesh(collarGeo, collarMat);
+  collar.name = "Cat_Collar";
+  collar.position.set(0, 0.78, 0.62);
+  group.add(collar);
+
+  const bellGeo = new THREE.SphereGeometry(0.06, 12, 10);
+  bellGeo.computeVertexNormals();
+  const bell = new THREE.Mesh(bellGeo, bellMat);
+  bell.name = "Cat_Bell";
+  bell.position.set(0, 0.72, 0.95);
+  group.add(bell);
+
+  return group;
+}
+
 export function createProceduralRocketShip(): THREE.Group {
   const group = new THREE.Group();
   group.name = "Procedural_RocketShip";
@@ -2417,6 +2570,11 @@ export function generateProceduralModelFromPrompt(prompt: string): THREE.Object3
   // 18. Animals: Sheep, Ram, Lamb
   if (p.includes("sheep") || p.includes("ram") || p.includes("lamb")) {
     return createProceduralSheep();
+  }
+
+  // 18b. Animals: Cat, Kitten, Kitty, Feline
+  if (p.includes("cat") || p.includes("kitten") || p.includes("kitty") || p.includes("feline") || p.includes("meow")) {
+    return createProceduralCat();
   }
 
   // 19. Space: Rocket, Starship, Spaceship

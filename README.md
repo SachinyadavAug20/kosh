@@ -22,6 +22,13 @@
   <img src="assets/kosh-banner.svg" alt="KOSH Banner" width="100%" />
 </p>
 
+<p align="center">
+  <video src="assets/videos/demo.mp4" width="100%" controls autoplay loop muted></video>
+</p>
+
+> [!NOTE]
+> **Watch the Live Demo Walkthrough**: [assets/videos/demo.mp4](assets/videos/demo.mp4) demonstrates real-time 3D model synthesis, interactive viewport manipulation, DCC inspector synchronization, and headless Blender MCP integration.
+
 ---
 
 ## Overview

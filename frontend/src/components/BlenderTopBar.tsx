@@ -119,6 +119,10 @@ export interface BlenderTopBarProps {
   onToggleHeadlamp?: () => void;
   lightingPreset?: "cad_studio" | "matcap" | "high_contrast";
   onSelectLightingPreset?: (preset: "cad_studio" | "matcap" | "high_contrast") => void;
+
+  // 3D Model Generation Mode
+  generationMode?: "ai" | "procedural";
+  onToggleGenerationMode?: (mode: "ai" | "procedural") => void;
 }
 
 export function BlenderTopBar({
@@ -186,6 +190,8 @@ export function BlenderTopBar({
   onToggleWireframeOverlay,
   showNormals = false,
   onToggleNormals,
+  generationMode = "ai",
+  onToggleGenerationMode,
 }: BlenderTopBarProps) {
   const { theme, setTheme } = useTheme();
 
@@ -1004,20 +1010,41 @@ export function BlenderTopBar({
         {/* Generation Mode Pill */}
         <button
           type="button"
-          onClick={onOpenKeyModal ? onOpenKeyModal : () => setIsKeyDrawerOpen(!isKeyDrawerOpen)}
+          onClick={() => {
+            if (onToggleGenerationMode) {
+              onToggleGenerationMode(generationMode === "ai" ? "procedural" : "ai");
+            } else if (onOpenKeyModal) {
+              onOpenKeyModal();
+            } else {
+              setIsKeyDrawerOpen(!isKeyDrawerOpen);
+            }
+          }}
           title={
-            token
-              ? `Generation Mode: ${token === "demo" ? "Demo (Procedural)" : "Procedural (Instant)"}`
-              : "Generation Mode: Procedural (Instant)"
+            generationMode === "ai"
+              ? "Active Mode: AI Generate (Google Gemini AI + Headless Blender). Click to switch to Procedural mode."
+              : "Active Mode: Procedural (Instant client-side parametric 3D synthesis). Click to switch to AI Generate mode."
           }
-          className="flex items-center space-x-1.5 px-2 py-0.5 rounded border border-[#27272a] bg-[#202024] text-[10px] font-mono transition-colors"
+          className={`flex items-center space-x-1.5 px-2 py-0.5 rounded border text-[10px] font-mono transition-all ${
+            generationMode === "ai"
+              ? "border-emerald-500/70 bg-emerald-950/40 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.15)] hover:bg-emerald-900/50"
+              : "border-[#ea580c]/70 bg-[#ea580c]/15 text-[#ea580c] shadow-[0_0_10px_rgba(234,88,12,0.15)] hover:bg-[#ea580c]/25"
+          }`}
         >
-          <Key className={`w-3 h-3 ${token ? "text-emerald-400" : "text-[#ea580c]"}`} />
-          <span className="hidden xl:inline text-[#a1a1aa]">
-            {token ? (token === "demo" ? "Demo Mode" : "Instant Gen") : "Instant Gen"}
-          </span>
-          <span className="w-1.5 h-1.5 rounded-full bg-[#ea580c]" />
-          <span className="hidden sm:inline text-[#ea580c] font-bold">Procedural</span>
+          {generationMode === "ai" ? (
+            <>
+              <Sparkles className="w-3 h-3 text-emerald-400" />
+              <span className="hidden xl:inline text-[#e4e4e7]">Mode:</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="hidden sm:inline text-emerald-400 font-bold">AI Generate</span>
+            </>
+          ) : (
+            <>
+              <Box className="w-3 h-3 text-[#ea580c]" />
+              <span className="hidden xl:inline text-[#e4e4e7]">Mode:</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#ea580c]" />
+              <span className="hidden sm:inline text-[#ea580c] font-bold">Procedural</span>
+            </>
+          )}
         </button>
 
         <div className="w-px h-4 bg-[#27272a]" />

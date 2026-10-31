@@ -1365,6 +1365,159 @@ public class GoogleGeminiClient {
                 """.formatted(format, exportCmd);
         }
 
+        // 10b. Procedural Cat / Feline / Kitty
+        if (lowerPrompt.contains("cat") || lowerPrompt.contains("kitten") || lowerPrompt.contains("kitty") || lowerPrompt.contains("feline") || lowerPrompt.contains("meow")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, color, roughness=0.6, metallic=0.0, emission=None, emission_strength=1.0):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        bsdf.inputs["Base Color"].default_value = color
+                        bsdf.inputs["Roughness"].default_value = roughness
+                        bsdf.inputs["Metallic"].default_value = metallic
+                        if emission:
+                            if "Emission Color" in bsdf.inputs:
+                                bsdf.inputs["Emission Color"].default_value = emission
+                                bsdf.inputs["Emission Strength"].default_value = emission_strength
+                            elif "Emission" in bsdf.inputs:
+                                bsdf.inputs["Emission"].default_value = emission
+                    return mat
+
+                mat_fur = make_mat("Cat_Ginger_Fur", (0.92, 0.35, 0.05, 1.0), roughness=0.65, metallic=0.05)
+                mat_belly = make_mat("Cat_Cream_Belly", (0.98, 0.95, 0.85, 1.0), roughness=0.7, metallic=0.0)
+                mat_pink = make_mat("Cat_Ears_Nose", (0.95, 0.45, 0.65, 1.0), roughness=0.5, metallic=0.0)
+                mat_eyes = make_mat("Cat_Emerald_Eyes", (0.05, 0.72, 0.45, 1.0), roughness=0.1, metallic=0.1, emission=(0.02, 0.65, 0.38, 1.0), emission_strength=2.0)
+                mat_collar = make_mat("Cat_Collar_Red", (0.85, 0.15, 0.15, 1.0), roughness=0.4, metallic=0.2)
+                mat_bell = make_mat("Cat_Bell_Gold", (0.96, 0.65, 0.08, 1.0), roughness=0.2, metallic=0.95)
+
+                # 1. Cat Body (curved horizontal cylinder)
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.36, depth=1.2, location=(0, 0, 0.65))
+                body = bpy.context.active_object
+                body.name = "Cat_Body"
+                body.rotation_euler = (math.radians(90), 0, 0)
+                bpy.ops.object.transform_apply(rotation=True)
+                body.data.materials.append(mat_fur)
+
+                # 2. Cream Belly Pad
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0.05, 0.55))
+                belly = bpy.context.active_object
+                belly.name = "Cat_Belly"
+                belly.scale = (0.48, 0.95, 0.35)
+                bpy.ops.object.transform_apply(scale=True)
+                belly.data.materials.append(mat_belly)
+
+                # 3. Cat Head (Sphere)
+                bpy.ops.mesh.primitive_uv_sphere_add(radius=0.36, location=(0, 0.68, 0.98))
+                head = bpy.context.active_object
+                head.name = "Cat_Head"
+                head.scale = (1.0, 0.95, 0.92)
+                bpy.ops.object.transform_apply(scale=True)
+                head.data.materials.append(mat_fur)
+
+                # 4. Pointy Triangular Ears (Left & Right)
+                for sx, name in [(-0.2, "Left"), (0.2, "Right")]:
+                    bpy.ops.mesh.primitive_cone_add(radius1=0.14, depth=0.28, location=(sx, 0.65, 1.35))
+                    ear = bpy.context.active_object
+                    ear.name = f"Cat_Ear_{name}"
+                    ear.rotation_euler = (math.radians(-10), 0, math.radians(-15 if sx > 0 else 15))
+                    ear.data.materials.append(mat_fur)
+
+                    bpy.ops.mesh.primitive_cone_add(radius1=0.09, depth=0.2, location=(sx * 0.95, 0.68, 1.34))
+                    inner = bpy.context.active_object
+                    inner.name = f"Cat_Inner_Ear_{name}"
+                    inner.rotation_euler = (math.radians(-10), 0, math.radians(-15 if sx > 0 else 15))
+                    inner.data.materials.append(mat_pink)
+
+                # 5. Snout & Nose
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 1.0, 0.88))
+                snout = bpy.context.active_object
+                snout.name = "Cat_Muzzle"
+                snout.scale = (0.24, 0.16, 0.14)
+                bpy.ops.object.transform_apply(scale=True)
+                snout.data.materials.append(mat_belly)
+
+                bpy.ops.mesh.primitive_cone_add(radius1=0.05, depth=0.06, location=(0, 1.08, 0.94))
+                nose = bpy.context.active_object
+                nose.name = "Cat_Nose"
+                nose.rotation_euler = (math.radians(180), 0, 0)
+                nose.data.materials.append(mat_pink)
+
+                # 6. Eyes (Left & Right Emerald)
+                for sx, name in [(-0.14, "Left"), (0.14, "Right")]:
+                    bpy.ops.mesh.primitive_uv_sphere_add(radius=0.065, location=(sx, 0.98, 1.04))
+                    eye = bpy.context.active_object
+                    eye.name = f"Cat_Eye_{name}"
+                    eye.data.materials.append(mat_eyes)
+
+                # 7. Four Paws & Legs
+                legs = [
+                    ("Cat_Leg_Front_Left", -0.22, 0.42, 0.32),
+                    ("Cat_Leg_Front_Right", 0.22, 0.42, 0.32),
+                    ("Cat_Leg_Back_Left", -0.24, -0.42, 0.32),
+                    ("Cat_Leg_Back_Right", 0.24, -0.42, 0.32),
+                ]
+                for leg_name, lx, ly, lz in legs:
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.08, depth=0.58, location=(lx, ly, lz))
+                    leg = bpy.context.active_object
+                    leg.name = leg_name
+                    leg.data.materials.append(mat_fur)
+
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(lx, ly + 0.03, 0.05))
+                    paw = bpy.context.active_object
+                    paw.name = f"{leg_name}_Paw"
+                    paw.scale = (0.16, 0.18, 0.09)
+                    bpy.ops.object.transform_apply(scale=True)
+                    paw.data.materials.append(mat_belly)
+
+                # 8. Curved Arching Tail (4 segments)
+                tail_pts = [
+                    (0, -0.7, 0.72, -35),
+                    (0, -0.85, 0.92, -20),
+                    (0, -0.9, 1.15, 10),
+                    (0, -0.8, 1.32, 45),
+                ]
+                for idx, (tx, ty, tz, rx) in enumerate(tail_pts):
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.055, depth=0.26, location=(tx, ty, tz))
+                    tseg = bpy.context.active_object
+                    tseg.name = f"Cat_Tail_{idx + 1}"
+                    tseg.rotation_euler = (math.radians(rx), 0, 0)
+                    tseg.data.materials.append(mat_fur)
+
+                # 9. Collar with Golden Bell
+                bpy.ops.mesh.primitive_torus_add(major_radius=0.35, minor_radius=0.035, location=(0, 0.62, 0.78))
+                col = bpy.context.active_object
+                col.name = "Cat_Collar"
+                col.rotation_euler = (math.radians(90), 0, 0)
+                col.data.materials.append(mat_collar)
+
+                bpy.ops.mesh.primitive_uv_sphere_add(radius=0.06, location=(0, 0.95, 0.72))
+                bell = bpy.context.active_object
+                bell.name = "Cat_Bell"
+                bell.data.materials.append(mat_bell)
+
+                # Studio Lights
+                klight = bpy.data.lights.new("KeyLight", type='AREA')
+                klight.energy = 1200
+                kobj = bpy.data.objects.new("KeyLight", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (4, -4, 6)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
         // 11. Turbine Flange / Mechanical Coupling
         if (lowerPrompt.contains("turbine") || lowerPrompt.contains("flange")) {
             return """

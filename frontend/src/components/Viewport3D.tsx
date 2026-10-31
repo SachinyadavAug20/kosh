@@ -238,6 +238,57 @@ export function Viewport3D({
   const [isLoadingModel, setIsLoadingModel] = useState<boolean>(false);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
 
+  // Generation Mode: AI Generate (Google Gemini AI + Headless Blender) vs Procedural (Instant Parametric)
+  const [generationMode, setGenerationMode] = useState<"ai" | "procedural">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("kosh_generation_mode");
+      if (saved === "ai" || saved === "procedural") return saved;
+    }
+    return "ai";
+  });
+
+  const handleToggleGenerationMode = useCallback((mode: "ai" | "procedural") => {
+    setGenerationMode(mode);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("kosh_generation_mode", mode);
+    }
+  }, []);
+
+  // Monitor backend AI tool execution and update progress HUD
+  const prevIsLoadingRef = useRef(isLoading);
+  useEffect(() => {
+    if (isLoading && generationMode === "ai") {
+      setIsLoadingModel(true);
+      const t1 = setTimeout(() => {
+        setSynthesisProgress(45);
+        setSynthesisStep("Synthesizing Blender Python parametric script via Gemini...");
+      }, 700);
+      const t2 = setTimeout(() => {
+        setSynthesisProgress(75);
+        setSynthesisStep("Executing headless Blender pipeline on MCP backend...");
+      }, 2200);
+      const t3 = setTimeout(() => {
+        setSynthesisProgress(90);
+        setSynthesisStep("Optimizing geometry & compiling binary GLTF/GLB...");
+      }, 4200);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
+    }
+  }, [isLoading, generationMode]);
+
+  useEffect(() => {
+    if (prevIsLoadingRef.current && !isLoading) {
+      const timer = setTimeout(() => {
+        setIsLoadingModel(false);
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+    prevIsLoadingRef.current = isLoading;
+  }, [isLoading]);
+
   // Snapping Engine State
   const [snapEnabled, setSnapEnabled] = useState<boolean>(false);
   const [isSnapPopoverOpen, setIsSnapPopoverOpen] = useState<boolean>(false);
@@ -3486,9 +3537,6 @@ export function Viewport3D({
     async (promptText: string, format: ExportFormat = "glb") => {
       if (!sceneRef.current) return;
       setActiveSynthesisPrompt(promptText);
-      setIsLoadingModel(true);
-      setSynthesisProgress(15);
-      setSynthesisStep("Analyzing semantic tokens & spatial proportions...");
 
       // Detach any active gizmos to prevent dangling unparented references
       if (transformControlsRef.current) {
@@ -3500,6 +3548,36 @@ export function Viewport3D({
       if (selectionBoxHelperRef.current) {
         selectionBoxHelperRef.current.visible = false;
       }
+
+      // -------------------------------------------------------------
+      // AI GENERATE MODE: Google Gemini AI + Headless Blender Pipeline
+      // -------------------------------------------------------------
+      if (generationMode === "ai") {
+        if (!token || token.trim() === "") {
+          setIsKeyModalOpen(true);
+          showUndoToast("Enter Google Gemini API Key from Google AI Studio to use AI Generate Mode");
+          return;
+        }
+
+        setIsLoadingModel(true);
+        setSynthesisProgress(15);
+        setSynthesisStep("Sending prompt to Google Gemini 1.5 Flash...");
+
+        if (onExecuteTool) {
+          onExecuteTool("cad_model", { prompt: promptText, format } as any);
+        } else {
+          setIsLoadingModel(false);
+          showUndoToast("MCP Tool Execution not connected");
+        }
+        return;
+      }
+
+      // -------------------------------------------------------------
+      // PROCEDURAL MODE: Instant Parametric Client-Side Synthesis
+      // -------------------------------------------------------------
+      setIsLoadingModel(true);
+      setSynthesisProgress(15);
+      setSynthesisStep("Analyzing semantic tokens & spatial proportions...");
 
       // Snapshot current scene for undo
       const prevChildren: THREE.Object3D[] = rootModelGroupRef.current
@@ -3598,13 +3676,8 @@ export function Viewport3D({
         setIsLoadingModel(false);
         showUndoToast("Generation failed");
       }
-
-      // If backend tool execution is available, also trigger backend AI script synthesis
-      if (onExecuteTool && token && token !== "demo") {
-        onExecuteTool("cad_model", { prompt: promptText, format } as any);
-      }
     },
-    [refreshMeshList, handleFocus, onMeshSelect, showUndoToast, meshList, pushUndo, onExecuteTool, token]
+    [refreshMeshList, handleFocus, onMeshSelect, showUndoToast, meshList, pushUndo, onExecuteTool, token, generationMode]
   );
 
   // -------------------------------------------------------------
@@ -4187,6 +4260,8 @@ export function Viewport3D({
         onToggleHeadlamp={() => setHeadlampEnabled(!headlampEnabled)}
         lightingPreset={lightingPreset}
         onSelectLightingPreset={applyLightingPreset}
+        generationMode={generationMode}
+        onToggleGenerationMode={handleToggleGenerationMode}
       />
 
       {/* Persistent Undo / Redo Floating Toast */}
@@ -4676,10 +4751,12 @@ export function Viewport3D({
                       {/* Sleek Floating CAD Command Prompt Bar (Bottom-Center) */}
                       <ModelPromptBar
                         onGenerate={handleGenerateModelFromPrompt}
-                        isLoading={isLoadingModel}
+                        isLoading={isLoadingModel || isLoading}
                         token={token}
                         onOpenKeyModal={() => setIsKeyModalOpen(true)}
                         activeStep={synthesisStep}
+                        generationMode={generationMode}
+                        onToggleGenerationMode={handleToggleGenerationMode}
                       />
                     </div>
 

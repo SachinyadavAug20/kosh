@@ -18,9 +18,12 @@ export interface ModelPromptBarProps {
   token?: string;
   onOpenKeyModal: () => void;
   activeStep?: string;
+  generationMode?: "ai" | "procedural";
+  onToggleGenerationMode?: (mode: "ai" | "procedural") => void;
 }
 
 export const PRESET_CAD_CHIPS = [
+  { label: "Cat", prompt: "A low-poly cat with head, pointy ears, whiskers, feline body, four paws, and an arched tail" },
   { label: "Car", prompt: "A sleek aerodynamic sports car with low-profile chassis, tinted glass cabin, headlights, and rear spoiler" },
   { label: "Airplane", prompt: "A modern commercial jet airliner with tapered fuselage, swept wings, dual turbofan engines, and vertical tail fin" },
   { label: "Boat", prompt: "A coastal motorboat with hydrodynamic hull, teak deck, steering bridge cabin, and radar mast" },
@@ -52,6 +55,8 @@ export function ModelPromptBar({
   token = "",
   onOpenKeyModal,
   activeStep,
+  generationMode = "ai",
+  onToggleGenerationMode,
 }: ModelPromptBarProps) {
   const [prompt, setPrompt] = useState<string>("");
   const [format, setFormat] = useState<ExportFormat>("glb");
@@ -88,10 +93,65 @@ export function ModelPromptBar({
 
       {/* Main Solid Floating Command Pill */}
       <div className="bg-[#141416] border border-[#27272a] shadow-2xl rounded p-1.5 space-y-1.5">
+        {/* Mode Selector & Status Header */}
+        <div className="flex items-center justify-between px-1 pb-1 border-b border-[#202024] text-[10px]">
+          <div className="flex items-center space-x-1">
+            <span className="text-[#71717a] uppercase tracking-wider text-[9px] mr-1">Mode:</span>
+            <button
+              type="button"
+              onClick={() => onToggleGenerationMode?.("ai")}
+              className={`flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                generationMode === "ai"
+                  ? "bg-emerald-950/70 border border-emerald-500/80 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+                  : "bg-[#202024] border border-[#27272a] text-[#71717a] hover:text-[#a1a1aa]"
+              }`}
+            >
+              <Sparkles className="w-2.5 h-2.5 text-emerald-400" />
+              <span>AI Generate</span>
+              <span className="text-[8px] opacity-75">(Gemini)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onToggleGenerationMode?.("procedural")}
+              className={`flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                generationMode === "procedural"
+                  ? "bg-[#ea580c]/20 border border-[#ea580c] text-[#ea580c] shadow-[0_0_10px_rgba(234,88,12,0.2)]"
+                  : "bg-[#202024] border border-[#27272a] text-[#71717a] hover:text-[#a1a1aa]"
+              }`}
+            >
+              <Box className="w-2.5 h-2.5 text-[#ea580c]" />
+              <span>Procedural</span>
+              <span className="text-[8px] opacity-75">(Instant)</span>
+            </button>
+          </div>
+
+          <div className="flex items-center space-x-1.5">
+            {generationMode === "ai" ? (
+              isKeyConfigured ? (
+                <div className="flex items-center space-x-1 text-emerald-400 text-[9px]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Gemini Ready</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onOpenKeyModal}
+                  className="flex items-center space-x-1 text-[#ea580c] hover:underline text-[9px]"
+                >
+                  <Key className="w-2.5 h-2.5" />
+                  <span>Enter Gemini Key</span>
+                </button>
+              )
+            ) : (
+              <span className="text-[9px] text-[#71717a]">Client Parametric</span>
+            )}
+          </div>
+        </div>
+
         <form onSubmit={handleSubmit} className="flex items-center space-x-1.5">
-          {/* Wand Icon Mark */}
-          <div className="pl-1.5 text-[#ea580c] shrink-0">
-            <Wand2 className="w-4 h-4" />
+          {/* Mode Icon Mark */}
+          <div className={`pl-1.5 shrink-0 ${generationMode === "ai" ? "text-emerald-400" : "text-[#ea580c]"}`}>
+            {generationMode === "ai" ? <Sparkles className="w-4 h-4" /> : <Box className="w-4 h-4" />}
           </div>
 
           {/* Text Input */}
@@ -99,7 +159,11 @@ export function ModelPromptBar({
             type="text"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Describe a 3D model (e.g., 'Turbine flange with 8 bolt holes', 'Medieval battleaxe', 'Sci-fi crate')..."
+            placeholder={
+              generationMode === "ai"
+                ? "Describe any 3D model for Gemini AI to synthesize (e.g., 'Cyberpunk cat with neon collar', 'Sports car')..."
+                : "Describe a procedural CAD model (e.g., 'Cat', 'Turbine flange', 'Rocket ship')..."
+            }
             disabled={isLoading}
             className="flex-1 bg-transparent px-2 py-1 text-xs text-[#f4f4f5] placeholder-[#52525b] outline-none min-w-0"
           />
@@ -127,7 +191,9 @@ export function ModelPromptBar({
                     }}
                     className={`w-full text-left px-2 py-1 rounded uppercase transition-colors ${
                       format === fmt
-                        ? "bg-[#ea580c] text-white font-bold"
+                        ? generationMode === "ai"
+                          ? "bg-emerald-600 text-white font-bold"
+                          : "bg-[#ea580c] text-white font-bold"
                         : "text-[#a1a1aa] hover:bg-[#202024] hover:text-white"
                     }`}
                   >
@@ -142,7 +208,11 @@ export function ModelPromptBar({
           <button
             type="submit"
             disabled={!prompt.trim() || isLoading}
-            className="flex items-center space-x-1 px-3 py-1 bg-[#ea580c] hover:bg-[#c2410c] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded font-bold text-[11px] transition-colors shrink-0 shadow-sm"
+            className={`flex items-center space-x-1 px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded font-bold text-[11px] transition-colors shrink-0 shadow-sm ${
+              generationMode === "ai"
+                ? "bg-emerald-600 hover:bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.25)]"
+                : "bg-[#ea580c] hover:bg-[#c2410c] shadow-[0_0_12px_rgba(234,88,12,0.25)]"
+            }`}
           >
             {isLoading ? (
               <>
@@ -151,7 +221,17 @@ export function ModelPromptBar({
               </>
             ) : (
               <>
-                <span>Generate</span>
+                {generationMode === "ai" ? (
+                  <>
+                    <Sparkles className="w-3 h-3 text-emerald-200" />
+                    <span>AI Generate</span>
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="w-3 h-3" />
+                    <span>Build Instant</span>
+                  </>
+                )}
                 <span className="text-[10px] opacity-70">↵</span>
               </>
             )}
