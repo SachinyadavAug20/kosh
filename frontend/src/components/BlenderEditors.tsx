@@ -69,6 +69,9 @@ export interface OutlinerEditorProps {
   selectedMeshNames?: string[];
   onSelectMesh: (name: string | null) => void;
   onToggleSelectMesh?: (name: string) => void;
+  onSelectAll?: () => void;
+  onDeselectAll?: () => void;
+  onAddPrimitive?: (type: string) => void;
   onToggleMeshVisibility: (name: string) => void;
   lockedMeshes: Set<string>;
   onToggleMeshLock: (name: string) => void;
@@ -80,6 +83,9 @@ export function OutlinerEditor({
   selectedMeshNames = [],
   onSelectMesh,
   onToggleSelectMesh,
+  onSelectAll,
+  onDeselectAll,
+  onAddPrimitive,
   onToggleMeshVisibility,
   lockedMeshes,
   onToggleMeshLock,
@@ -105,14 +111,38 @@ export function OutlinerEditor({
         />
       </div>
 
-      {/* Summary Metrics */}
+      {/* Summary Metrics & Quick Select Strip */}
       <div className="flex items-center justify-between text-[10px] font-mono text-[#71717a] shrink-0 px-0.5">
-        <span>
-          Meshes: {meshList.length}
-          {selectedMeshNames.length > 1 && (
-            <span className="ml-1 text-[#ea580c] font-bold">({selectedMeshNames.length} selected)</span>
+        <div className="flex items-center space-x-1.5">
+          <span>
+            Meshes: {meshList.length}
+            {selectedMeshNames.length > 1 && (
+              <span className="ml-1 text-[#ea580c] font-bold">({selectedMeshNames.length} selected)</span>
+            )}
+          </span>
+          {meshList.length > 0 && (
+            <div className="flex items-center space-x-1 pl-1">
+              {onSelectAll && (
+                <button
+                  type="button"
+                  onClick={onSelectAll}
+                  className="px-1 py-0.2 rounded bg-[#202024] hover:bg-[#27272a] text-[#a1a1aa] hover:text-[#f4f4f5] transition-colors"
+                >
+                  All
+                </button>
+              )}
+              {onDeselectAll && (
+                <button
+                  type="button"
+                  onClick={onDeselectAll}
+                  className="px-1 py-0.2 rounded bg-[#202024] hover:bg-[#27272a] text-[#a1a1aa] hover:text-[#f4f4f5] transition-colors"
+                >
+                  None
+                </button>
+              )}
+            </div>
           )}
-        </span>
+        </div>
         <span>{totalTris.toLocaleString()} Tris</span>
       </div>
 
@@ -185,8 +215,18 @@ export function OutlinerEditor({
         })}
 
         {meshList.length === 0 && (
-          <div className="text-center py-6 text-[#52525b] font-mono text-[10px]">
-            No mesh objects in active scene.
+          <div className="flex flex-col items-center justify-center py-8 text-center space-y-2">
+            <Box className="w-6 h-6 text-[#3f3f46]" />
+            <span className="text-[#71717a] font-mono text-[10px]">No mesh objects in active scene</span>
+            {onAddPrimitive && (
+              <button
+                type="button"
+                onClick={() => onAddPrimitive("cube")}
+                className="mt-1 px-2.5 py-1 rounded bg-[#202024] hover:bg-[#27272a] border border-[#27272a] text-[#ea580c] text-[10px] font-mono font-bold transition-colors"
+              >
+                + Add Cube (Shift+A)
+              </button>
+            )}
           </div>
         )}
       </div>

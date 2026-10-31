@@ -21,6 +21,19 @@ export interface ModelPromptBarProps {
 }
 
 export const PRESET_CAD_CHIPS = [
+  { label: "Car", prompt: "A sleek aerodynamic sports car with low-profile chassis, tinted glass cabin, headlights, and rear spoiler" },
+  { label: "Airplane", prompt: "A modern commercial jet airliner with tapered fuselage, swept wings, dual turbofan engines, and vertical tail fin" },
+  { label: "Boat", prompt: "A coastal motorboat with hydrodynamic hull, teak deck, steering bridge cabin, and radar mast" },
+  { label: "Laptop", prompt: "An ultra-thin aluminum unibody laptop with keyboard, trackpad, and open glowing OLED display" },
+  { label: "Tree", prompt: "A lush low-poly pine tree with organic timber trunk and 3 tiers of multifaceted evergreen foliage" },
+  { label: "House", prompt: "A cozy suburban home with concrete foundation, walls, gabled roof, front door, and windows" },
+  { label: "Table", prompt: "A modern minimalist dining table with thick wood top and 4 sturdy frame legs" },
+  { label: "Chair", prompt: "An ergonomic dining chair with cushioned seat pad, lumbar backrest, and 4 tapered legs" },
+  { label: "Robot", prompt: "A humanoid service robot with articulated metal body, sensor head, arms, and legs" },
+  { label: "Rocket", prompt: "A heavy-lift orbital rocket with aerodynamic nose cone, booster fins, and command window" },
+  { label: "Castle", prompt: "A medieval stone castle keep with defensive battlements, 4 corner turrets, and arched gate" },
+  { label: "Tank", prompt: "An armored combat tank with track treads, rotating turret, and long-range cannon barrel" },
+  { label: "Pyramid", prompt: "An ancient monumental stone pyramid with tiered base and gleaming polished gold capstone" },
   { label: "Turbine Flange", prompt: "A precision mechanical turbine base flange with central bore, 8 metric bolt holes, and chamfered bevels" },
   { label: "Bevel Gear", prompt: "A high-torque 24-tooth mechanical bevel gear with keyed center shaft and precision involute teeth" },
   { label: "Sci-Fi Crate", prompt: "A futuristic sci-fi cargo container crate with reinforced corner brackets, locking latch, and metallic panel details" },
@@ -46,12 +59,12 @@ export function ModelPromptBar({
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!prompt.trim() || isLoading || !token) return;
+    if (!prompt.trim() || isLoading) return;
     onGenerate(prompt.trim(), format);
   };
 
   const handleSelectChip = (chipPrompt: string) => {
-    if (isLoading || !token) return;
+    if (isLoading) return;
     setPrompt(chipPrompt);
     onGenerate(chipPrompt, format);
   };
@@ -128,15 +141,13 @@ export function ModelPromptBar({
           {/* Generate Button */}
           <button
             type="submit"
-            disabled={!prompt.trim() || isLoading || !token}
+            disabled={!prompt.trim() || isLoading}
             className="flex items-center space-x-1 px-3 py-1 bg-[#ea580c] hover:bg-[#c2410c] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded font-bold text-[11px] transition-colors shrink-0 shadow-sm"
           >
-            {!token ? (
-              <span className="text-xs opacity-90">API Key Required</span>
-            ) : isLoading ? (
+            {isLoading ? (
               <>
                 <Loader2 className="w-3 h-3 animate-spin" />
-                <span>Synthesizing</span>
+                <span>Synthesizing...</span>
               </>
             ) : (
               <>

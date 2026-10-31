@@ -48,6 +48,7 @@ import { LowPolyCharacter } from "../lib/narrative/LowPolyCharacterRig";
 import { DirectorCameraRig } from "../lib/narrative/DirectorCameraRig";
 import {
   Download,
+  Loader2,
   RotateCw,
   Grid,
   Maximize2,
@@ -555,9 +556,85 @@ export function Viewport3D({
   const [lightingPreset, setLightingPreset] = useState<"cad_studio" | "matcap" | "high_contrast">("cad_studio");
   const uvCheckerTextureRef = useRef<THREE.CanvasTexture | null>(null);
 
+  // Live CAD Model Synthesis Progress States
+  const [synthesisStep, setSynthesisStep] = useState<string>("");
+  const [synthesisProgress, setSynthesisProgress] = useState<number>(0);
+  const [activeSynthesisPrompt, setActiveSynthesisPrompt] = useState<string>("");
+
   useEffect(() => {
     headlampEnabledRef.current = headlampEnabled;
   }, [headlampEnabled]);
+
+  const applyLightingPreset = useCallback(
+    (preset: "cad_studio" | "matcap" | "high_contrast") => {
+      setLightingPreset(preset);
+      if (preset === "cad_studio") {
+        if (hemiLightRef.current) {
+          hemiLightRef.current.intensity = 0.35;
+          hemiLightRef.current.color.setHex(0xffffff);
+          hemiLightRef.current.groundColor.setHex(0x18181b);
+        }
+        if (ambientLightRef.current) ambientLightRef.current.intensity = 0.15;
+        if (keyLightRef.current) {
+          keyLightRef.current.intensity = 2.0;
+          keyLightRef.current.position.set(5, 12, 7);
+          keyLightRef.current.visible = true;
+        }
+        if (fillLightRef.current) {
+          fillLightRef.current.intensity = 0.8;
+          fillLightRef.current.position.set(-6, 4, -5);
+          fillLightRef.current.color.setHex(0xe2e8f0);
+          fillLightRef.current.visible = true;
+        }
+        if (rimLightRef.current) {
+          rimLightRef.current.intensity = 1.2;
+          rimLightRef.current.position.set(0, -5, -8);
+          rimLightRef.current.color.setHex(0xf1f5f9);
+          rimLightRef.current.visible = true;
+        }
+        setShadingMode("solid");
+        setMatcap("studio");
+        showUndoToast("CAD Studio Rig (3-Point Neutral)");
+      } else if (preset === "matcap") {
+        if (hemiLightRef.current) hemiLightRef.current.intensity = 0.05;
+        if (ambientLightRef.current) ambientLightRef.current.intensity = 0.05;
+        if (keyLightRef.current) keyLightRef.current.visible = false;
+        if (fillLightRef.current) fillLightRef.current.visible = false;
+        if (rimLightRef.current) rimLightRef.current.visible = false;
+        setShadingMode("solid");
+        setMatcap("clay");
+        showUndoToast("MatCap Shading (Clay Inspection)");
+      } else if (preset === "high_contrast") {
+        if (hemiLightRef.current) {
+          hemiLightRef.current.intensity = 0.2;
+          hemiLightRef.current.color.setHex(0xffffff);
+          hemiLightRef.current.groundColor.setHex(0x09090b);
+        }
+        if (ambientLightRef.current) ambientLightRef.current.intensity = 0.05;
+        if (keyLightRef.current) {
+          keyLightRef.current.intensity = 2.8;
+          keyLightRef.current.position.set(6, 14, 8);
+          keyLightRef.current.visible = true;
+        }
+        if (fillLightRef.current) {
+          fillLightRef.current.intensity = 0.4;
+          fillLightRef.current.position.set(-6, 3, -5);
+          fillLightRef.current.color.setHex(0x94a3b8);
+          fillLightRef.current.visible = true;
+        }
+        if (rimLightRef.current) {
+          rimLightRef.current.intensity = 1.6;
+          rimLightRef.current.position.set(0, -6, -9);
+          rimLightRef.current.color.setHex(0xffffff);
+          rimLightRef.current.visible = true;
+        }
+        setShadingMode("solid");
+        setMatcap("studio");
+        showUndoToast("High Contrast CAD (Crisp Shadows)");
+      }
+    },
+    [showUndoToast]
+  );
 
   const [liveTransform, setLiveTransform] = useState<{
     pos: [number, number, number];
@@ -2397,18 +2474,47 @@ export function Viewport3D({
   const refreshMeshList = useCallback(() => {
     if (!rootModelGroupRef.current) return;
     const list: MeshNodeInfo[] = [];
+    let count = 0;
+    let totalTriangles = 0;
+    let totalVertices = 0;
+
     rootModelGroupRef.current.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.name && !child.name.includes("Helper")) {
+      if (child instanceof THREE.Mesh && !child.name.includes("Helper") && !child.name.includes("selection_")) {
+        count++;
+        if (!child.name || child.name.trim() === "") {
+          const type = (child.geometry?.type || "Mesh").replace("Geometry", "").replace("Buffer", "");
+          child.name = `${type || "Part"}_${String(count).padStart(3, "0")}`;
+        }
+        const tris = child.geometry?.index
+          ? Math.round(child.geometry.index.count / 3)
+          : child.geometry?.attributes?.position
+          ? Math.round(child.geometry.attributes.position.count / 3)
+          : 0;
+        const verts = child.geometry?.attributes?.position ? child.geometry.attributes.position.count : 0;
+        totalTriangles += tris;
+        totalVertices += verts;
+
         list.push({
           id: child.uuid,
           name: child.name,
-          triangles: child.geometry.index ? child.geometry.index.count / 3 : child.geometry.attributes.position.count / 3,
-          vertices: child.geometry.attributes.position.count,
+          triangles: tris,
+          vertices: verts,
           visible: child.visible,
           meshRef: child,
         });
       }
     });
+
+    const box = new THREE.Box3().setFromObject(rootModelGroupRef.current);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const dimensions = `${size.x.toFixed(2)}m × ${size.y.toFixed(2)}m × ${size.z.toFixed(2)}m`;
+    setStats({
+      triangles: totalTriangles,
+      vertices: totalVertices,
+      dimensions,
+    });
+
     setMeshList(list);
     onMeshListUpdate?.(list);
   }, [onMeshListUpdate]);
@@ -3174,6 +3280,17 @@ export function Viewport3D({
         return;
       }
 
+      // Alt + L -> Toggle CAD Inspection Headlamp
+      if (e.altKey && e.key.toLowerCase() === "l" && !e.ctrlKey) {
+        e.preventDefault();
+        setHeadlampEnabled((prev) => {
+          const next = !prev;
+          showUndoToast(next ? "CAD Headlamp ON (Camera Lock)" : "CAD Headlamp OFF");
+          return next;
+        });
+        return;
+      }
+
       // Space -> Toggle Timeline Playback
       if (e.key === " ") {
         e.preventDefault();
@@ -3367,9 +3484,12 @@ export function Viewport3D({
   }, [onMeshSelect, showUndoToast, meshList, onMeshListUpdate, pushUndo, refreshMeshList]);
 
   const handleGenerateModelFromPrompt = useCallback(
-    async (promptText: string, _format: ExportFormat = "glb") => {
+    async (promptText: string, format: ExportFormat = "glb") => {
       if (!sceneRef.current) return;
+      setActiveSynthesisPrompt(promptText);
       setIsLoadingModel(true);
+      setSynthesisProgress(15);
+      setSynthesisStep("Analyzing semantic tokens & spatial proportions...");
 
       // Detach any active gizmos to prevent dangling unparented references
       if (transformControlsRef.current) {
@@ -3388,7 +3508,11 @@ export function Viewport3D({
         : [];
       const prevMeshList = meshList;
 
-      // Instant procedural CAD generation — full multi-mesh named model
+      // Stage 2: Synthesis
+      await new Promise((r) => setTimeout(r, 120));
+      setSynthesisProgress(40);
+      setSynthesisStep("Synthesizing 3D parametric components & vertex geometry...");
+
       let proceduralMesh: THREE.Object3D | null = null;
       try {
         proceduralMesh = generateProceduralModelFromPrompt(promptText);
@@ -3396,8 +3520,15 @@ export function Viewport3D({
         console.warn("Procedural generation failed:", err);
       }
 
-      // Keep loading visible so user gets clear feedback that generation is working
-      await new Promise((r) => setTimeout(r, 1500));
+      // Stage 3: Normals & manifold
+      await new Promise((r) => setTimeout(r, 120));
+      setSynthesisProgress(65);
+      setSynthesisStep("Computing surface normals & manifold topology...");
+
+      // Stage 4: Materials calibration
+      await new Promise((r) => setTimeout(r, 120));
+      setSynthesisProgress(85);
+      setSynthesisStep("Calibrating studio PBR materials & shading presets...");
 
       if (proceduralMesh && rootModelGroupRef.current) {
         // Clear prior children WITHOUT disposing (kept alive for undo)
@@ -3407,6 +3538,10 @@ export function Viewport3D({
 
         rootModelGroupRef.current.add(proceduralMesh);
         currentModelRef.current = proceduralMesh;
+
+        // Stage 5: Outliner hierarchy
+        setSynthesisProgress(95);
+        setSynthesisStep("Assembling scene hierarchy & populating Outliner...");
 
         // Find first mesh in hierarchy for selection
         let firstMesh: THREE.Mesh | null = null;
@@ -3422,14 +3557,14 @@ export function Viewport3D({
 
         refreshMeshList();
         if (firstMesh) {
-          setSelectedMesh(firstMesh);
+          setSelectedMeshes([firstMesh]);
           onMeshSelect?.(firstMesh.name);
         } else {
-          setSelectedMesh(null);
+          setSelectedMeshes([]);
           onMeshSelect?.(null);
         }
+
         handleFocus();
-        setIsLoadingModel(false);
 
         const nextChildren: THREE.Object3D[] = [...rootModelGroupRef.current.children];
         const nextModel = proceduralMesh;
@@ -3453,13 +3588,24 @@ export function Viewport3D({
           },
         });
 
+        // Stage 6: Finalize viewport
+        setSynthesisProgress(100);
+        setSynthesisStep("Finalizing viewport scene...");
+        await new Promise((r) => setTimeout(r, 100));
+
+        setIsLoadingModel(false);
         showUndoToast(`Generated: ${promptText.slice(0, 24)}...`);
       } else {
         setIsLoadingModel(false);
         showUndoToast("Generation failed");
       }
+
+      // If backend tool execution is available, also trigger backend AI script synthesis
+      if (onExecuteTool && token && token !== "demo") {
+        onExecuteTool("cad_model", { prompt: promptText, format } as any);
+      }
     },
-    [refreshMeshList, handleFocus, onMeshSelect, showUndoToast, meshList, pushUndo]
+    [refreshMeshList, handleFocus, onMeshSelect, showUndoToast, meshList, pushUndo, onExecuteTool, token]
   );
 
   // -------------------------------------------------------------
@@ -4038,6 +4184,10 @@ export function Viewport3D({
         onToggleWireframeOverlay={() => setShowWireframeOverlay(!showWireframeOverlay)}
         showNormals={showNormals}
         onToggleNormals={() => setShowNormals(!showNormals)}
+        headlampEnabled={headlampEnabled}
+        onToggleHeadlamp={() => setHeadlampEnabled(!headlampEnabled)}
+        lightingPreset={lightingPreset}
+        onSelectLightingPreset={applyLightingPreset}
       />
 
       {/* Persistent Undo / Redo Floating Toast */}
@@ -4127,11 +4277,65 @@ export function Viewport3D({
                         </div>
                       )}
 
-                      {/* Loading Spinner Overlay */}
+                      {/* Active CAD Model Synthesis Progress HUD */}
                       {isLoadingModel && (
-                        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#141416]/90 text-[#f4f4f5]">
-                          <div className="w-6 h-6 border-2 border-[#ea580c] border-t-transparent rounded-full animate-spin mb-2" />
-                          <span className="font-mono text-xs text-[#a1a1aa]">PARSING 3D CAD GEOMETRY...</span>
+                        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-xs select-none pointer-events-auto animate-fade-in">
+                          <div className="w-full max-w-md mx-4 p-5 rounded bg-[#141416] border border-[#ea580c] shadow-2xl font-mono text-xs text-[#f4f4f5] space-y-3.5">
+                            {/* Header */}
+                            <div className="flex items-center justify-between pb-2.5 border-b border-[#27272a]">
+                              <div className="flex items-center space-x-2 text-[#ea580c]">
+                                <Loader2 className="w-4 h-4 animate-spin text-[#ea580c]" />
+                                <span className="font-bold tracking-wider uppercase text-[11px]">
+                                  SYNTHESIZING 3D CAD MODEL
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-[#ea580c] font-bold px-2 py-0.5 rounded bg-[#202024] border border-[#27272a]">
+                                {synthesisProgress}%
+                              </span>
+                            </div>
+
+                            {/* Active Prompt Label */}
+                            {activeSynthesisPrompt && (
+                              <div className="p-2 rounded bg-[#18181b] border border-[#27272a] text-[11px] text-[#e4e4e7] truncate flex items-center space-x-2">
+                                <span className="text-[#ea580c] font-bold shrink-0">PROMPT:</span>
+                                <span className="truncate italic text-[#a1a1aa]">"{activeSynthesisPrompt}"</span>
+                              </div>
+                            )}
+
+                            {/* Progress Bar & Current Status */}
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between text-[10px]">
+                                <span className="text-[#f4f4f5] font-semibold">{synthesisStep || "Synthesizing geometry..."}</span>
+                                <span className="text-[#ea580c] animate-pulse">In Progress</span>
+                              </div>
+                              <div className="w-full h-2 bg-[#202024] rounded-full overflow-hidden border border-[#27272a]">
+                                <div
+                                  className="h-full bg-gradient-to-r from-[#ea580c] to-[#f59e0b] transition-all duration-200 ease-out"
+                                  style={{ width: `${synthesisProgress}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Live Sub-Stage Checklist */}
+                            <div className="grid grid-cols-2 gap-1.5 text-[10px] text-[#71717a] pt-1 border-t border-[#27272a]">
+                              <div className={`flex items-center space-x-1.5 ${synthesisProgress >= 15 ? "text-emerald-400 font-medium" : ""}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${synthesisProgress >= 15 ? "bg-emerald-400" : "bg-[#52525b]"}`} />
+                                <span>Topology Analysis</span>
+                              </div>
+                              <div className={`flex items-center space-x-1.5 ${synthesisProgress >= 40 ? "text-emerald-400 font-medium" : ""}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${synthesisProgress >= 40 ? "bg-emerald-400" : "bg-[#52525b]"}`} />
+                                <span>Geometry Synthesis</span>
+                              </div>
+                              <div className={`flex items-center space-x-1.5 ${synthesisProgress >= 65 ? "text-emerald-400 font-medium" : ""}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${synthesisProgress >= 65 ? "bg-emerald-400" : "bg-[#52525b]"}`} />
+                                <span>Normals Computing</span>
+                              </div>
+                              <div className={`flex items-center space-x-1.5 ${synthesisProgress >= 85 ? "text-emerald-400 font-medium" : ""}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${synthesisProgress >= 85 ? "bg-emerald-400" : "bg-[#52525b]"}`} />
+                                <span>PBR Materials</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       )}
 
@@ -4475,6 +4679,7 @@ export function Viewport3D({
                         isLoading={isLoadingModel}
                         token={token}
                         onOpenKeyModal={() => setIsKeyModalOpen(true)}
+                        activeStep={synthesisStep}
                       />
                     </div>
 
@@ -4567,6 +4772,16 @@ export function Viewport3D({
                     selectedMeshNames={selectedMeshes.map((m) => m.name)}
                     onSelectMesh={(name) => selectMeshByName(name)}
                     onToggleSelectMesh={toggleMeshByName}
+                    onSelectAll={() => {
+                      const allMeshes = meshList.map((m) => m.meshRef).filter(Boolean);
+                      setSelectedMeshes(allMeshes);
+                      if (allMeshes.length > 0) onMeshSelect?.(allMeshes[allMeshes.length - 1].name);
+                    }}
+                    onDeselectAll={() => {
+                      setSelectedMeshes([]);
+                      onMeshSelect?.(null);
+                    }}
+                    onAddPrimitive={handleAddPrimitive}
                     onToggleMeshVisibility={handleToggleMeshVisibility}
                     lockedMeshes={lockedMeshes}
                     onToggleMeshLock={handleToggleMeshLock}

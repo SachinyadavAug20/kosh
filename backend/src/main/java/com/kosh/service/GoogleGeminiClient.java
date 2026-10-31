@@ -27,7 +27,7 @@ public class GoogleGeminiClient {
     @Value("${google.gemini.api.base-url:https://generativelanguage.googleapis.com/v1beta}")
     private String geminiBaseUrl;
 
-    @Value("${google.gemini.model:gemini-2.5-flash}")
+    @Value("${google.gemini.model:gemini-1.5-flash}")
     private String primaryModel;
 
     @Value("${google.gemini.fallback-model:gemini-flash-latest}")
@@ -37,11 +37,10 @@ public class GoogleGeminiClient {
     private String defaultApiKey;
 
     private static final List<String> CASCADE_MODELS = List.of(
-            "gemini-2.5-flash",
-            "gemini-flash-latest",
-            "gemini-2.5-flash-lite",
-            "gemini-3.5-flash",
-            "gemini-2.5-pro"
+            "gemini-1.5-flash",
+            "gemini-2.0-flash-exp",
+            "gemini-1.5-pro",
+            "gemini-flash-latest"
     );
 
     public GoogleGeminiClient(WebClient.Builder webClientBuilder,

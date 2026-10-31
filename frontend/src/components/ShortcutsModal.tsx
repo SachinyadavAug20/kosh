@@ -172,6 +172,12 @@ const SHORTCUTS: ShortcutItem[] = [
     category: "Shading & Visibility",
   },
   {
+    keys: ["Alt", "+", "L"],
+    title: "Toggle CAD Inspection Headlamp",
+    description: "Camera-locked inspection light to clearly illuminate cavities and surface normals",
+    category: "Shading & Visibility",
+  },
+  {
     keys: ["H"],
     title: "Hide Mesh",
     description: "Conceal the currently selected sub-mesh from view",

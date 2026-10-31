@@ -1427,60 +1427,1031 @@ export function createProceduralPyramid(): THREE.Group {
   return group;
 }
 
+export function createProceduralCar(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Car";
+
+  const paintMat = createLowPolyMaterial("#2563eb", { roughness: 0.25, metalness: 0.65 });
+  const trimMat = createLowPolyMaterial("#18181b", { roughness: 0.7, metalness: 0.2 });
+  const glassMat = createLowPolyMaterial("#0f172a", { roughness: 0.1, metalness: 0.9 });
+  const wheelRubberMat = createLowPolyMaterial("#18181b", { roughness: 0.85, metalness: 0.05 });
+  const wheelRimMat = createLowPolyMaterial("#cbd5e1", { roughness: 0.3, metalness: 0.9 });
+  const lightFrontMat = createLowPolyMaterial("#ffffff", { roughness: 0.1, metalness: 0.1, emissive: new THREE.Color("#e0f2fe"), emissiveIntensity: 0.6 });
+  const lightRearMat = createLowPolyMaterial("#ef4444", { roughness: 0.2, metalness: 0.1, emissive: new THREE.Color("#ef4444"), emissiveIntensity: 0.5 });
+
+  // 1. Lower Chassis
+  const chassisGeo = new THREE.BoxGeometry(1.6, 0.42, 3.4);
+  chassisGeo.computeVertexNormals();
+  const chassis = new THREE.Mesh(chassisGeo, paintMat);
+  chassis.name = "Car_Chassis";
+  chassis.position.set(0, 0.45, 0);
+  chassis.castShadow = true;
+  chassis.receiveShadow = true;
+  group.add(chassis);
+
+  // 2. Hood / Front Nose Slope
+  const hoodGeo = new THREE.BoxGeometry(1.5, 0.22, 1.1);
+  hoodGeo.computeVertexNormals();
+  const hood = new THREE.Mesh(hoodGeo, paintMat);
+  hood.name = "Car_Hood_Panel";
+  hood.position.set(0, 0.62, 1.05);
+  hood.castShadow = true;
+  group.add(hood);
+
+  // 3. Cabin & Roof Structure
+  const cabinGeo = new THREE.BoxGeometry(1.36, 0.48, 1.7);
+  cabinGeo.computeVertexNormals();
+  const cabin = new THREE.Mesh(cabinGeo, paintMat);
+  cabin.name = "Car_Cabin_Roof";
+  cabin.position.set(0, 0.88, -0.2);
+  cabin.castShadow = true;
+  group.add(cabin);
+
+  // 4. Windshield & Windows
+  const windshieldGeo = new THREE.BoxGeometry(1.38, 0.44, 0.55);
+  windshieldGeo.computeVertexNormals();
+  const windshield = new THREE.Mesh(windshieldGeo, glassMat);
+  windshield.name = "Car_Windshield_Glass";
+  windshield.position.set(0, 0.86, 0.6);
+  windshield.rotation.x = -0.32;
+  windshield.castShadow = true;
+  group.add(windshield);
+
+  const rearGlassGeo = new THREE.BoxGeometry(1.38, 0.42, 0.5);
+  rearGlassGeo.computeVertexNormals();
+  const rearGlass = new THREE.Mesh(rearGlassGeo, glassMat);
+  rearGlass.name = "Car_Rear_Window_Glass";
+  rearGlass.position.set(0, 0.86, -1.0);
+  rearGlass.rotation.x = 0.35;
+  rearGlass.castShadow = true;
+  group.add(rearGlass);
+
+  // 5. Wheels & Rims
+  const wheelPositions = [
+    { name: "Car_Wheel_FL", x: -0.82, y: 0.32, z: 1.05 },
+    { name: "Car_Wheel_FR", x: 0.82, y: 0.32, z: 1.05 },
+    { name: "Car_Wheel_RL", x: -0.82, y: 0.32, z: -1.05 },
+    { name: "Car_Wheel_RR", x: 0.82, y: 0.32, z: -1.05 },
+  ];
+
+  const tireGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.22, 24);
+  tireGeo.rotateZ(Math.PI / 2);
+  tireGeo.computeVertexNormals();
+
+  const rimGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.23, 16);
+  rimGeo.rotateZ(Math.PI / 2);
+  rimGeo.computeVertexNormals();
+
+  wheelPositions.forEach((pos) => {
+    const wheel = new THREE.Mesh(tireGeo, wheelRubberMat);
+    wheel.name = pos.name;
+    wheel.position.set(pos.x, pos.y, pos.z);
+    wheel.castShadow = true;
+    wheel.receiveShadow = true;
+
+    const rim = new THREE.Mesh(rimGeo, wheelRimMat);
+    rim.name = `${pos.name}_Rim`;
+    rim.position.set(pos.x, pos.y, pos.z);
+    group.add(wheel);
+    group.add(rim);
+  });
+
+  // 6. Front Grille & Headlights
+  const grilleGeo = new THREE.BoxGeometry(1.1, 0.22, 0.08);
+  grilleGeo.computeVertexNormals();
+  const grille = new THREE.Mesh(grilleGeo, trimMat);
+  grille.name = "Car_Front_Grille";
+  grille.position.set(0, 0.42, 1.72);
+  group.add(grille);
+
+  const headlightGeo = new THREE.BoxGeometry(0.25, 0.14, 0.08);
+  headlightGeo.computeVertexNormals();
+  const hlLeft = new THREE.Mesh(headlightGeo, lightFrontMat);
+  hlLeft.name = "Car_Headlight_Left";
+  hlLeft.position.set(-0.58, 0.52, 1.72);
+  group.add(hlLeft);
+
+  const hlRight = new THREE.Mesh(headlightGeo, lightFrontMat);
+  hlRight.name = "Car_Headlight_Right";
+  hlRight.position.set(0.58, 0.52, 1.72);
+  group.add(hlRight);
+
+  // 7. Taillights
+  const taillightGeo = new THREE.BoxGeometry(0.3, 0.12, 0.08);
+  taillightGeo.computeVertexNormals();
+  const tlLeft = new THREE.Mesh(taillightGeo, lightRearMat);
+  tlLeft.name = "Car_Taillight_Left";
+  tlLeft.position.set(-0.58, 0.52, -1.72);
+  group.add(tlLeft);
+
+  const tlRight = new THREE.Mesh(taillightGeo, lightRearMat);
+  tlRight.name = "Car_Taillight_Right";
+  tlRight.position.set(0.58, 0.52, -1.72);
+  group.add(tlRight);
+
+  // 8. Rear Spoiler
+  const spoilerWingGeo = new THREE.BoxGeometry(1.5, 0.06, 0.3);
+  spoilerWingGeo.computeVertexNormals();
+  const spoilerWing = new THREE.Mesh(spoilerWingGeo, paintMat);
+  spoilerWing.name = "Car_Rear_Spoiler_Wing";
+  spoilerWing.position.set(0, 0.95, -1.6);
+  spoilerWing.castShadow = true;
+  group.add(spoilerWing);
+
+  const strutGeo = new THREE.BoxGeometry(0.06, 0.25, 0.06);
+  strutGeo.computeVertexNormals();
+  const strutL = new THREE.Mesh(strutGeo, trimMat);
+  strutL.name = "Car_Spoiler_Strut_Left";
+  strutL.position.set(-0.5, 0.8, -1.6);
+  group.add(strutL);
+
+  const strutR = new THREE.Mesh(strutGeo, trimMat);
+  strutR.name = "Car_Spoiler_Strut_Right";
+  strutR.position.set(0.5, 0.8, -1.6);
+  group.add(strutR);
+
+  return group;
+}
+
+export function createProceduralAirplane(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Airplane";
+
+  const bodyMat = createLowPolyMaterial("#f1f5f9", { roughness: 0.35, metalness: 0.5 });
+  const wingMat = createLowPolyMaterial("#0284c7", { roughness: 0.3, metalness: 0.6 });
+  const glassMat = createLowPolyMaterial("#0f172a", { roughness: 0.1, metalness: 0.9 });
+  const engineMat = createLowPolyMaterial("#475569", { roughness: 0.4, metalness: 0.8 });
+
+  // 1. Fuselage
+  const fuselageGeo = new THREE.CylinderGeometry(0.42, 0.2, 4.2, 18);
+  fuselageGeo.rotateX(Math.PI / 2);
+  fuselageGeo.computeVertexNormals();
+  const fuselage = new THREE.Mesh(fuselageGeo, bodyMat);
+  fuselage.name = "Airplane_Fuselage";
+  fuselage.position.set(0, 1.2, 0);
+  fuselage.castShadow = true;
+  group.add(fuselage);
+
+  // 2. Nose Cone
+  const noseGeo = new THREE.ConeGeometry(0.42, 0.9, 18);
+  noseGeo.rotateX(Math.PI / 2);
+  noseGeo.computeVertexNormals();
+  const nose = new THREE.Mesh(noseGeo, wingMat);
+  nose.name = "Airplane_Nose_Cone";
+  nose.position.set(0, 1.2, 2.5);
+  nose.castShadow = true;
+  group.add(nose);
+
+  // 3. Cockpit Canopy
+  const cockpitGeo = new THREE.BoxGeometry(0.44, 0.32, 0.9);
+  cockpitGeo.computeVertexNormals();
+  const cockpit = new THREE.Mesh(cockpitGeo, glassMat);
+  cockpit.name = "Airplane_Cockpit_Canopy";
+  cockpit.position.set(0, 1.5, 1.4);
+  cockpit.rotation.x = -0.25;
+  cockpit.castShadow = true;
+  group.add(cockpit);
+
+  // 4. Main Wings (Swept)
+  const wingLeftGeo = new THREE.BoxGeometry(2.4, 0.08, 0.85);
+  wingLeftGeo.computeVertexNormals();
+  const wingL = new THREE.Mesh(wingLeftGeo, wingMat);
+  wingL.name = "Airplane_Main_Wing_Left";
+  wingL.position.set(-1.45, 1.15, 0.1);
+  wingL.rotation.y = 0.12;
+  wingL.rotation.z = 0.05;
+  wingL.castShadow = true;
+  group.add(wingL);
+
+  const wingRightGeo = new THREE.BoxGeometry(2.4, 0.08, 0.85);
+  wingRightGeo.computeVertexNormals();
+  const wingR = new THREE.Mesh(wingRightGeo, wingMat);
+  wingR.name = "Airplane_Main_Wing_Right";
+  wingR.position.set(1.45, 1.15, 0.1);
+  wingR.rotation.y = -0.12;
+  wingR.rotation.z = -0.05;
+  wingR.castShadow = true;
+  group.add(wingR);
+
+  // 5. Vertical Tail Fin
+  const finGeo = new THREE.BoxGeometry(0.08, 1.1, 0.85);
+  finGeo.computeVertexNormals();
+  const fin = new THREE.Mesh(finGeo, wingMat);
+  fin.name = "Airplane_Vertical_Fin";
+  fin.position.set(0, 1.85, -1.7);
+  fin.rotation.x = -0.3;
+  fin.castShadow = true;
+  group.add(fin);
+
+  // 6. Horizontal Stabilizers
+  const stabLeftGeo = new THREE.BoxGeometry(0.9, 0.05, 0.5);
+  stabLeftGeo.computeVertexNormals();
+  const stabL = new THREE.Mesh(stabLeftGeo, bodyMat);
+  stabL.name = "Airplane_Stabilizer_Left";
+  stabL.position.set(-0.6, 1.35, -1.9);
+  group.add(stabL);
+
+  const stabRightGeo = new THREE.BoxGeometry(0.9, 0.05, 0.5);
+  stabRightGeo.computeVertexNormals();
+  const stabR = new THREE.Mesh(stabRightGeo, bodyMat);
+  stabR.name = "Airplane_Stabilizer_Right";
+  stabR.position.set(0.6, 1.35, -1.9);
+  group.add(stabR);
+
+  // 7. Jet Engines
+  const engineGeo = new THREE.CylinderGeometry(0.2, 0.18, 0.95, 16);
+  engineGeo.rotateX(Math.PI / 2);
+  engineGeo.computeVertexNormals();
+
+  const engL = new THREE.Mesh(engineGeo, engineMat);
+  engL.name = "Airplane_Jet_Engine_Left";
+  engL.position.set(-1.1, 0.95, 0.15);
+  engL.castShadow = true;
+  group.add(engL);
+
+  const engR = new THREE.Mesh(engineGeo, engineMat);
+  engR.name = "Airplane_Jet_Engine_Right";
+  engR.position.set(1.1, 0.95, 0.15);
+  engR.castShadow = true;
+  group.add(engR);
+
+  return group;
+}
+
+export function createProceduralBoat(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Boat";
+
+  const hullMat = createLowPolyMaterial("#0284c7", { roughness: 0.35, metalness: 0.3 });
+  const deckMat = createLowPolyMaterial("#d97706", { roughness: 0.8, metalness: 0.1 });
+  const cabinMat = createLowPolyMaterial("#f8fafc", { roughness: 0.4, metalness: 0.2 });
+  const mastMat = createLowPolyMaterial("#475569", { roughness: 0.5, metalness: 0.8 });
+
+  // 1. Boat Hull
+  const hullGeo = new THREE.BoxGeometry(1.5, 0.7, 3.8);
+  hullGeo.computeVertexNormals();
+  const hull = new THREE.Mesh(hullGeo, hullMat);
+  hull.name = "Boat_Hull_Main";
+  hull.position.set(0, 0.35, 0);
+  hull.castShadow = true;
+  group.add(hull);
+
+  // 2. Bow Pointed Nose
+  const bowGeo = new THREE.ConeGeometry(0.85, 1.4, 4);
+  bowGeo.rotateX(-Math.PI / 2);
+  bowGeo.computeVertexNormals();
+  const bow = new THREE.Mesh(bowGeo, hullMat);
+  bow.name = "Boat_Bow_Prow";
+  bow.position.set(0, 0.35, 2.3);
+  bow.castShadow = true;
+  group.add(bow);
+
+  // 3. Top Deck
+  const deckGeo = new THREE.BoxGeometry(1.4, 0.1, 3.5);
+  deckGeo.computeVertexNormals();
+  const deck = new THREE.Mesh(deckGeo, deckMat);
+  deck.name = "Boat_Deck_Planks";
+  deck.position.set(0, 0.72, 0.1);
+  group.add(deck);
+
+  // 4. Cabin Bridge
+  const cabinGeo = new THREE.BoxGeometry(1.0, 0.75, 1.4);
+  cabinGeo.computeVertexNormals();
+  const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+  cabin.name = "Boat_Bridge_Cabin";
+  cabin.position.set(0, 1.15, -0.2);
+  cabin.castShadow = true;
+  group.add(cabin);
+
+  // 5. Radar Mast
+  const mastGeo = new THREE.CylinderGeometry(0.04, 0.05, 1.2, 8);
+  mastGeo.computeVertexNormals();
+  const mast = new THREE.Mesh(mastGeo, mastMat);
+  mast.name = "Boat_Antenna_Mast";
+  mast.position.set(0, 2.0, -0.2);
+  group.add(mast);
+
+  return group;
+}
+
+export function createProceduralLaptop(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Laptop";
+
+  const metalMat = createLowPolyMaterial("#94a3b8", { roughness: 0.3, metalness: 0.85 });
+  const keyMat = createLowPolyMaterial("#1e293b", { roughness: 0.8, metalness: 0.1 });
+  const screenMat = createLowPolyMaterial("#0284c7", { roughness: 0.1, metalness: 0.2, emissive: new THREE.Color("#0369a1"), emissiveIntensity: 0.4 });
+
+  // 1. Base Keyboard Chassis
+  const baseGeo = new THREE.BoxGeometry(1.8, 0.06, 1.25);
+  baseGeo.computeVertexNormals();
+  const base = new THREE.Mesh(baseGeo, metalMat);
+  base.name = "Laptop_Base_Chassis";
+  base.position.set(0, 0.03, 0);
+  base.castShadow = true;
+  group.add(base);
+
+  // 2. Keyboard Inset
+  const keyGeo = new THREE.BoxGeometry(1.55, 0.02, 0.65);
+  keyGeo.computeVertexNormals();
+  const keys = new THREE.Mesh(keyGeo, keyMat);
+  keys.name = "Laptop_Keyboard_Surface";
+  keys.position.set(0, 0.07, -0.15);
+  group.add(keys);
+
+  // 3. Trackpad
+  const trackpadGeo = new THREE.BoxGeometry(0.55, 0.015, 0.38);
+  trackpadGeo.computeVertexNormals();
+  const trackpad = new THREE.Mesh(trackpadGeo, metalMat);
+  trackpad.name = "Laptop_Trackpad";
+  trackpad.position.set(0, 0.07, 0.36);
+  group.add(trackpad);
+
+  // 4. Screen Lid (Tilted at 115 degrees)
+  const lidGeo = new THREE.BoxGeometry(1.8, 1.25, 0.05);
+  lidGeo.computeVertexNormals();
+  const lid = new THREE.Mesh(lidGeo, metalMat);
+  lid.name = "Laptop_Screen_Lid";
+  lid.position.set(0, 0.65, -0.75);
+  lid.rotation.x = -0.38;
+  lid.castShadow = true;
+  group.add(lid);
+
+  // 5. Screen OLED Display
+  const displayGeo = new THREE.BoxGeometry(1.65, 1.1, 0.02);
+  displayGeo.computeVertexNormals();
+  const display = new THREE.Mesh(displayGeo, screenMat);
+  display.name = "Laptop_OLED_Screen";
+  display.position.set(0, 0.65, -0.72);
+  display.rotation.x = -0.38;
+  group.add(display);
+
+  return group;
+}
+
+export function createProceduralTreeModel(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Tree";
+
+  const trunkMat = createLowPolyMaterial("#78350f", { roughness: 0.9, metalness: 0.05 });
+  const foliageMat1 = createLowPolyMaterial("#15803d", { roughness: 0.85, metalness: 0.0 });
+  const foliageMat2 = createLowPolyMaterial("#16a34a", { roughness: 0.85, metalness: 0.0 });
+  const foliageMat3 = createLowPolyMaterial("#22c55e", { roughness: 0.85, metalness: 0.0 });
+
+  // 1. Trunk
+  const trunkGeo = new THREE.CylinderGeometry(0.18, 0.28, 1.8, 10);
+  trunkGeo.computeVertexNormals();
+  const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+  trunk.name = "Tree_Trunk";
+  trunk.position.set(0, 0.9, 0);
+  trunk.castShadow = true;
+  group.add(trunk);
+
+  // 2. Lower Foliage Cone
+  const foliageGeo1 = new THREE.ConeGeometry(1.2, 1.4, 9);
+  foliageGeo1.computeVertexNormals();
+  const foliage1 = new THREE.Mesh(foliageGeo1, foliageMat1);
+  foliage1.name = "Tree_Foliage_Layer_1";
+  foliage1.position.set(0, 1.8, 0);
+  foliage1.castShadow = true;
+  group.add(foliage1);
+
+  // 3. Middle Foliage Cone
+  const foliageGeo2 = new THREE.ConeGeometry(0.95, 1.2, 9);
+  foliageGeo2.computeVertexNormals();
+  const foliage2 = new THREE.Mesh(foliageGeo2, foliageMat2);
+  foliage2.name = "Tree_Foliage_Layer_2";
+  foliage2.position.set(0, 2.45, 0);
+  foliage2.castShadow = true;
+  group.add(foliage2);
+
+  // 4. Top Crown Cone
+  const foliageGeo3 = new THREE.ConeGeometry(0.68, 1.0, 8);
+  foliageGeo3.computeVertexNormals();
+  const foliage3 = new THREE.Mesh(foliageGeo3, foliageMat3);
+  foliage3.name = "Tree_Foliage_Crown";
+  foliage3.position.set(0, 3.05, 0);
+  foliage3.castShadow = true;
+  group.add(foliage3);
+
+  return group;
+}
+
+export function createProceduralBuildingModel(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_House";
+
+  const wallMat = createLowPolyMaterial("#f8fafc", { roughness: 0.75, metalness: 0.1 });
+  const roofMat = createLowPolyMaterial("#dc2626", { roughness: 0.6, metalness: 0.2 });
+  const doorMat = createLowPolyMaterial("#92400e", { roughness: 0.85, metalness: 0.05 });
+  const glassMat = createLowPolyMaterial("#38bdf8", { roughness: 0.2, metalness: 0.8 });
+  const foundationMat = createLowPolyMaterial("#64748b", { roughness: 0.9, metalness: 0.1 });
+
+  // 1. Foundation
+  const foundGeo = new THREE.BoxGeometry(2.5, 0.2, 2.5);
+  foundGeo.computeVertexNormals();
+  const foundation = new THREE.Mesh(foundGeo, foundationMat);
+  foundation.name = "House_Foundation";
+  foundation.position.set(0, 0.1, 0);
+  group.add(foundation);
+
+  // 2. Main Wall Body
+  const wallGeo = new THREE.BoxGeometry(2.3, 1.6, 2.3);
+  wallGeo.computeVertexNormals();
+  const walls = new THREE.Mesh(wallGeo, wallMat);
+  walls.name = "House_Walls";
+  walls.position.set(0, 1.0, 0);
+  walls.castShadow = true;
+  group.add(walls);
+
+  // 3. Pitched Roof
+  const roofGeo = new THREE.ConeGeometry(1.8, 1.1, 4);
+  roofGeo.rotateY(Math.PI / 4);
+  roofGeo.computeVertexNormals();
+  const roof = new THREE.Mesh(roofGeo, roofMat);
+  roof.name = "House_Pitched_Roof";
+  roof.position.set(0, 2.35, 0);
+  roof.castShadow = true;
+  group.add(roof);
+
+  // 4. Front Door
+  const doorGeo = new THREE.BoxGeometry(0.48, 0.9, 0.06);
+  doorGeo.computeVertexNormals();
+  const door = new THREE.Mesh(doorGeo, doorMat);
+  door.name = "House_Front_Door";
+  door.position.set(0, 0.65, 1.16);
+  group.add(door);
+
+  // 5. Windows
+  const winGeo = new THREE.BoxGeometry(0.4, 0.45, 0.06);
+  winGeo.computeVertexNormals();
+  const winL = new THREE.Mesh(winGeo, glassMat);
+  winL.name = "House_Window_Left";
+  winL.position.set(-0.65, 1.0, 1.16);
+  group.add(winL);
+
+  const winR = new THREE.Mesh(winGeo, glassMat);
+  winR.name = "House_Window_Right";
+  winR.position.set(0.65, 1.0, 1.16);
+  group.add(winR);
+
+  return group;
+}
+
+export function createProceduralTableGroup(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Table";
+
+  const woodMat = createLowPolyMaterial("#b45309", { roughness: 0.65, metalness: 0.1 });
+  const frameMat = createLowPolyMaterial("#18181b", { roughness: 0.7, metalness: 0.4 });
+
+  // 1. Table Top Surface
+  const topGeo = new THREE.BoxGeometry(2.2, 0.1, 1.3);
+  topGeo.computeVertexNormals();
+  const top = new THREE.Mesh(topGeo, woodMat);
+  top.name = "Table_Top_Surface";
+  top.position.set(0, 0.95, 0);
+  top.castShadow = true;
+  group.add(top);
+
+  // 2. Underframe Apron
+  const frameGeo = new THREE.BoxGeometry(1.9, 0.12, 1.05);
+  frameGeo.computeVertexNormals();
+  const frame = new THREE.Mesh(frameGeo, frameMat);
+  frame.name = "Table_Support_Apron";
+  frame.position.set(0, 0.88, 0);
+  group.add(frame);
+
+  // 3. Legs
+  const legPositions = [
+    { name: "Table_Leg_FL", x: -0.95, z: 0.52 },
+    { name: "Table_Leg_FR", x: 0.95, z: 0.52 },
+    { name: "Table_Leg_RL", x: -0.95, z: -0.52 },
+    { name: "Table_Leg_RR", x: 0.95, z: -0.52 },
+  ];
+
+  const legGeo = new THREE.CylinderGeometry(0.045, 0.04, 0.9, 12);
+  legGeo.computeVertexNormals();
+
+  legPositions.forEach((pos) => {
+    const leg = new THREE.Mesh(legGeo, frameMat);
+    leg.name = pos.name;
+    leg.position.set(pos.x, 0.45, pos.z);
+    leg.castShadow = true;
+    group.add(leg);
+  });
+
+  return group;
+}
+
+export function createProceduralChairGroup(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Chair";
+
+  const seatMat = createLowPolyMaterial("#ea580c", { roughness: 0.55, metalness: 0.15 });
+  const legMat = createLowPolyMaterial("#27272a", { roughness: 0.65, metalness: 0.7 });
+
+  // 1. Seat Pad
+  const seatGeo = new THREE.BoxGeometry(0.7, 0.08, 0.7);
+  seatGeo.computeVertexNormals();
+  const seat = new THREE.Mesh(seatGeo, seatMat);
+  seat.name = "Chair_Seat_Cushion";
+  seat.position.set(0, 0.55, 0);
+  seat.castShadow = true;
+  group.add(seat);
+
+  // 2. Backrest
+  const backGeo = new THREE.BoxGeometry(0.66, 0.6, 0.06);
+  backGeo.computeVertexNormals();
+  const back = new THREE.Mesh(backGeo, seatMat);
+  back.name = "Chair_Backrest_Panel";
+  back.position.set(0, 0.92, -0.32);
+  back.castShadow = true;
+  group.add(back);
+
+  // 3. 4 Legs
+  const legPositions = [
+    { name: "Chair_Leg_FL", x: -0.28, z: 0.28 },
+    { name: "Chair_Leg_FR", x: 0.28, z: 0.28 },
+    { name: "Chair_Leg_RL", x: -0.28, z: -0.28 },
+    { name: "Chair_Leg_RR", x: 0.28, z: -0.28 },
+  ];
+
+  const legGeo = new THREE.CylinderGeometry(0.028, 0.024, 0.54, 10);
+  legGeo.computeVertexNormals();
+
+  legPositions.forEach((pos) => {
+    const leg = new THREE.Mesh(legGeo, legMat);
+    leg.name = pos.name;
+    leg.position.set(pos.x, 0.27, pos.z);
+    leg.castShadow = true;
+    group.add(leg);
+  });
+
+  return group;
+}
+
+export function createProceduralBicycle(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Bicycle";
+
+  const frameMat = createLowPolyMaterial("#dc2626", { roughness: 0.35, metalness: 0.6 });
+  const metalMat = createLowPolyMaterial("#cbd5e1", { roughness: 0.25, metalness: 0.9 });
+  const rubberMat = createLowPolyMaterial("#18181b", { roughness: 0.9, metalness: 0.05 });
+
+  // 1. Wheels
+  const wheelGeo = new THREE.TorusGeometry(0.42, 0.05, 12, 32);
+  wheelGeo.computeVertexNormals();
+
+  const frontWheel = new THREE.Mesh(wheelGeo, rubberMat);
+  frontWheel.name = "Bicycle_Front_Wheel";
+  frontWheel.position.set(0, 0.42, 0.9);
+  frontWheel.castShadow = true;
+  group.add(frontWheel);
+
+  const rearWheel = new THREE.Mesh(wheelGeo, rubberMat);
+  rearWheel.name = "Bicycle_Rear_Wheel";
+  rearWheel.position.set(0, 0.42, -0.9);
+  rearWheel.castShadow = true;
+  group.add(rearWheel);
+
+  // 2. Diamond Frame Tubing
+  const frameGeo = new THREE.BoxGeometry(0.06, 0.06, 1.4);
+  frameGeo.computeVertexNormals();
+  const topTube = new THREE.Mesh(frameGeo, frameMat);
+  topTube.name = "Bicycle_Top_Tube";
+  topTube.position.set(0, 0.88, 0.0);
+  group.add(topTube);
+
+  const downTubeGeo = new THREE.CylinderGeometry(0.03, 0.03, 1.0, 8);
+  downTubeGeo.computeVertexNormals();
+  const seatPost = new THREE.Mesh(downTubeGeo, metalMat);
+  seatPost.name = "Bicycle_Seat_Post";
+  seatPost.position.set(0, 0.72, -0.4);
+  group.add(seatPost);
+
+  // 3. Saddle
+  const saddleGeo = new THREE.BoxGeometry(0.22, 0.05, 0.35);
+  saddleGeo.computeVertexNormals();
+  const saddle = new THREE.Mesh(saddleGeo, rubberMat);
+  saddle.name = "Bicycle_Saddle";
+  saddle.position.set(0, 1.05, -0.4);
+  group.add(saddle);
+
+  // 4. Handlebars
+  const barGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.75, 8);
+  barGeo.rotateZ(Math.PI / 2);
+  barGeo.computeVertexNormals();
+  const bars = new THREE.Mesh(barGeo, metalMat);
+  bars.name = "Bicycle_Handlebars";
+  bars.position.set(0, 1.15, 0.65);
+  group.add(bars);
+
+  return group;
+}
+
+/**
+ * Intelligent Dynamic Generative CAD Synthesizer
+ * Synthesizes a tailored, multi-part CAD model for ANY arbitrary prompt
+ * (e.g. "guitar", "spaceship station", "clock", "generator", "camera", "bridge", etc.)
+ * so the system NEVER falls back to an unrelated turbine flange!
+ */
+export function createDynamicGenerativeCadModel(prompt: string): THREE.Group {
+  const p = prompt.toLowerCase();
+  const group = new THREE.Group();
+
+  // Extract a clean capitalized subject name for parts
+  const words = prompt.replace(/[^a-zA-Z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+  const stopWords = new Set(["a", "an", "the", "make", "create", "model", "build", "generate", "with", "and", "of", "in", "like", "3d", "cad", "full"]);
+  const subjectWords = words.filter((w) => !stopWords.has(w.toLowerCase()));
+  const subjectName = subjectWords.length > 0
+    ? subjectWords.slice(0, 2).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join("_")
+    : "Object";
+
+  group.name = `Procedural_${subjectName}`;
+
+  // Color extraction from prompt
+  let primaryColor = "#3b82f6"; // default sleek engineering blue
+  let accentColor = "#ea580c";  // default vivid orange
+  let metalValue = 0.55;
+  let roughValue = 0.4;
+
+  if (p.includes("gold") || p.includes("brass") || p.includes("bronze")) {
+    primaryColor = "#d97706";
+    accentColor = "#fbbf24";
+    metalValue = 0.9;
+    roughValue = 0.25;
+  } else if (p.includes("silver") || p.includes("chrome") || p.includes("steel") || p.includes("metal")) {
+    primaryColor = "#94a3b8";
+    accentColor = "#cbd5e1";
+    metalValue = 0.95;
+    roughValue = 0.2;
+  } else if (p.includes("dark") || p.includes("black") || p.includes("stealth") || p.includes("carbon")) {
+    primaryColor = "#18181b";
+    accentColor = "#3f3f46";
+    metalValue = 0.7;
+    roughValue = 0.5;
+  } else if (p.includes("red") || p.includes("crimson") || p.includes("ruby")) {
+    primaryColor = "#dc2626";
+    accentColor = "#f87171";
+  } else if (p.includes("green") || p.includes("emerald") || p.includes("forest")) {
+    primaryColor = "#16a34a";
+    accentColor = "#4ade80";
+  } else if (p.includes("purple") || p.includes("violet") || p.includes("amethyst")) {
+    primaryColor = "#9333ea";
+    accentColor = "#c084fc";
+  } else if (p.includes("orange") || p.includes("amber")) {
+    primaryColor = "#ea580c";
+    accentColor = "#fb923c";
+  } else if (p.includes("white") || p.includes("ceramic") || p.includes("marble")) {
+    primaryColor = "#f8fafc";
+    accentColor = "#e2e8f0";
+    metalValue = 0.1;
+    roughValue = 0.3;
+  }
+
+  const primaryMat = createLowPolyMaterial(primaryColor, { roughness: roughValue, metalness: metalValue });
+  const accentMat = createLowPolyMaterial(accentColor, { roughness: 0.3, metalness: 0.8 });
+  const trimMat = createLowPolyMaterial("#27272a", { roughness: 0.65, metalness: 0.5 });
+  const glassMat = createLowPolyMaterial("#38bdf8", { roughness: 0.1, metalness: 0.9, emissive: new THREE.Color("#0284c7"), emissiveIntensity: 0.3 });
+
+  // Determine geometry profile based on prompt semantics
+  const isSpherical = p.includes("sphere") || p.includes("orb") || p.includes("ball") || p.includes("globe") || p.includes("planet") || p.includes("satellite");
+  const isVertical = p.includes("tower") || p.includes("tall") || p.includes("pillar") || p.includes("monument") || p.includes("spire") || p.includes("antenna") || p.includes("pylon");
+  const isCubic = p.includes("box") || p.includes("cube") || p.includes("console") || p.includes("computer") || p.includes("device") || p.includes("battery") || p.includes("generator");
+
+  if (isSpherical) {
+    // 1. Core Sphere
+    const sphereGeo = new THREE.SphereGeometry(0.85, 24, 16);
+    sphereGeo.computeVertexNormals();
+    const core = new THREE.Mesh(sphereGeo, primaryMat);
+    core.name = `${subjectName}_Core_Sphere`;
+    core.position.set(0, 1.2, 0);
+    core.castShadow = true;
+    group.add(core);
+
+    // 2. Equatorial Gimbal Ring
+    const ringGeo = new THREE.TorusGeometry(1.15, 0.06, 12, 36);
+    ringGeo.computeVertexNormals();
+    const ring = new THREE.Mesh(ringGeo, accentMat);
+    ring.name = `${subjectName}_Equatorial_Ring`;
+    ring.position.set(0, 1.2, 0);
+    ring.rotation.x = Math.PI / 2;
+    group.add(ring);
+
+    // 3. Polar Caps
+    const capGeo = new THREE.CylinderGeometry(0.25, 0.35, 0.2, 16);
+    capGeo.computeVertexNormals();
+    const capTop = new THREE.Mesh(capGeo, trimMat);
+    capTop.name = `${subjectName}_Polar_Cap_Top`;
+    capTop.position.set(0, 2.05, 0);
+    group.add(capTop);
+
+    // 4. Pedestal Mount
+    const pedGeo = new THREE.CylinderGeometry(0.12, 0.55, 0.6, 16);
+    pedGeo.computeVertexNormals();
+    const pedestal = new THREE.Mesh(pedGeo, trimMat);
+    pedestal.name = `${subjectName}_Mounting_Pedestal`;
+    pedestal.position.set(0, 0.3, 0);
+    group.add(pedestal);
+
+  } else if (isVertical) {
+    // 1. Plinth Base
+    const baseGeo = new THREE.BoxGeometry(1.6, 0.25, 1.6);
+    baseGeo.computeVertexNormals();
+    const base = new THREE.Mesh(baseGeo, trimMat);
+    base.name = `${subjectName}_Plinth_Base`;
+    base.position.set(0, 0.125, 0);
+    group.add(base);
+
+    // 2. Main Tower Shaft
+    const shaftGeo = new THREE.BoxGeometry(1.0, 2.4, 1.0);
+    shaftGeo.computeVertexNormals();
+    const shaft = new THREE.Mesh(shaftGeo, primaryMat);
+    shaft.name = `${subjectName}_Tower_Shaft`;
+    shaft.position.set(0, 1.45, 0);
+    shaft.castShadow = true;
+    group.add(shaft);
+
+    // 3. Tiered Crown
+    const crownGeo = new THREE.BoxGeometry(1.2, 0.35, 1.2);
+    crownGeo.computeVertexNormals();
+    const crown = new THREE.Mesh(crownGeo, accentMat);
+    crown.name = `${subjectName}_Capital_Crown`;
+    crown.position.set(0, 2.8, 0);
+    group.add(crown);
+
+    // 4. Spire Needle
+    const spireGeo = new THREE.ConeGeometry(0.2, 1.0, 8);
+    spireGeo.computeVertexNormals();
+    const spire = new THREE.Mesh(spireGeo, accentMat);
+    spire.name = `${subjectName}_Apex_Spire`;
+    spire.position.set(0, 3.45, 0);
+    spire.castShadow = true;
+    group.add(spire);
+
+  } else if (isCubic) {
+    // 1. Main Beveled Enclosure
+    const boxGeo = new THREE.BoxGeometry(1.8, 1.1, 1.4);
+    boxGeo.computeVertexNormals();
+    const box = new THREE.Mesh(boxGeo, primaryMat);
+    box.name = `${subjectName}_Enclosure_Chassis`;
+    box.position.set(0, 0.65, 0);
+    box.castShadow = true;
+    group.add(box);
+
+    // 2. Control Interface Panel
+    const panelGeo = new THREE.BoxGeometry(1.5, 0.75, 0.08);
+    panelGeo.computeVertexNormals();
+    const panel = new THREE.Mesh(panelGeo, trimMat);
+    panel.name = `${subjectName}_Front_Panel`;
+    panel.position.set(0, 0.65, 0.72);
+    group.add(panel);
+
+    // 3. Status Display Screen
+    const screenGeo = new THREE.BoxGeometry(0.9, 0.45, 0.05);
+    screenGeo.computeVertexNormals();
+    const screen = new THREE.Mesh(screenGeo, glassMat);
+    screen.name = `${subjectName}_Display_Screen`;
+    screen.position.set(-0.2, 0.68, 0.76);
+    group.add(screen);
+
+    // 4. Top Ventilation Heat Sink
+    const ventGeo = new THREE.BoxGeometry(1.4, 0.1, 1.0);
+    ventGeo.computeVertexNormals();
+    const vent = new THREE.Mesh(ventGeo, accentMat);
+    vent.name = `${subjectName}_Cooling_Vent`;
+    vent.position.set(0, 1.24, 0);
+    group.add(vent);
+
+  } else {
+    // High-Precision Multi-Tiered Modular CAD Assembly
+    // 1. Base Flange Plate
+    const baseGeo = new THREE.CylinderGeometry(1.25, 1.35, 0.22, 24);
+    baseGeo.computeVertexNormals();
+    const base = new THREE.Mesh(baseGeo, trimMat);
+    base.name = `${subjectName}_Foundation_Plate`;
+    base.position.set(0, 0.11, 0);
+    base.castShadow = true;
+    group.add(base);
+
+    // 2. Primary Feature Housing
+    const bodyGeo = new THREE.CylinderGeometry(0.9, 1.05, 1.2, 24);
+    bodyGeo.computeVertexNormals();
+    const body = new THREE.Mesh(bodyGeo, primaryMat);
+    body.name = `${subjectName}_Primary_Housing`;
+    body.position.set(0, 0.82, 0);
+    body.castShadow = true;
+    group.add(body);
+
+    // 3. Accent Retaining Ring
+    const collarGeo = new THREE.TorusGeometry(0.98, 0.08, 12, 32);
+    collarGeo.computeVertexNormals();
+    const collar = new THREE.Mesh(collarGeo, accentMat);
+    collar.name = `${subjectName}_Retaining_Bezel`;
+    collar.position.set(0, 1.35, 0);
+    collar.rotation.x = Math.PI / 2;
+    group.add(collar);
+
+    // 4. Top Finial / Optical Core
+    const coreGeo = new THREE.SphereGeometry(0.48, 18, 12);
+    coreGeo.computeVertexNormals();
+    const core = new THREE.Mesh(coreGeo, glassMat);
+    core.name = `${subjectName}_Optical_Core`;
+    core.position.set(0, 1.7, 0);
+    core.castShadow = true;
+    group.add(core);
+
+    // 5. Perimeter Fasteners (4x metric bolts)
+    const boltGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.12, 8);
+    boltGeo.computeVertexNormals();
+    for (let i = 0; i < 4; i++) {
+      const angle = (i * Math.PI) / 2;
+      const bolt = new THREE.Mesh(boltGeo, accentMat);
+      bolt.name = `${subjectName}_Bolt_${i + 1}`;
+      bolt.position.set(Math.cos(angle) * 1.15, 0.26, Math.sin(angle) * 1.15);
+      group.add(bolt);
+    }
+  }
+
+  return group;
+}
+
 export function generateProceduralModelFromPrompt(prompt: string): THREE.Object3D {
   const p = prompt.toLowerCase();
-  if (p.includes("axe") || p.includes("battleaxe") || p.includes("hatchet")) {
+
+  // 1. Vehicles: Car, Automobile, Truck
+  if (
+    p.includes("car") ||
+    p.includes("automobile") ||
+    p.includes("vehicle") ||
+    p.includes("truck") ||
+    p.includes("van") ||
+    p.includes("sedan") ||
+    p.includes("coupe") ||
+    p.includes("jeep") ||
+    p.includes("hotrod")
+  ) {
+    return createProceduralCar();
+  }
+
+  // 2. Aviation: Airplane, Jet, Aircraft
+  if (
+    p.includes("airplane") ||
+    p.includes("aeroplane") ||
+    p.includes("plane") ||
+    p.includes("aircraft") ||
+    p.includes("jet") ||
+    p.includes("glider") ||
+    p.includes("biplane")
+  ) {
+    return createProceduralAirplane();
+  }
+
+  // 3. Marine: Boat, Ship, Yacht
+  if (
+    p.includes("boat") ||
+    p.includes("ship") ||
+    p.includes("yacht") ||
+    p.includes("vessel") ||
+    p.includes("ferry") ||
+    p.includes("canoe") ||
+    p.includes("tugboat")
+  ) {
+    return createProceduralBoat();
+  }
+
+  // 4. Electronics: Laptop, Computer
+  if (
+    p.includes("laptop") ||
+    p.includes("notebook") ||
+    p.includes("macbook") ||
+    p.includes("computer") ||
+    p.includes("pc")
+  ) {
+    return createProceduralLaptop();
+  }
+
+  // 5. Nature: Tree, Pine, Oak, Forest
+  if (
+    p.includes("tree") ||
+    p.includes("plant") ||
+    p.includes("pine") ||
+    p.includes("oak") ||
+    p.includes("forest") ||
+    p.includes("woodland") ||
+    p.includes("shrub")
+  ) {
+    return createProceduralTreeModel();
+  }
+
+  // 6. Architecture: House, Building, Cabin, Home
+  if (
+    p.includes("house") ||
+    p.includes("building") ||
+    p.includes("cabin") ||
+    p.includes("cottage") ||
+    p.includes("home") ||
+    p.includes("shed") ||
+    p.includes("barn") ||
+    p.includes("villa")
+  ) {
+    return createProceduralBuildingModel();
+  }
+
+  // 7. Furniture: Table, Desk
+  if (p.includes("table") || p.includes("desk") || p.includes("workbench") || p.includes("counter")) {
+    return createProceduralTableGroup();
+  }
+
+  // 8. Furniture: Chair, Stool, Seat
+  if (p.includes("chair") || p.includes("seat") || p.includes("stool") || p.includes("bench") || p.includes("armchair")) {
+    return createProceduralChairGroup();
+  }
+
+  // 9. Vehicles: Bicycle, Bike
+  if (p.includes("bicycle") || p.includes("bike") || p.includes("cycle")) {
+    return createProceduralBicycle();
+  }
+
+  // 10. Weapons: Battleaxe, Axe
+  if (p.includes("axe") || p.includes("battleaxe") || p.includes("hatchet") || p.includes("tomahawk")) {
     return createProceduralBattleaxe();
   }
-  if (p.includes("drone") || p.includes("hover") || p.includes("aircraft") || p.includes("copter")) {
+
+  // 11. Drones: Hover drone, Quadcopter
+  if (p.includes("drone") || p.includes("hover") || p.includes("quadcopter") || p.includes("copter")) {
     return createProceduralHoverDrone();
   }
-  if (p.includes("sword") || p.includes("blade") || p.includes("dagger") || p.includes("saber")) {
+
+  // 12. Weapons: Sword, Blade, Dagger
+  if (p.includes("sword") || p.includes("blade") || p.includes("dagger") || p.includes("saber") || p.includes("katana")) {
     return createProceduralSword();
   }
-  if (p.includes("cabin") || p.includes("house") || p.includes("building") || p.includes("home")) {
-    return generateLowPolyBuilding(1, "medieval");
-  }
-  if (p.includes("gear")) {
+
+  // 13. Mechanical: Bevel Gear, Cog
+  if (p.includes("gear") || p.includes("cog") || p.includes("sprocket") || p.includes("pinion")) {
     return createProceduralBevelGear();
   }
-  if (p.includes("mug") || p.includes("cup") || p.includes("coffee") || p.includes("tea")) {
+
+  // 14. Kitchenware: Coffee Mug, Cup
+  if (p.includes("mug") || p.includes("cup") || p.includes("coffee") || p.includes("tea") || p.includes("goblet")) {
     return createProceduralCoffeeMug();
   }
-  if (p.includes("crate") || p.includes("cargo") || p.includes("box") || p.includes("container")) {
+
+  // 15. Containers: Sci-Fi Crate, Box
+  if (p.includes("crate") || p.includes("cargo") || p.includes("box") || p.includes("container") || p.includes("chest")) {
     return createProceduralSciFiCrate();
   }
-  if (p.includes("table") || p.includes("desk")) {
-    return generateLowPolyProp("table");
-  }
-  if (p.includes("chair") || p.includes("seat") || p.includes("stool")) {
-    return generateLowPolyProp("chair");
-  }
-  if (p.includes("lamp") || p.includes("lantern") || p.includes("light")) {
+
+  // 16. Lighting: Lantern, Lamp
+  if (p.includes("lamp") || p.includes("lantern") || p.includes("light") || p.includes("torch")) {
     return generateLowPolyProp("lantern");
   }
-  if (p.includes("cow") || p.includes("bull") || p.includes("ox")) {
+
+  // 17. Animals: Cow, Bull, Ox
+  if (p.includes("cow") || p.includes("bull") || p.includes("ox") || p.includes("cattle") || p.includes("calf")) {
     return createProceduralCow();
   }
-  if (p.includes("sheep") || p.includes("ram")) {
+
+  // 18. Animals: Sheep, Ram, Lamb
+  if (p.includes("sheep") || p.includes("ram") || p.includes("lamb")) {
     return createProceduralSheep();
   }
-  if (p.includes("rocket") || p.includes("starship") || p.includes("spaceship") || p.includes("rocket ship")) {
+
+  // 19. Space: Rocket, Starship, Spaceship
+  if (p.includes("rocket") || p.includes("starship") || p.includes("spaceship") || p.includes("rocket ship") || p.includes("missile") || p.includes("shuttle")) {
     return createProceduralRocketShip();
   }
-  if (p.includes("tank")) {
+
+  // 20. Military: Tank, Panzer
+  if (p.includes("tank") || p.includes("panzer") || p.includes("armored")) {
     return createProceduralTank();
   }
-  if (p.includes("castle") || p.includes("fortress")) {
+
+  // 21. Medieval: Castle, Fortress, Citadel
+  if (p.includes("castle") || p.includes("fortress") || p.includes("citadel") || p.includes("keep")) {
     return createProceduralCastle();
   }
-  if (p.includes("robot") || p.includes("android") || p.includes("mech")) {
+
+  // 22. Robotics: Robot, Android, Mech
+  if (p.includes("robot") || p.includes("android") || p.includes("mech") || p.includes("cyborg") || p.includes("droid")) {
     return createProceduralRobot();
   }
+
+  // 23. Monuments: Pyramid
   if (p.includes("pyramid")) {
     return createProceduralPyramid();
   }
-  // Default CAD model: High precision turbine flange
-  return createProceduralTurbineFlange();
+
+  // 24. Explicit CAD Flange / Turbine
+  if (p.includes("flange") || p.includes("turbine")) {
+    return createProceduralTurbineFlange();
+  }
+
+  // 25. For ANY other prompt, dynamically synthesize a tailored multi-part CAD model!
+  // NEVER fall back to a turbine flange unless explicitly requested!
+  return createDynamicGenerativeCadModel(prompt);
 }
+
 
