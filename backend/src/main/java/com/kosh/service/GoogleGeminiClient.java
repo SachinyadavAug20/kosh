@@ -491,7 +491,7 @@ public class GoogleGeminiClient {
                    mat_roof = bpy.data.materials.new(name="Roof_Material")
                    mat_walls = bpy.data.materials.new(name="Wall_Material")
                  * Do NOT boolean-union or join all components into a single merged mesh unless explicitly requested. Preserving separate sub-meshes allows individual part selection, live PBR painting, and exploded view assembly inspection in the Three.js viewport.
-               - Setup real node trees: mat.use_nodes = True; bsdf = mat.node_tree.nodes.get("Principled BSDF")
+               - Setup real node trees: if hasattr(mat, "use_nodes") and not mat.use_nodes: mat.use_nodes = True; bsdf = mat.node_tree.nodes.get("Principled BSDF")
                - Set realistic physical parameters:
                  * Metals: Metallic=0.85-0.95, Roughness=0.18-0.35, Base Color=(0.75, 0.78, 0.82, 1.0)
                  * Matte Polymers: Metallic=0.0, Roughness=0.3-0.5

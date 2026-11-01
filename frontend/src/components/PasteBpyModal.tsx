@@ -27,7 +27,8 @@ sub.levels = 2
 bpy.ops.object.shade_smooth()
 
 mat = bpy.data.materials.new("Mat_BurnishedGold")
-mat.use_nodes = True
+if hasattr(mat, "use_nodes") and not mat.use_nodes:
+    mat.use_nodes = True
 b = mat.node_tree.nodes.get("Principled BSDF")
 if b:
     b.inputs["Base Color"].default_value = (0.95, 0.75, 0.2, 1.0)
@@ -63,7 +64,8 @@ sub = torus.modifiers.new("Subsurf", type='SUBSURF')
 sub.levels = 1
 
 mat = bpy.data.materials.new("Mat_NeonCyan")
-mat.use_nodes = True
+if hasattr(mat, "use_nodes") and not mat.use_nodes:
+    mat.use_nodes = True
 b = mat.node_tree.nodes.get("Principled BSDF")
 if b:
     b.inputs["Base Color"].default_value = (0.05, 0.75, 0.95, 1.0)

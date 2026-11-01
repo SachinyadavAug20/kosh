@@ -10,10 +10,18 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-# Install Blender headless and required graphics libraries for background procedural execution
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install Blender headless, NumPy, pip, and required graphics libraries for background procedural execution
+RUN apt-get update && apt-get install -y \
     blender \
+    python3-numpy \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+# If Blender uses its own isolated bundled Python runtime, install numpy directly into Blender's Python:
+RUN find /usr/ -name "python3*" -path "*/blender/*" -exec {} -m pip install numpy \; 2>/dev/null || true
+
+# Install numpy for the default python interpreter used by bpy:
+RUN pip install --break-system-packages numpy 2>/dev/null || pip3 install numpy 2>/dev/null || true
 
 COPY --from=builder /app/target/*.jar app.jar
 EXPOSE 8080

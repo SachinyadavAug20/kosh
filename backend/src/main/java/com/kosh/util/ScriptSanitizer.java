@@ -117,6 +117,11 @@ public class ScriptSanitizer {
             patched = sb.toString();
         }
 
+        // Fix deprecation: mat.use_nodes = True -> safe node activation check
+        // DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+        patched = patched.replaceAll("(?m)^(\\s*)([a-zA-Z0-9_]+)\\.use_nodes\\s*=\\s*True\\b",
+                "$1if hasattr($2, \"use_nodes\") and not $2.use_nodes:\n$1    $2.use_nodes = True");
+
         return patched;
     }
 
@@ -141,9 +146,19 @@ public class ScriptSanitizer {
             
             # --- KOSH WORKSTATION TELEMETRY & SNAPSHOT ---
             try:
-                import os, json
+                import os, json, sys
                 import mathutils
                 from mathutils import Vector
+                
+                # NumPy verification for official GLTF exporter
+                try:
+                    import numpy
+                except ImportError:
+                    import subprocess
+                    try:
+                        subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy"])
+                    except Exception as _ne:
+                        print(f"Failed to auto-install numpy: {_ne}", file=sys.stderr)
                 
                 if bpy.context.view_layer.objects.active is None and bpy.context.selected_objects:
                     bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]

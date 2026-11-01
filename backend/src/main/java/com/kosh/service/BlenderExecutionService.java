@@ -120,10 +120,15 @@ public class BlenderExecutionService {
         String assetFileName = "kosh_" + assetId + "." + ext;
         Path outputFile = storagePath.resolve(assetFileName);
 
+        // Fix deprecation: mat.use_nodes = True -> safe node activation check
+        // DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+        String sanitizedScript = (script != null) ? script.replaceAll("(?m)^(\\s*)([a-zA-Z0-9_]+)\\.use_nodes\\s*=\\s*True\\b",
+                "$1if hasattr($2, \"use_nodes\") and not $2.use_nodes:\n$1    $2.use_nodes = True") : "";
+
         // Tier 1: Warm Blender Daemon Execution (~400ms turnaround)
         if (daemonEnabled) {
             try {
-                BlenderRunResult daemonResult = executeViaDaemon(script, ext, assetId, assetFileName, outputFile);
+                BlenderRunResult daemonResult = executeViaDaemon(sanitizedScript, ext, assetId, assetFileName, outputFile);
                 if (daemonResult != null && daemonResult.isSuccess()) {
                     return daemonResult;
                 }
@@ -134,7 +139,7 @@ public class BlenderExecutionService {
         }
 
         // Tier 2: Direct Process Execution with Strict 4s Timeout
-        return executeViaDirectProcess(script, ext, assetId, assetFileName, outputFile);
+        return executeViaDirectProcess(sanitizedScript, ext, assetId, assetFileName, outputFile);
     }
 
     private BlenderRunResult executeViaDaemon(String script, String ext, String assetId, String assetFileName, Path outputFile) throws Exception {
@@ -174,21 +179,56 @@ public class BlenderExecutionService {
                     ? ((Number) resp.get("executionTimeMs")).longValue()
                     : (System.currentTimeMillis() - startTime);
 
-            if (!success || !Files.exists(outputFile) || Files.size(outputFile) == 0) {
+            Path effectiveOutputFile = outputFile;
+            String effectiveExt = ext;
+            String effectiveFileName = assetFileName;
+
+            String respOut = resp.containsKey("outputPath") ? String.valueOf(resp.get("outputPath")) : null;
+            String respFmt = resp.containsKey("format") ? String.valueOf(resp.get("format")) : null;
+
+            if (respOut != null && respFmt != null) {
+                Path returnedPath = Paths.get(respOut);
+                if (Files.exists(returnedPath) && Files.size(returnedPath) > 0) {
+                    effectiveOutputFile = returnedPath;
+                    effectiveExt = respFmt.toLowerCase();
+                    effectiveFileName = returnedPath.getFileName().toString();
+                    if (!effectiveExt.equalsIgnoreCase(ext)) {
+                        log.info("Blender daemon used fallback export format: {} -> {}", ext, effectiveExt);
+                    }
+                }
+            }
+
+            if (!Files.exists(effectiveOutputFile) || Files.size(effectiveOutputFile) == 0) {
+                Path fallbackObj = storagePath.resolve("kosh_" + assetId + ".obj");
+                Path fallbackStl = storagePath.resolve("kosh_" + assetId + ".stl");
+                if (Files.exists(fallbackObj) && Files.size(fallbackObj) > 0) {
+                    effectiveOutputFile = fallbackObj;
+                    effectiveExt = "obj";
+                    effectiveFileName = "kosh_" + assetId + ".obj";
+                    log.info("Recovered emergency fallback OBJ from disk: {}", fallbackObj);
+                } else if (Files.exists(fallbackStl) && Files.size(fallbackStl) > 0) {
+                    effectiveOutputFile = fallbackStl;
+                    effectiveExt = "stl";
+                    effectiveFileName = "kosh_" + assetId + ".stl";
+                    log.info("Recovered emergency fallback STL from disk: {}", fallbackStl);
+                }
+            }
+
+            if (!success || !Files.exists(effectiveOutputFile) || Files.size(effectiveOutputFile) == 0) {
                 String err = resp.containsKey("errorMessage") ? String.valueOf(resp.get("errorMessage")) : "Asset not written";
                 log.warn("Blender daemon generation unsuccessful: {}", err);
                 return BlenderRunResult.builder()
                         .success(false)
                         .assetId(assetId)
-                        .assetFileName(assetFileName)
-                        .format(ext)
+                        .assetFileName(effectiveFileName)
+                        .format(effectiveExt)
                         .executionTimeMs(executionTimeMs)
                         .errorMessage(err)
                         .stderr(err)
                         .build();
             }
 
-            long fileSize = Files.size(outputFile);
+            long fileSize = Files.size(effectiveOutputFile);
             Map<String, Object> telemetry = resp.containsKey("telemetry") ? (Map<String, Object>) resp.get("telemetry") : null;
             String stdout = resp.containsKey("stdout") ? String.valueOf(resp.get("stdout")) : "";
             String stderr = resp.containsKey("stderr") ? String.valueOf(resp.get("stderr")) : "";
@@ -197,16 +237,16 @@ public class BlenderExecutionService {
             String snapshotUrl = (Files.exists(snapshotFile) && Files.size(snapshotFile) > 0)
                     ? "/api/assets/kosh_" + assetId + ".png" : null;
 
-            log.info("Blender warm daemon generated asset in {}ms: {} ({} bytes)", executionTimeMs, assetFileName, fileSize);
+            log.info("Blender warm daemon generated asset in {}ms: {} ({} bytes)", executionTimeMs, effectiveFileName, fileSize);
 
             return BlenderRunResult.builder()
                     .success(true)
                     .assetId(assetId)
-                    .assetFileName(assetFileName)
-                    .assetPath(outputFile)
+                    .assetFileName(effectiveFileName)
+                    .assetPath(effectiveOutputFile)
                     .snapshotUrl(snapshotUrl)
                     .telemetry(telemetry)
-                    .format(ext)
+                    .format(effectiveExt)
                     .sizeBytes(fileSize)
                     .stdout(stdout)
                     .stderr(stderr)
@@ -308,7 +348,34 @@ public class BlenderExecutionService {
                             except Exception:
                                 pass
                         else:
-                            bpy.ops.export_scene.gltf(filepath=_out, export_format='GLB', export_animations=True)
+                            try:
+                                import numpy
+                            except ImportError:
+                                import sys, subprocess
+                                try:
+                                    subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy"])
+                                except Exception as _ne:
+                                    print(f"Failed to auto-install numpy: {_ne}", file=sys.stderr)
+                            
+                            try:
+                                bpy.ops.export_scene.gltf(filepath=_out, export_format='GLB', export_animations=True)
+                            except Exception as _ge:
+                                print(f"GLTF export failed: {_ge}, falling back to OBJ", file=sys.stderr)
+                                _obj_out = _out.replace(".glb", ".obj")
+                                try:
+                                    if hasattr(bpy.ops.wm, "obj_export"):
+                                        bpy.ops.wm.obj_export(filepath=_obj_out)
+                                    elif hasattr(bpy.ops.export_scene, "obj"):
+                                        bpy.ops.export_scene.obj(filepath=_obj_out)
+                                except Exception:
+                                    _stl_out = _out.replace(".glb", ".stl")
+                                    try:
+                                        if hasattr(bpy.ops.wm, "stl_export"):
+                                            bpy.ops.wm.stl_export(filepath=_stl_out)
+                                        else:
+                                            bpy.ops.export_mesh.stl(filepath=_stl_out)
+                                    except Exception:
+                                        pass
                     """;
                 executableScript = executableScript + "\n" + autoExport;
             }
@@ -340,12 +407,30 @@ public class BlenderExecutionService {
             String stderr = stderrFuture.get(2, TimeUnit.SECONDS);
             long duration = System.currentTimeMillis() - startTime;
 
-            if (!Files.exists(outputFile) || Files.size(outputFile) == 0) {
-                throw new IllegalStateException("Blender execution completed with exit code " + exitCode +
-                        ", but expected asset was not generated. Stderr: " + stderr);
+            Path effectiveOutputFile = outputFile;
+            String effectiveExt = ext;
+            String effectiveFileName = assetFileName;
+
+            if (!Files.exists(effectiveOutputFile) || Files.size(effectiveOutputFile) == 0) {
+                Path fallbackObj = storagePath.resolve("kosh_" + assetId + ".obj");
+                Path fallbackStl = storagePath.resolve("kosh_" + assetId + ".stl");
+                if (Files.exists(fallbackObj) && Files.size(fallbackObj) > 0) {
+                    effectiveOutputFile = fallbackObj;
+                    effectiveExt = "obj";
+                    effectiveFileName = "kosh_" + assetId + ".obj";
+                    log.info("Direct process fallback OBJ used: {}", fallbackObj);
+                } else if (Files.exists(fallbackStl) && Files.size(fallbackStl) > 0) {
+                    effectiveOutputFile = fallbackStl;
+                    effectiveExt = "stl";
+                    effectiveFileName = "kosh_" + assetId + ".stl";
+                    log.info("Direct process fallback STL used: {}", fallbackStl);
+                } else {
+                    throw new IllegalStateException("Blender execution completed with exit code " + exitCode +
+                            ", but expected asset was not generated. Stderr: " + stderr);
+                }
             }
 
-            long fileSize = Files.size(outputFile);
+            long fileSize = Files.size(effectiveOutputFile);
             Path snapshotFile = storagePath.resolve("kosh_" + assetId + ".png");
             String snapshotUrl = (Files.exists(snapshotFile) && Files.size(snapshotFile) > 0)
                     ? "/api/assets/kosh_" + assetId + ".png" : null;
@@ -363,11 +448,11 @@ public class BlenderExecutionService {
             return BlenderRunResult.builder()
                     .success(exitCode == 0)
                     .assetId(assetId)
-                    .assetFileName(assetFileName)
-                    .assetPath(outputFile)
+                    .assetFileName(effectiveFileName)
+                    .assetPath(effectiveOutputFile)
                     .snapshotUrl(snapshotUrl)
                     .telemetry(telemetry)
-                    .format(ext)
+                    .format(effectiveExt)
                     .sizeBytes(fileSize)
                     .stdout(stdout)
                     .stderr(stderr)

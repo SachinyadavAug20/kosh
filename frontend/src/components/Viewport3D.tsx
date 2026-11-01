@@ -6,6 +6,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import { OBJExporter } from "three/examples/jsm/exporters/OBJExporter.js";
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
@@ -1575,6 +1576,19 @@ export function Viewport3D({
         undefined,
         (err) => {
           console.error("Failed to load STL model", err);
+          setIsLoadingModel(false);
+        }
+      );
+    } else if (format === "obj" || resolvedUrl.endsWith(".obj")) {
+      const objLoader = new OBJLoader();
+      objLoader.load(
+        resolvedUrl,
+        (obj) => {
+          onLoad(obj);
+        },
+        undefined,
+        (err) => {
+          console.error("Failed to load OBJ model", err);
           setIsLoadingModel(false);
         }
       );

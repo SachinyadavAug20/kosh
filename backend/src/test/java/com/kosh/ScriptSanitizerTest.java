@@ -72,6 +72,15 @@ class ScriptSanitizerTest {
         String result = sanitizer.ensureTelemetryAndSnapshot(input);
         assertTrue(result.contains("KOSH WORKSTATION TELEMETRY"));
         assertTrue(result.contains("json.dump"));
+        assertTrue(result.contains("numpy"));
         assertTrue(result.contains("bpy.ops.export_scene.gltf"));
+    }
+
+    @Test
+    void testPatchUseNodesDeprecationFix() {
+        String input = "    mat.use_nodes = True\n    mat_core.use_nodes = True";
+        String patched = sanitizer.patchBlenderHallucinations(input);
+        assertTrue(patched.contains("if hasattr(mat, \"use_nodes\") and not mat.use_nodes:"));
+        assertTrue(patched.contains("if hasattr(mat_core, \"use_nodes\") and not mat_core.use_nodes:"));
     }
 }

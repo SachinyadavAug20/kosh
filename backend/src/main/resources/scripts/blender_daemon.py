@@ -14,6 +14,17 @@ import traceback
 import bpy
 import mathutils
 
+# NumPy verification & graceful auto-install
+try:
+    import numpy
+except ImportError:
+    try:
+        import subprocess
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy"])
+        import numpy
+    except Exception as _ne:
+        sys.stderr.write(f"Warning: numpy unavailable and auto-install failed: {_ne}\n")
+
 DEFAULT_PORT = 9091
 DEFAULT_HOST = "127.0.0.1"
 
@@ -84,23 +95,78 @@ def auto_export(output_path, fmt):
         os.makedirs(bdir, exist_ok=True)
 
     if ext == "blend" or output_path.lower().endswith(".blend"):
-        bpy.ops.wm.save_as_mainfile(filepath=output_path)
+        try:
+            bpy.ops.wm.save_as_mainfile(filepath=output_path)
+        except Exception as e:
+            print(f"Error saving blend: {e}", file=sys.stderr)
+        return output_path, "blend"
     elif ext == "stl" or output_path.lower().endswith(".stl"):
         try:
             bpy.ops.wm.stl_export(filepath=output_path)
         except Exception:
             bpy.ops.export_mesh.stl(filepath=output_path)
+        return output_path, "stl"
     elif ext == "obj" or output_path.lower().endswith(".obj"):
         try:
             bpy.ops.wm.obj_export(filepath=output_path)
         except Exception:
             bpy.ops.export_scene.obj(filepath=output_path)
+        return output_path, "obj"
     elif ext == "fbx":
         bpy.ops.export_scene.fbx(filepath=output_path)
+        return output_path, "fbx"
     elif ext in ("usd", "usdz"):
-        bpy.ops.wm.usd_export(filepath=output_path)
+        try:
+            bpy.ops.wm.usd_export(filepath=output_path)
+        except Exception:
+            pass
+        return output_path, ext
     else:
-        bpy.ops.export_scene.gltf(filepath=output_path, export_format='GLB', export_animations=True)
+        # Pre-verify NumPy availability before gltf export
+        try:
+            import numpy
+        except ImportError:
+            try:
+                import subprocess
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy"])
+            except Exception as _ne:
+                print(f"Failed to auto-install numpy via pip: {_ne}", file=sys.stderr)
+
+        # Primary GLTF/GLB export
+        try:
+            bpy.ops.export_scene.gltf(filepath=output_path, export_format='GLB', export_animations=True)
+            if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                return output_path, "glb"
+        except Exception as e:
+            print(f"GLTF export failed: {e}, falling back to OBJ", file=sys.stderr)
+
+        # Emergency Fallback 1: Wavefront OBJ
+        obj_path = output_path.replace(".glb", ".obj")
+        try:
+            if hasattr(bpy.ops.wm, "obj_export"):
+                bpy.ops.wm.obj_export(filepath=obj_path)
+            elif hasattr(bpy.ops.export_scene, "obj"):
+                bpy.ops.export_scene.obj(filepath=obj_path)
+            if os.path.exists(obj_path) and os.path.getsize(obj_path) > 0:
+                print(f"Fallback to OBJ succeeded: {obj_path}", file=sys.stderr)
+                return obj_path, "obj"
+        except Exception as oe:
+            print(f"OBJ fallback failed: {oe}, falling back to STL", file=sys.stderr)
+
+        # Emergency Fallback 2: STL
+        stl_path = output_path.replace(".glb", ".stl")
+        try:
+            if hasattr(bpy.ops.wm, "stl_export"):
+                bpy.ops.wm.stl_export(filepath=stl_path)
+            else:
+                bpy.ops.export_mesh.stl(filepath=stl_path)
+            if os.path.exists(stl_path) and os.path.getsize(stl_path) > 0:
+                print(f"Fallback to STL succeeded: {stl_path}", file=sys.stderr)
+                return stl_path, "stl"
+        except Exception as se:
+            print(f"STL fallback failed: {se}", file=sys.stderr)
+
+        return output_path, "glb"
 
 def execute_request(req):
     asset_id = req.get("assetId", "daemon_asset")
@@ -123,6 +189,8 @@ def execute_request(req):
 
     success = False
     error_msg = None
+    actual_path = output_path
+    actual_format = fmt
 
     try:
         exec_globals = {
@@ -138,12 +206,24 @@ def execute_request(req):
         exec(script, exec_globals)
 
         if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
-            auto_export(output_path, fmt)
+            actual_path, actual_format = auto_export(output_path, fmt)
 
-        success = os.path.exists(output_path) and os.path.getsize(output_path) > 0
+        success = os.path.exists(actual_path) and os.path.getsize(actual_path) > 0
     except Exception as e:
         error_msg = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
-        success = False
+        # If script threw exception during gltf export, scene geometry is intact; attempt fallback
+        if "export_scene.gltf" in str(e) or "io_scene_gltf2" in str(e) or "numpy" in str(e):
+            try:
+                print("Export error detected; attempting auto_export fallback", file=sys.stderr)
+                actual_path, actual_format = auto_export(output_path, fmt)
+                if os.path.exists(actual_path) and os.path.getsize(actual_path) > 0:
+                    success = True
+                    error_msg = None
+            except Exception as fe:
+                print(f"Fallback export failed: {fe}", file=sys.stderr)
+                success = False
+        else:
+            success = False
     finally:
         sys.stdout = old_stdout
         sys.stderr = old_stderr
@@ -157,12 +237,12 @@ def execute_request(req):
 
     telemetry = {}
     size_bytes = 0
-    if success and os.path.exists(output_path):
-        size_bytes = os.path.getsize(output_path)
+    if success and os.path.exists(actual_path):
+        size_bytes = os.path.getsize(actual_path)
         try:
             telemetry = compute_telemetry()
-            base_dir = os.path.dirname(output_path)
-            base_name = os.path.splitext(os.path.basename(output_path))[0]
+            base_dir = os.path.dirname(actual_path)
+            base_name = os.path.splitext(os.path.basename(actual_path))[0]
             telem_path = os.path.join(base_dir, base_name + ".json")
             with open(telem_path, "w") as tf:
                 json.dump(telemetry, tf)
@@ -172,7 +252,8 @@ def execute_request(req):
     return {
         "success": success,
         "assetId": asset_id,
-        "outputPath": output_path,
+        "outputPath": actual_path,
+        "format": actual_format,
         "sizeBytes": size_bytes,
         "executionTimeMs": exec_time_ms,
         "stdout": stdout_str,
