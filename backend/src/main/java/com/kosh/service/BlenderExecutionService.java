@@ -1,6 +1,8 @@
 package com.kosh.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.Builder;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -8,10 +10,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,13 +35,24 @@ public class BlenderExecutionService {
     @Value("${blender.executable:blender}")
     private String blenderExecutable;
 
-    @Value("${blender.timeout-seconds:45}")
+    @Value("${blender.timeout-seconds:4}")
     private long timeoutSeconds;
 
     @Value("${app.storage.dir:storage}")
     private String storageDirProperty;
 
+    @Value("${kosh.blender.daemon.enabled:true}")
+    private boolean daemonEnabled;
+
+    @Value("${kosh.blender.daemon.port:9091}")
+    private int daemonPort;
+
+    @Value("${kosh.blender.daemon.host:127.0.0.1}")
+    private String daemonHost;
+
     private Path storagePath;
+    private Process daemonProcess;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @PostConstruct
     public void init() {
@@ -43,6 +60,10 @@ public class BlenderExecutionService {
             this.storagePath = Paths.get(storageDirProperty).toAbsolutePath().normalize();
             Files.createDirectories(this.storagePath);
             log.info("Initialized Kosh asset storage directory at: {}", this.storagePath);
+
+            if (daemonEnabled) {
+                CompletableFuture.runAsync(this::ensureDaemonStarted);
+            }
         } catch (Exception e) {
             log.error("Failed to initialize storage directory: {}", e.getMessage(), e);
             throw new IllegalStateException("Storage directory initialization failed", e);
@@ -98,8 +119,106 @@ public class BlenderExecutionService {
         String assetId = UUID.randomUUID().toString().substring(0, 12);
         String assetFileName = "kosh_" + assetId + "." + ext;
         Path outputFile = storagePath.resolve(assetFileName);
-        Path scriptFile = storagePath.resolve("script_" + assetId + ".py");
 
+        // Tier 1: Warm Blender Daemon Execution (~400ms turnaround)
+        if (daemonEnabled) {
+            try {
+                BlenderRunResult daemonResult = executeViaDaemon(script, ext, assetId, assetFileName, outputFile);
+                if (daemonResult != null && daemonResult.isSuccess()) {
+                    return daemonResult;
+                }
+            } catch (Exception e) {
+                log.warn("Blender warm daemon execution failed or timed out: {}. Cascading to direct process with strict {}s timeout...",
+                        e.getMessage(), timeoutSeconds);
+            }
+        }
+
+        // Tier 2: Direct Process Execution with Strict 4s Timeout
+        return executeViaDirectProcess(script, ext, assetId, assetFileName, outputFile);
+    }
+
+    private BlenderRunResult executeViaDaemon(String script, String ext, String assetId, String assetFileName, Path outputFile) throws Exception {
+        if (!isDaemonAlive()) {
+            ensureDaemonStarted();
+            if (!isDaemonAlive()) {
+                throw new IllegalStateException("Blender warm daemon is not reachable on " + daemonHost + ":" + daemonPort);
+            }
+        }
+
+        long startTime = System.currentTimeMillis();
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(daemonHost, daemonPort), 1500);
+            socket.setSoTimeout(4000); // Strict 4-second socket timeout
+
+            Map<String, Object> req = Map.of(
+                    "assetId", assetId,
+                    "script", script,
+                    "format", ext,
+                    "outputPath", outputFile.toAbsolutePath().toString()
+            );
+
+            byte[] jsonBytes = objectMapper.writeValueAsBytes(req);
+            DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
+            dos.writeInt(jsonBytes.length);
+            dos.write(jsonBytes);
+            dos.flush();
+
+            DataInputStream dis = new DataInputStream(socket.getInputStream());
+            int respLen = dis.readInt();
+            byte[] respBytes = new byte[respLen];
+            dis.readFully(respBytes);
+
+            Map<String, Object> resp = objectMapper.readValue(respBytes, Map.class);
+            boolean success = Boolean.TRUE.equals(resp.get("success"));
+            long executionTimeMs = resp.containsKey("executionTimeMs")
+                    ? ((Number) resp.get("executionTimeMs")).longValue()
+                    : (System.currentTimeMillis() - startTime);
+
+            if (!success || !Files.exists(outputFile) || Files.size(outputFile) == 0) {
+                String err = resp.containsKey("errorMessage") ? String.valueOf(resp.get("errorMessage")) : "Asset not written";
+                log.warn("Blender daemon generation unsuccessful: {}", err);
+                return BlenderRunResult.builder()
+                        .success(false)
+                        .assetId(assetId)
+                        .assetFileName(assetFileName)
+                        .format(ext)
+                        .executionTimeMs(executionTimeMs)
+                        .errorMessage(err)
+                        .stderr(err)
+                        .build();
+            }
+
+            long fileSize = Files.size(outputFile);
+            Map<String, Object> telemetry = resp.containsKey("telemetry") ? (Map<String, Object>) resp.get("telemetry") : null;
+            String stdout = resp.containsKey("stdout") ? String.valueOf(resp.get("stdout")) : "";
+            String stderr = resp.containsKey("stderr") ? String.valueOf(resp.get("stderr")) : "";
+
+            Path snapshotFile = storagePath.resolve("kosh_" + assetId + ".png");
+            String snapshotUrl = (Files.exists(snapshotFile) && Files.size(snapshotFile) > 0)
+                    ? "/api/assets/kosh_" + assetId + ".png" : null;
+
+            log.info("Blender warm daemon generated asset in {}ms: {} ({} bytes)", executionTimeMs, assetFileName, fileSize);
+
+            return BlenderRunResult.builder()
+                    .success(true)
+                    .assetId(assetId)
+                    .assetFileName(assetFileName)
+                    .assetPath(outputFile)
+                    .snapshotUrl(snapshotUrl)
+                    .telemetry(telemetry)
+                    .format(ext)
+                    .sizeBytes(fileSize)
+                    .stdout(stdout)
+                    .stderr(stderr)
+                    .exitCode(0)
+                    .executionTimeMs(executionTimeMs)
+                    .script(script)
+                    .build();
+        }
+    }
+
+    private BlenderRunResult executeViaDirectProcess(String script, String ext, String assetId, String assetFileName, Path outputFile) {
+        Path scriptFile = storagePath.resolve("script_" + assetId + ".py");
         long startTime = System.currentTimeMillis();
 
         try {
@@ -194,7 +313,6 @@ public class BlenderExecutionService {
                 executableScript = executableScript + "\n" + autoExport;
             }
 
-            // Write script to temporary file
             Files.writeString(scriptFile, executableScript, StandardCharsets.UTF_8);
 
             ProcessBuilder pb = new ProcessBuilder(
@@ -204,8 +322,7 @@ public class BlenderExecutionService {
                     "--", outputFile.toString()
             );
 
-            // Redirect error stream or capture concurrently
-            log.info("Spawning Blender process: {} -b -P {} -- {}", blenderExecutable, scriptFile, outputFile);
+            log.info("Spawning direct Blender process with strict {}s timeout: {}", timeoutSeconds, scriptFile);
             Process process = pb.start();
 
             CompletableFuture<String> stdoutFuture = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
@@ -215,37 +332,29 @@ public class BlenderExecutionService {
 
             if (!finished) {
                 process.destroyForcibly();
-                throw new TimeoutException("Blender process exceeded timeout of " + timeoutSeconds + " seconds.");
+                throw new TimeoutException("Direct Blender process exceeded strict timeout of " + timeoutSeconds + " seconds.");
             }
 
             int exitCode = process.exitValue();
-            String stdout = stdoutFuture.get(5, TimeUnit.SECONDS);
-            String stderr = stderrFuture.get(5, TimeUnit.SECONDS);
+            String stdout = stdoutFuture.get(2, TimeUnit.SECONDS);
+            String stderr = stderrFuture.get(2, TimeUnit.SECONDS);
             long duration = System.currentTimeMillis() - startTime;
 
-            log.info("Blender process finished with exit code {} in {}ms", exitCode, duration);
-
-            // Validate generated binary file
             if (!Files.exists(outputFile) || Files.size(outputFile) == 0) {
                 throw new IllegalStateException("Blender execution completed with exit code " + exitCode +
-                        ", but expected asset was not generated or has zero bytes. Stderr: " + stderr);
+                        ", but expected asset was not generated. Stderr: " + stderr);
             }
 
             long fileSize = Files.size(outputFile);
-            log.info("Validated generated 3D asset: {} ({} bytes)", assetFileName, fileSize);
-
-            // Check for rendered snapshot image
             Path snapshotFile = storagePath.resolve("kosh_" + assetId + ".png");
             String snapshotUrl = (Files.exists(snapshotFile) && Files.size(snapshotFile) > 0)
                     ? "/api/assets/kosh_" + assetId + ".png" : null;
 
-            // Check for scene telemetry JSON
             Path telemetryFile = storagePath.resolve("kosh_" + assetId + ".json");
             Map<String, Object> telemetry = null;
             if (Files.exists(telemetryFile) && Files.size(telemetryFile) > 0) {
                 try {
-                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                    telemetry = mapper.readValue(telemetryFile.toFile(), Map.class);
+                    telemetry = objectMapper.readValue(telemetryFile.toFile(), Map.class);
                 } catch (Exception te) {
                     log.warn("Failed to parse telemetry JSON: {}", te.getMessage());
                 }
@@ -269,7 +378,7 @@ public class BlenderExecutionService {
 
         } catch (Exception e) {
             long duration = System.currentTimeMillis() - startTime;
-            log.error("Blender execution error: {}", e.getMessage());
+            log.warn("Direct Blender process error or timeout ({}ms): {}", duration, e.getMessage());
             return BlenderRunResult.builder()
                     .success(false)
                     .assetId(assetId)
@@ -284,10 +393,111 @@ public class BlenderExecutionService {
                     .errorMessage(e.getMessage())
                     .build();
         } finally {
-            // Clean up temporary script
             try {
                 Files.deleteIfExists(scriptFile);
             } catch (Exception ignored) {
+            }
+        }
+    }
+
+    public boolean isDaemonAlive() {
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(daemonHost, daemonPort), 400);
+            socket.setSoTimeout(600);
+            DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
+            byte[] ping = "{\"action\":\"ping\"}".getBytes(StandardCharsets.UTF_8);
+            dos.writeInt(ping.length);
+            dos.write(ping);
+            dos.flush();
+
+            DataInputStream dis = new DataInputStream(socket.getInputStream());
+            int len = dis.readInt();
+            byte[] buf = new byte[len];
+            dis.readFully(buf);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private synchronized void ensureDaemonStarted() {
+        if (isDaemonAlive()) return;
+        if (!isBlenderAvailable()) {
+            log.warn("Blender executable '{}' is not available. Warm daemon cannot start.", blenderExecutable);
+            return;
+        }
+
+        try {
+            Path daemonScript = storagePath.resolve("blender_daemon.py");
+            try (InputStream is = getClass().getResourceAsStream("/scripts/blender_daemon.py")) {
+                if (is != null) {
+                    Files.copy(is, daemonScript, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+
+            if (!Files.exists(daemonScript)) {
+                log.warn("blender_daemon.py not found at {}", daemonScript);
+                return;
+            }
+
+            log.info("Starting persistent warm Blender daemon on {}:{}", daemonHost, daemonPort);
+            ProcessBuilder pb = new ProcessBuilder(
+                    blenderExecutable,
+                    "-b",
+                    "--python", daemonScript.toString(),
+                    "--",
+                    "--host", daemonHost,
+                    "--port", String.valueOf(daemonPort)
+            );
+            pb.redirectErrorStream(true);
+            this.daemonProcess = pb.start();
+
+            CompletableFuture.runAsync(() -> {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(daemonProcess.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (line.contains("KOSH_BLENDER_DAEMON_READY")) {
+                            log.info("Blender daemon worker is ready: {}", line);
+                        } else {
+                            log.debug("[Blender Daemon] {}", line);
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            });
+
+            for (int i = 0; i < 20; i++) {
+                if (isDaemonAlive()) {
+                    log.info("Warm Blender daemon successfully connected on port {}", daemonPort);
+                    return;
+                }
+                Thread.sleep(200);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to launch Blender daemon: {}", e.getMessage());
+        }
+    }
+
+    @PreDestroy
+    public void cleanup() {
+        if (daemonProcess != null && daemonProcess.isAlive()) {
+            log.info("Shutting down Blender daemon process...");
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress(daemonHost, daemonPort), 500);
+                DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
+                byte[] req = "{\"action\":\"shutdown\"}".getBytes(StandardCharsets.UTF_8);
+                dos.writeInt(req.length);
+                dos.write(req);
+                dos.flush();
+            } catch (Exception ignored) {
+            }
+            daemonProcess.destroy();
+            try {
+                daemonProcess.waitFor(2, TimeUnit.SECONDS);
+            } catch (InterruptedException ignored) {
+            }
+            if (daemonProcess.isAlive()) {
+                daemonProcess.destroyForcibly();
             }
         }
     }

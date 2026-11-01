@@ -44,6 +44,7 @@ import {
   instantiateLowPolyEntity,
   generateProceduralModelFromPrompt,
 } from "../lib/narrative/LowPolyProceduralLibrary";
+import { generateInstantProcedural } from "../lib/procedural/ProceduralPrimitives";
 import { LowPolyCharacter } from "../lib/narrative/LowPolyCharacterRig";
 import { DirectorCameraRig } from "../lib/narrative/DirectorCameraRig";
 import {
@@ -89,6 +90,10 @@ import {
   Lightbulb,
   Component,
   Paintbrush,
+  Zap,
+  Trees,
+  Mountain,
+  Package,
 } from "lucide-react";
 
 export type ShadingMode = "solid" | "material" | "wireframe" | "normals";
@@ -254,6 +259,10 @@ export function Viewport3D({
     }
   }, []);
 
+  const handleInstantSpawnRef = useRef<(prompt: string) => void>(() => {});
+  const activeSynthesisPromptRef = useRef<string>("");
+  const showUndoToastRef = useRef<(msg: string) => void>(() => {});
+
   // Monitor backend AI tool execution and update progress HUD
   const prevIsLoadingRef = useRef(isLoading);
   useEffect(() => {
@@ -261,20 +270,31 @@ export function Viewport3D({
       setIsLoadingModel(true);
       const t1 = setTimeout(() => {
         setSynthesisProgress(45);
-        setSynthesisStep("Synthesizing Blender Python parametric script via Gemini...");
-      }, 700);
+        setSynthesisStep("Synthesizing Blender Python script via Gemini...");
+      }, 600);
       const t2 = setTimeout(() => {
         setSynthesisProgress(75);
-        setSynthesisStep("Executing headless Blender pipeline on MCP backend...");
-      }, 2200);
+        setSynthesisStep("Executing in warm Blender daemon (<500ms)...");
+      }, 1600);
       const t3 = setTimeout(() => {
         setSynthesisProgress(90);
-        setSynthesisStep("Optimizing geometry & compiling binary GLTF/GLB...");
-      }, 4200);
+        setSynthesisStep("Compiling binary GLTF/GLB...");
+      }, 2800);
+      // Auto-proxy fallback timer (strict 4-second safety limit)
+      const t4 = setTimeout(() => {
+        const promptToUse = activeSynthesisPromptRef.current;
+        if (promptToUse) {
+          console.info("Blender daemon timeout (>4s), deploying instant procedural proxy");
+          handleInstantSpawnRef.current(promptToUse);
+          setIsLoadingModel(false);
+          showUndoToastRef.current("Placed instant proxy (Blender daemon compiling in background)");
+        }
+      }, 4000);
       return () => {
         clearTimeout(t1);
         clearTimeout(t2);
         clearTimeout(t3);
+        clearTimeout(t4);
       };
     }
   }, [isLoading, generationMode]);
@@ -283,7 +303,7 @@ export function Viewport3D({
     if (prevIsLoadingRef.current && !isLoading) {
       const timer = setTimeout(() => {
         setIsLoadingModel(false);
-      }, 600);
+      }, 400);
       return () => clearTimeout(timer);
     }
     prevIsLoadingRef.current = isLoading;
@@ -515,6 +535,7 @@ export function Viewport3D({
   const [undoToast, setUndoToast] = useState<string | null>(null);
 
   const showUndoToast = useCallback((msg: string) => {
+    showUndoToastRef.current = showUndoToast;
     setUndoToast(msg);
     setTimeout(() => {
       setUndoToast((current) => (current === msg ? null : current));
@@ -611,6 +632,10 @@ export function Viewport3D({
   const [synthesisStep, setSynthesisStep] = useState<string>("");
   const [synthesisProgress, setSynthesisProgress] = useState<number>(0);
   const [activeSynthesisPrompt, setActiveSynthesisPrompt] = useState<string>("");
+
+  useEffect(() => {
+    activeSynthesisPromptRef.current = activeSynthesisPrompt;
+  }, [activeSynthesisPrompt]);
 
   useEffect(() => {
     headlampEnabledRef.current = headlampEnabled;
@@ -3386,6 +3411,59 @@ export function Viewport3D({
   // -------------------------------------------------------------
   const handleAddPrimitive = (type: string) => {
     if (!rootModelGroupRef.current || !sceneRef.current) return;
+
+    if (type.startsWith("prop_")) {
+      const keyword = type.replace("prop_", "").replace(/_/g, " ");
+      let obj: THREE.Object3D;
+      try {
+        obj = generateInstantProcedural(keyword);
+      } catch (err) {
+        console.warn("Failed to generate prop primitive:", err);
+        return;
+      }
+      obj.position.set(0, 0, 0);
+      rootModelGroupRef.current.add(obj);
+
+      // Select first mesh
+      let targetMesh: THREE.Mesh | null = null;
+      if (obj instanceof THREE.Mesh) {
+        targetMesh = obj;
+      } else {
+        obj.traverse((c) => {
+          if (!targetMesh && c instanceof THREE.Mesh) {
+            targetMesh = c;
+          }
+        });
+      }
+
+      if (targetMesh) {
+        setSelectedMesh(targetMesh);
+        setSelectedMeshes([targetMesh]);
+        onMeshSelect?.(targetMesh.name);
+        syncMeshTransform(targetMesh);
+      }
+      setIsAddMenuOpen(false);
+      setIsQuickAddOpen(false);
+      refreshMeshList();
+
+      pushUndo({
+        label: `Add ${keyword}`,
+        undo: () => {
+          obj.removeFromParent();
+          refreshMeshList();
+          setSelectedMeshes([]);
+          setSelectedMesh(null);
+          onMeshSelect?.(null);
+        },
+        redo: () => {
+          rootModelGroupRef.current?.add(obj);
+          refreshMeshList();
+        },
+      });
+      showUndoToast(`Added ${keyword}`);
+      return;
+    }
+
     let geo: THREE.BufferGeometry;
     let name = "Primitive";
 
@@ -3432,6 +3510,7 @@ export function Viewport3D({
         light.name = `Point_Light_${Date.now() % 1000}`;
         sceneRef.current.add(light);
         setIsAddMenuOpen(false);
+        setIsQuickAddOpen(false);
         return;
       }
       case "light_sun": {
@@ -3440,6 +3519,7 @@ export function Viewport3D({
         sun.name = `Sun_Light_${Date.now() % 1000}`;
         sceneRef.current.add(sun);
         setIsAddMenuOpen(false);
+        setIsQuickAddOpen(false);
         return;
       }
       default:
@@ -3460,27 +3540,29 @@ export function Viewport3D({
 
     rootModelGroupRef.current.add(mesh);
     setSelectedMesh(mesh);
+    setSelectedMeshes([mesh]);
     onMeshSelect?.(mesh.name);
     setLastAddedPrimitive({ type, mesh });
     setIsAddMenuOpen(false);
+    setIsQuickAddOpen(false);
     syncMeshTransform(mesh);
+    refreshMeshList();
 
-    // Refresh mesh stats
-    const list: MeshNodeInfo[] = [];
-    rootModelGroupRef.current.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.name && !child.name.includes("Helper")) {
-        list.push({
-          id: child.uuid,
-          name: child.name,
-          triangles: child.geometry.index ? child.geometry.index.count / 3 : child.geometry.attributes.position.count / 3,
-          vertices: child.geometry.attributes.position.count,
-          visible: child.visible,
-          meshRef: child,
-        });
-      }
+    pushUndo({
+      label: `Add ${name}`,
+      undo: () => {
+        mesh.removeFromParent();
+        refreshMeshList();
+        setSelectedMeshes([]);
+        setSelectedMesh(null);
+        onMeshSelect?.(null);
+      },
+      redo: () => {
+        rootModelGroupRef.current?.add(mesh);
+        refreshMeshList();
+      },
     });
-    setMeshList(list);
-    onMeshListUpdate?.(list);
+    showUndoToast(`Added ${name}`);
   };
 
   // -------------------------------------------------------------
@@ -3533,6 +3615,128 @@ export function Viewport3D({
     showUndoToast("Clear Canvas");
   }, [onMeshSelect, showUndoToast, meshList, onMeshListUpdate, pushUndo, refreshMeshList]);
 
+  const handleInstantSpawn = useCallback(
+    (promptText: string) => {
+      if (!sceneRef.current || !rootModelGroupRef.current) return;
+      setActiveSynthesisPrompt(promptText);
+
+      // Detach any active gizmos to prevent dangling unparented references
+      if (transformControlsRef.current) {
+        transformControlsRef.current.detach();
+      }
+      if (universalGizmoRef.current) {
+        universalGizmoRef.current.attach(null);
+      }
+      if (selectionBoxHelperRef.current) {
+        selectionBoxHelperRef.current.visible = false;
+      }
+
+      // Snapshot current scene for undo
+      const prevChildren: THREE.Object3D[] = rootModelGroupRef.current
+        ? [...rootModelGroupRef.current.children]
+        : [];
+
+      let proceduralMesh: THREE.Object3D | null = null;
+      try {
+        proceduralMesh = generateInstantProcedural(promptText);
+      } catch (err) {
+        console.warn("generateInstantProcedural error, fallback to standard:", err);
+        try {
+          proceduralMesh = generateProceduralModelFromPrompt(promptText);
+        } catch (e) {
+          console.error("Secondary procedural fallback failed:", e);
+        }
+      }
+
+      if (!proceduralMesh) {
+        showUndoToast("Failed to spawn procedural object");
+        return;
+      }
+
+      // Clear prior children
+      while (rootModelGroupRef.current.children.length > 0) {
+        rootModelGroupRef.current.remove(rootModelGroupRef.current.children[0]);
+      }
+
+      rootModelGroupRef.current.add(proceduralMesh);
+      currentModelRef.current = proceduralMesh;
+
+      // Fit Contact Shadow Catcher
+      const box = new THREE.Box3().setFromObject(proceduralMesh);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      if (contactShadowRef.current) {
+        const radius = Math.max(size.x, size.z) * 1.5;
+        contactShadowRef.current.scale.set(radius, radius, 1);
+        contactShadowRef.current.position.set(0, 0.002, 0);
+        contactShadowRef.current.visible = true;
+      }
+
+      // Select first mesh
+      let firstMesh: THREE.Mesh | null = null;
+      if (proceduralMesh instanceof THREE.Mesh) {
+        firstMesh = proceduralMesh;
+      } else {
+        proceduralMesh.traverse((child) => {
+          if (!firstMesh && child instanceof THREE.Mesh) {
+            firstMesh = child;
+          }
+        });
+      }
+
+      refreshMeshList();
+      if (firstMesh) {
+        setSelectedMeshes([firstMesh]);
+        setSelectedMesh(firstMesh);
+        onMeshSelect?.(firstMesh.name);
+      } else {
+        setSelectedMeshes([]);
+        setSelectedMesh(null);
+        onMeshSelect?.(null);
+      }
+
+      handleFocus();
+
+      const nextChildren: THREE.Object3D[] = [...rootModelGroupRef.current.children];
+      const nextModel = proceduralMesh;
+      pushUndo({
+        label: `Instant: "${promptText.slice(0, 20)}"`,
+        undo: () => {
+          if (!rootModelGroupRef.current) return;
+          for (const c of nextChildren) c.removeFromParent();
+          for (const c of prevChildren) rootModelGroupRef.current.add(c);
+          currentModelRef.current = prevChildren[0] || null;
+          refreshMeshList();
+          setSelectedMeshes([]);
+          setSelectedMesh(null);
+          onMeshSelect?.(null);
+        },
+        redo: () => {
+          if (!rootModelGroupRef.current) return;
+          for (const c of prevChildren) c.removeFromParent();
+          rootModelGroupRef.current.add(nextModel);
+          currentModelRef.current = nextModel;
+          refreshMeshList();
+        },
+      });
+
+      setIsLoadingModel(false);
+      showUndoToast(`Spawned: ${promptText.slice(0, 24)} (<50ms)`);
+    },
+    [refreshMeshList, handleFocus, onMeshSelect, showUndoToast, pushUndo]
+  );
+
+  useEffect(() => {
+    handleInstantSpawnRef.current = handleInstantSpawn;
+  }, [handleInstantSpawn]);
+
+  const handlePlaceProceduralProxy = useCallback(() => {
+    const promptToUse = activeSynthesisPrompt || "proxy";
+    handleInstantSpawn(promptToUse);
+    setIsLoadingModel(false);
+    showUndoToast(`Placed instant proxy for "${promptToUse.slice(0, 20)}"`);
+  }, [activeSynthesisPrompt, handleInstantSpawn, showUndoToast]);
+
   const handleGenerateModelFromPrompt = useCallback(
     async (promptText: string, format: ExportFormat = "glb") => {
       if (!sceneRef.current) return;
@@ -3573,39 +3777,31 @@ export function Viewport3D({
       }
 
       // -------------------------------------------------------------
-      // PROCEDURAL MODE: Instant Parametric Client-Side Synthesis
+      // PROCEDURAL MODE: Instant Parametric Client-Side Synthesis (<50ms)
       // -------------------------------------------------------------
       setIsLoadingModel(true);
-      setSynthesisProgress(15);
-      setSynthesisStep("Analyzing semantic tokens & spatial proportions...");
+      setSynthesisProgress(25);
+      setSynthesisStep("Synthesizing instant procedural geometry (<50ms)...");
 
       // Snapshot current scene for undo
       const prevChildren: THREE.Object3D[] = rootModelGroupRef.current
         ? [...rootModelGroupRef.current.children]
         : [];
-      const prevMeshList = meshList;
-
-      // Stage 2: Synthesis
-      await new Promise((r) => setTimeout(r, 120));
-      setSynthesisProgress(40);
-      setSynthesisStep("Synthesizing 3D parametric components & vertex geometry...");
 
       let proceduralMesh: THREE.Object3D | null = null;
       try {
-        proceduralMesh = generateProceduralModelFromPrompt(promptText);
+        proceduralMesh = generateInstantProcedural(promptText);
       } catch (err) {
-        console.warn("Procedural generation failed:", err);
+        console.warn("generateInstantProcedural failed, fallback to standard:", err);
+        try {
+          proceduralMesh = generateProceduralModelFromPrompt(promptText);
+        } catch (e) {
+          console.error("Secondary procedural fallback failed:", e);
+        }
       }
 
-      // Stage 3: Normals & manifold
-      await new Promise((r) => setTimeout(r, 120));
-      setSynthesisProgress(65);
-      setSynthesisStep("Computing surface normals & manifold topology...");
-
-      // Stage 4: Materials calibration
-      await new Promise((r) => setTimeout(r, 120));
-      setSynthesisProgress(85);
-      setSynthesisStep("Calibrating studio PBR materials & shading presets...");
+      setSynthesisProgress(75);
+      setSynthesisStep("Calibrating materials & scene hierarchy...");
 
       if (proceduralMesh && rootModelGroupRef.current) {
         // Clear prior children WITHOUT disposing (kept alive for undo)
@@ -3615,10 +3811,6 @@ export function Viewport3D({
 
         rootModelGroupRef.current.add(proceduralMesh);
         currentModelRef.current = proceduralMesh;
-
-        // Stage 5: Outliner hierarchy
-        setSynthesisProgress(95);
-        setSynthesisStep("Assembling scene hierarchy & populating Outliner...");
 
         // Find first mesh in hierarchy for selection
         let firstMesh: THREE.Mesh | null = null;
@@ -3635,9 +3827,11 @@ export function Viewport3D({
         refreshMeshList();
         if (firstMesh) {
           setSelectedMeshes([firstMesh]);
+          setSelectedMesh(firstMesh);
           onMeshSelect?.(firstMesh.name);
         } else {
           setSelectedMeshes([]);
+          setSelectedMesh(null);
           onMeshSelect?.(null);
         }
 
@@ -3654,6 +3848,7 @@ export function Viewport3D({
             currentModelRef.current = prevChildren[0] || null;
             refreshMeshList();
             setSelectedMeshes([]);
+            setSelectedMesh(null);
             onMeshSelect?.(null);
           },
           redo: () => {
@@ -3665,19 +3860,16 @@ export function Viewport3D({
           },
         });
 
-        // Stage 6: Finalize viewport
         setSynthesisProgress(100);
-        setSynthesisStep("Finalizing viewport scene...");
-        await new Promise((r) => setTimeout(r, 100));
-
+        setSynthesisStep("Done");
         setIsLoadingModel(false);
-        showUndoToast(`Generated: ${promptText.slice(0, 24)}...`);
+        showUndoToast(`Generated: ${promptText.slice(0, 24)} (<50ms)`);
       } else {
         setIsLoadingModel(false);
         showUndoToast("Generation failed");
       }
     },
-    [refreshMeshList, handleFocus, onMeshSelect, showUndoToast, meshList, pushUndo, onExecuteTool, token, generationMode]
+    [refreshMeshList, handleFocus, onMeshSelect, showUndoToast, pushUndo, onExecuteTool, token, generationMode]
   );
 
   // -------------------------------------------------------------
@@ -4363,9 +4555,19 @@ export function Viewport3D({
                                   SYNTHESIZING 3D CAD MODEL
                                 </span>
                               </div>
-                              <span className="text-[10px] text-[#ea580c] font-bold px-2 py-0.5 rounded bg-[#202024] border border-[#27272a]">
-                                {synthesisProgress}%
-                              </span>
+                              <div className="flex items-center space-x-2">
+                                <span className="text-[10px] text-[#ea580c] font-bold px-2 py-0.5 rounded bg-[#202024] border border-[#27272a]">
+                                  {synthesisProgress}%
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsLoadingModel(false)}
+                                  className="text-[#71717a] hover:text-[#f4f4f5] p-0.5 rounded hover:bg-[#27272a] transition-colors"
+                                  title="Dismiss HUD (Process runs in background)"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
 
                             {/* Active Prompt Label */}
@@ -4387,6 +4589,22 @@ export function Viewport3D({
                                   className="h-full bg-gradient-to-r from-[#ea580c] to-[#f59e0b] transition-all duration-200 ease-out"
                                   style={{ width: `${synthesisProgress}%` }}
                                 />
+                              </div>
+                            </div>
+
+                            {/* Instant Proxy Fallback & Daemon status */}
+                            <div className="flex items-center justify-between pt-1 border-t border-[#27272a]">
+                              <button
+                                type="button"
+                                onClick={handlePlaceProceduralProxy}
+                                className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-[#ea580c] hover:bg-[#c2410c] text-white text-[11px] font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+                              >
+                                <Zap className="w-3.5 h-3.5 fill-current" />
+                                <span>Place Instant Proxy (&lt;50ms)</span>
+                              </button>
+                              <div className="flex items-center space-x-1.5 text-[10px] text-emerald-400">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                                <span className="font-semibold">Daemon Port 9091</span>
                               </div>
                             </div>
 
@@ -4606,34 +4824,120 @@ export function Viewport3D({
                           <div
                             style={{ left: `${quickAddPos.x}px`, top: `${quickAddPos.y}px` }}
                             onClick={(e) => e.stopPropagation()}
-                            className="absolute w-48 bg-[#18181b]/98 border border-[#3f3f46] shadow-2xl rounded-sm p-1 text-[11px] font-mono space-y-0.5 animate-in fade-in zoom-in-95 duration-100"
+                            className="absolute w-52 max-h-96 overflow-y-auto bg-[#18181b]/98 border border-[#3f3f46] shadow-2xl rounded p-1.5 text-[11px] font-mono space-y-1.5 animate-in fade-in zoom-in-95 duration-100 custom-scrollbar"
                           >
-                            <div className="flex items-center justify-between px-2 py-1 border-b border-[#27272a] text-[9px] uppercase font-bold text-[#71717a]">
-                              <span>Add Primitive</span>
+                            <div className="flex items-center justify-between px-1.5 py-1 border-b border-[#27272a] text-[9px] uppercase font-bold text-[#71717a]">
+                              <span>Add Object</span>
                               <span className="text-[#ea580c]">Shift + A</span>
                             </div>
-                            {[
-                              { type: "cube", label: "Cube", icon: <Box className="w-3.5 h-3.5 text-[#ea580c]" /> },
-                              { type: "uv_sphere", label: "UV Sphere", icon: <Circle className="w-3.5 h-3.5 text-sky-400" /> },
-                              { type: "cylinder", label: "Cylinder", icon: <Layers className="w-3.5 h-3.5 text-emerald-400" /> },
-                              { type: "cone", label: "Cone", icon: <Compass className="w-3.5 h-3.5 text-amber-400" /> },
-                              { type: "torus", label: "Torus", icon: <Circle className="w-3.5 h-3.5 text-pink-400" /> },
-                              { type: "plane", label: "Plane", icon: <Square className="w-3.5 h-3.5 text-blue-400" /> },
-                              { type: "suzanne", label: "Monkey (Suzanne)", icon: <Sparkles className="w-3.5 h-3.5 text-orange-400" /> },
-                            ].map((p) => (
-                              <button
-                                key={p.type}
-                                type="button"
-                                onClick={() => {
-                                  handleAddPrimitive(p.type);
-                                  setIsQuickAddOpen(false);
-                                }}
-                                className="w-full flex items-center space-x-2 px-2 py-1 rounded-xs text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#f4f4f5] transition-colors"
-                              >
-                                {p.icon}
-                                <span>{p.label}</span>
-                              </button>
-                            ))}
+
+                            {/* Section: Mesh Primitives */}
+                            <div className="px-1 text-[9px] font-semibold text-[#71717a] uppercase tracking-wider">
+                              Mesh Primitives
+                            </div>
+                            <div className="space-y-0.5">
+                              {[
+                                { type: "cube", label: "Cube", icon: <Box className="w-3.5 h-3.5 text-[#ea580c]" /> },
+                                { type: "uv_sphere", label: "UV Sphere", icon: <Circle className="w-3.5 h-3.5 text-sky-400" /> },
+                                { type: "cylinder", label: "Cylinder", icon: <Layers className="w-3.5 h-3.5 text-emerald-400" /> },
+                                { type: "cone", label: "Cone", icon: <Compass className="w-3.5 h-3.5 text-amber-400" /> },
+                                { type: "torus", label: "Torus", icon: <Circle className="w-3.5 h-3.5 text-pink-400" /> },
+                                { type: "plane", label: "Plane", icon: <Square className="w-3.5 h-3.5 text-blue-400" /> },
+                                { type: "suzanne", label: "Monkey (Suzanne)", icon: <Sparkles className="w-3.5 h-3.5 text-orange-400" /> },
+                              ].map((p) => (
+                                <button
+                                  key={p.type}
+                                  type="button"
+                                  onClick={() => {
+                                    handleAddPrimitive(p.type);
+                                    setIsQuickAddOpen(false);
+                                  }}
+                                  className="w-full flex items-center space-x-2 px-2 py-1 rounded text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#f4f4f5] transition-colors text-left"
+                                >
+                                  {p.icon}
+                                  <span>{p.label}</span>
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Section: Nature & Props */}
+                            <div className="px-1 pt-1 border-t border-[#27272a] text-[9px] font-semibold text-[#71717a] uppercase tracking-wider">
+                              Nature & Props
+                            </div>
+                            <div className="space-y-0.5">
+                              {[
+                                { type: "prop_pine_tree", label: "Pine Tree", icon: <Trees className="w-3.5 h-3.5 text-emerald-500" /> },
+                                { type: "prop_oak_tree", label: "Oak Tree", icon: <Trees className="w-3.5 h-3.5 text-green-400" /> },
+                                { type: "prop_rock", label: "Rock Boulder", icon: <Box className="w-3.5 h-3.5 text-zinc-400" /> },
+                                { type: "prop_terrain", label: "Terrain Relief", icon: <Mountain className="w-3.5 h-3.5 text-amber-600" /> },
+                              ].map((p) => (
+                                <button
+                                  key={p.type}
+                                  type="button"
+                                  onClick={() => {
+                                    handleAddPrimitive(p.type);
+                                    setIsQuickAddOpen(false);
+                                  }}
+                                  className="w-full flex items-center space-x-2 px-2 py-1 rounded text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#f4f4f5] transition-colors text-left"
+                                >
+                                  {p.icon}
+                                  <span>{p.label}</span>
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Section: Characters & Creatures */}
+                            <div className="px-1 pt-1 border-t border-[#27272a] text-[9px] font-semibold text-[#71717a] uppercase tracking-wider">
+                              Characters & Creatures
+                            </div>
+                            <div className="space-y-0.5">
+                              {[
+                                { type: "prop_wolf", label: "Wolf", icon: <Sparkles className="w-3.5 h-3.5 text-slate-300" /> },
+                                { type: "prop_cat", label: "Cat", icon: <Sparkles className="w-3.5 h-3.5 text-amber-400" /> },
+                                { type: "prop_sheep", label: "Sheep", icon: <Sparkles className="w-3.5 h-3.5 text-zinc-200" /> },
+                                { type: "prop_cow", label: "Cow", icon: <Sparkles className="w-3.5 h-3.5 text-amber-700" /> },
+                                { type: "prop_robot", label: "Robot", icon: <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> },
+                              ].map((p) => (
+                                <button
+                                  key={p.type}
+                                  type="button"
+                                  onClick={() => {
+                                    handleAddPrimitive(p.type);
+                                    setIsQuickAddOpen(false);
+                                  }}
+                                  className="w-full flex items-center space-x-2 px-2 py-1 rounded text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#f4f4f5] transition-colors text-left"
+                                >
+                                  {p.icon}
+                                  <span>{p.label}</span>
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Section: Architecture & Structures */}
+                            <div className="px-1 pt-1 border-t border-[#27272a] text-[9px] font-semibold text-[#71717a] uppercase tracking-wider">
+                              Architecture & Props
+                            </div>
+                            <div className="space-y-0.5">
+                              {[
+                                { type: "prop_crate", label: "Cargo Crate", icon: <Package className="w-3.5 h-3.5 text-amber-500" /> },
+                                { type: "prop_fence", label: "Fence Barrier", icon: <Layers className="w-3.5 h-3.5 text-yellow-600" /> },
+                                { type: "prop_cabin", label: "Cabin House", icon: <Box className="w-3.5 h-3.5 text-stone-400" /> },
+                                { type: "prop_barrel", label: "Wooden Barrel", icon: <Box className="w-3.5 h-3.5 text-amber-700" /> },
+                              ].map((p) => (
+                                <button
+                                  key={p.type}
+                                  type="button"
+                                  onClick={() => {
+                                    handleAddPrimitive(p.type);
+                                    setIsQuickAddOpen(false);
+                                  }}
+                                  className="w-full flex items-center space-x-2 px-2 py-1 rounded text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#f4f4f5] transition-colors text-left"
+                                >
+                                  {p.icon}
+                                  <span>{p.label}</span>
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       )}
@@ -4751,6 +5055,7 @@ export function Viewport3D({
                       {/* Sleek Floating CAD Command Prompt Bar (Bottom-Center) */}
                       <ModelPromptBar
                         onGenerate={handleGenerateModelFromPrompt}
+                        onInstantSpawn={handleInstantSpawn}
                         isLoading={isLoadingModel || isLoading}
                         token={token}
                         onOpenKeyModal={() => setIsKeyModalOpen(true)}

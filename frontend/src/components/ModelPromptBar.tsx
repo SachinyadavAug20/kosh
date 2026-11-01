@@ -14,6 +14,7 @@ import { ExportFormat } from "@/types/mcp";
 
 export interface ModelPromptBarProps {
   onGenerate: (prompt: string, format: ExportFormat) => void;
+  onInstantSpawn?: (prompt: string) => void;
   isLoading?: boolean;
   token?: string;
   onOpenKeyModal: () => void;
@@ -24,33 +25,30 @@ export interface ModelPromptBarProps {
 
 export const PRESET_CAD_CHIPS = [
   { label: "Cat", prompt: "A low-poly cat with head, pointy ears, whiskers, feline body, four paws, and an arched tail" },
+  { label: "Wolf", prompt: "A low-poly wolf with grey fur, white chest, pointy ears, and bushy tail" },
+  { label: "Tree", prompt: "A lush low-poly pine tree with organic timber trunk and 3 tiers of multifaceted evergreen foliage" },
+  { label: "Rock", prompt: "A low-poly faceted rock boulder with rugged granite displacements" },
+  { label: "Terrain", prompt: "A rolling low-poly terrain landscape with elevation relief and biome coloring" },
+  { label: "Cabin", prompt: "A cozy suburban log cabin with stone foundation, gabled roof, door, and windows" },
+  { label: "Crate", prompt: "A futuristic sci-fi cargo container crate with reinforced corner brackets and metallic panels" },
+  { label: "Barrel", prompt: "A wooden barrel with bulged staves and iron compression hoops" },
+  { label: "Fence", prompt: "A rustic timber fence with chamfered vertical posts and horizontal cross rails" },
   { label: "Car", prompt: "A sleek aerodynamic sports car with low-profile chassis, tinted glass cabin, headlights, and rear spoiler" },
   { label: "Airplane", prompt: "A modern commercial jet airliner with tapered fuselage, swept wings, dual turbofan engines, and vertical tail fin" },
-  { label: "Boat", prompt: "A coastal motorboat with hydrodynamic hull, teak deck, steering bridge cabin, and radar mast" },
-  { label: "Laptop", prompt: "An ultra-thin aluminum unibody laptop with keyboard, trackpad, and open glowing OLED display" },
-  { label: "Tree", prompt: "A lush low-poly pine tree with organic timber trunk and 3 tiers of multifaceted evergreen foliage" },
-  { label: "House", prompt: "A cozy suburban home with concrete foundation, walls, gabled roof, front door, and windows" },
-  { label: "Table", prompt: "A modern minimalist dining table with thick wood top and 4 sturdy frame legs" },
-  { label: "Chair", prompt: "An ergonomic dining chair with cushioned seat pad, lumbar backrest, and 4 tapered legs" },
   { label: "Robot", prompt: "A humanoid service robot with articulated metal body, sensor head, arms, and legs" },
   { label: "Rocket", prompt: "A heavy-lift orbital rocket with aerodynamic nose cone, booster fins, and command window" },
-  { label: "Castle", prompt: "A medieval stone castle keep with defensive battlements, 4 corner turrets, and arched gate" },
-  { label: "Tank", prompt: "An armored combat tank with track treads, rotating turret, and long-range cannon barrel" },
-  { label: "Pyramid", prompt: "An ancient monumental stone pyramid with tiered base and gleaming polished gold capstone" },
-  { label: "Turbine Flange", prompt: "A precision mechanical turbine base flange with central bore, 8 metric bolt holes, and chamfered bevels" },
-  { label: "Bevel Gear", prompt: "A high-torque 24-tooth mechanical bevel gear with keyed center shaft and precision involute teeth" },
-  { label: "Sci-Fi Crate", prompt: "A futuristic sci-fi cargo container crate with reinforced corner brackets, locking latch, and metallic panel details" },
-  { label: "Battleaxe", prompt: "A medieval iron battleaxe with double-beveled crescent blades, reinforced central spine, and carved wooden haft" },
-  { label: "Hover Drone", prompt: "A compact aerodynamic surveillance drone with 4 ducted rotor nacelles, gimbal sensor array, and landing skids" },
-  { label: "Coffee Mug", prompt: "A ceramic coffee mug with smooth curved handle, rounded lip, and glossy ceramic finish" },
-  { label: "Cow", prompt: "A low-poly cow with brown body, dark spots, head and four legs" },
+  { label: "Table", prompt: "A modern minimalist dining table with thick wood top and 4 sturdy frame legs" },
+  { label: "Chair", prompt: "An ergonomic dining chair with cushioned seat pad, lumbar backrest, and 4 tapered legs" },
   { label: "Sheep", prompt: "A fluffy white sheep with woolly body, dark face and four legs" },
+  { label: "Cow", prompt: "A low-poly cow with brown body, dark spots, head and four legs" },
+  { label: "Turbine Flange", prompt: "A precision mechanical turbine base flange with central bore, 8 metric bolt holes, and chamfered bevels" },
 ];
 
 const SYNTHESIS_STEPS = ["Generating geometry..."];
 
 export function ModelPromptBar({
   onGenerate,
+  onInstantSpawn,
   isLoading = false,
   token = "",
   onOpenKeyModal,
@@ -69,9 +67,12 @@ export function ModelPromptBar({
   };
 
   const handleSelectChip = (chipPrompt: string) => {
-    if (isLoading) return;
     setPrompt(chipPrompt);
-    onGenerate(chipPrompt, format);
+    if (onInstantSpawn) {
+      onInstantSpawn(chipPrompt);
+    } else {
+      onGenerate(chipPrompt, format);
+    }
   };
 
   const isKeyConfigured = !!token && token.trim() !== "";
