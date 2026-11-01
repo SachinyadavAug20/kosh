@@ -21,6 +21,12 @@ public class McpRpcResponse {
     @JsonProperty("id")
     private Object id;
 
+    @JsonProperty("method")
+    private String method;
+
+    @JsonProperty("params")
+    private Object params;
+
     @JsonProperty("result")
     private Object result;
 
@@ -51,6 +57,14 @@ public class McpRpcResponse {
                 .jsonrpc("2.0")
                 .id(id)
                 .error(new RpcError(code, message, data))
+                .build();
+    }
+
+    public static McpRpcResponse notification(String method, Object params) {
+        return McpRpcResponse.builder()
+                .jsonrpc("2.0")
+                .method(method)
+                .params(params)
                 .build();
     }
 }

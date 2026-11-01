@@ -13,14 +13,17 @@ public class CorsConfig implements WebMvcConfigurer {
                 .allowedOriginPatterns(
                     "https://kosh-puce.vercel.app",
                     "https://*.vercel.app",
+                    "http://localhost:[*]",
+                    "http://127.0.0.1:[*]",
                     "http://localhost:3000",
                     "http://127.0.0.1:3000",
-                    "http://localhost:8080"
+                    "http://localhost:8080",
+                    "*"
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD")
                 .allowedHeaders("*")
                 .exposedHeaders("X-BharatCode-Token", "X-BharatCode-Key", "Content-Disposition")
-                .allowCredentials(true)
+                .allowCredentials(false)
                 .maxAge(3600);
     }
 }
