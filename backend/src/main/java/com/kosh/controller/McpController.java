@@ -5,7 +5,8 @@ import com.kosh.dto.McpRpcRequest;
 import com.kosh.dto.McpRpcResponse;
 import com.kosh.dto.ToolExecutionDto;
 import com.kosh.service.McpProgressListener;
-import com.kosh.service.McpSceneStateService;
+import com.kosh.service.McpPromptRegistry;
+import com.kosh.service.McpResourceRegistry;
 import com.kosh.service.McpToolRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +36,8 @@ import java.util.concurrent.Executors;
 public class McpController {
 
     private final McpToolRegistry mcpToolRegistry;
-    private final McpSceneStateService mcpSceneStateService;
+    private final McpResourceRegistry mcpResourceRegistry;
+    private final McpPromptRegistry mcpPromptRegistry;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Map<String, SseEmitter> activeSseSessions = new ConcurrentHashMap<>();
     private final ExecutorService asyncWorkerPool = Executors.newCachedThreadPool();
@@ -46,9 +48,12 @@ public class McpController {
     @org.springframework.beans.factory.annotation.Value("${kosh.bharatcode.api-key:}")
     private String defaultBharatCodeApiKey;
 
-    public McpController(McpToolRegistry mcpToolRegistry, McpSceneStateService mcpSceneStateService) {
+    public McpController(McpToolRegistry mcpToolRegistry,
+                         McpResourceRegistry mcpResourceRegistry,
+                         McpPromptRegistry mcpPromptRegistry) {
         this.mcpToolRegistry = mcpToolRegistry;
-        this.mcpSceneStateService = mcpSceneStateService;
+        this.mcpResourceRegistry = mcpResourceRegistry;
+        this.mcpPromptRegistry = mcpPromptRegistry;
     }
 
     /**
@@ -217,62 +222,29 @@ public class McpController {
 
                 case "resources/list":
                     return McpRpcResponse.success(id, Map.of(
-                            "resources", List.of(
-                                    Map.of(
-                                            "uri", "kosh://scene/hierarchy",
-                                            "name", "Active Scene Hierarchy Graph",
-                                            "description", "Complete scene graph tree of objects, parent-child links, world transforms, and material IDs",
-                                            "mimeType", "application/json"
-                                    ),
-                                    Map.of(
-                                            "uri", "kosh://engine/capabilities",
-                                            "name", "Kosh 3D Engine Capabilities",
-                                            "description", "Blender version, installed Python packages (NumPy status), supported formats (.glb, .stl, .obj), and max polygon quotas",
-                                            "mimeType", "application/json"
-                                    ),
-                                    Map.of(
-                                            "uri", "kosh://materials/catalog",
-                                            "name", "PBR Material Catalog",
-                                            "description", "Ready-to-use studio PBR materials: MatteTitanium, ClearGlass, CastIron, NeonBlueEmissive, BrushedBrass, CarbonFiber, StudioClay",
-                                            "mimeType", "application/json"
-                                    ),
-                                    Map.of(
-                                            "uri", "kosh://scene/bounding-boxes",
-                                            "name", "Scene World Space Bounding Boxes",
-                                            "description", "Axis-Aligned Bounding Box (AABB) extents and metric dimensions for active scene meshes",
-                                            "mimeType", "application/json"
-                                    ),
-                                    Map.of(
-                                            "uri", "kosh://materials/library",
-                                            "name", "Studio PBR & MatCap Material Library",
-                                            "description", "Built-in CAD material presets (Titanium, Frosted Acrylic, Clay, Redwax, Chrome, Brass, Neon Emissive)",
-                                            "mimeType", "application/json"
-                                    ),
-                                    Map.of(
-                                            "uri", "kosh://viewport/active-selection",
-                                            "name", "Active Viewport Selection & Modifier Stack",
-                                            "description", "Currently selected entity metadata: vertex list, face count, active modifier stack, and transform matrices",
-                                            "mimeType", "application/json"
-                                    )
-                            )
+                            "resources", mcpResourceRegistry.listResources()
                     ));
 
                 case "resources/read":
                     Map<String, Object> readParams = request.getParams();
                     String resourceUri = readParams != null && readParams.get("uri") != null ? readParams.get("uri").toString() : "";
-                    return McpRpcResponse.success(id, Map.of(
-                            "contents", List.of(
-                                    Map.of(
-                                            "uri", resourceUri,
-                                            "mimeType", "application/json",
-                                            "text", resolveResourceContent(resourceUri)
-                                    )
-                            )
-                    ));
+                    try {
+                        String resourceText = mcpResourceRegistry.readResource(resourceUri);
+                        return McpRpcResponse.success(id, Map.of(
+                                "contents", List.of(
+                                        Map.of(
+                                                "uri", resourceUri,
+                                                "mimeType", "application/json",
+                                                "text", resourceText
+                                        )
+                                )
+                        ));
+                    } catch (IllegalArgumentException e) {
+                        return McpRpcResponse.error(id, -32602, e.getMessage(), null);
+                    }
 
                 case "prompts/list":
-                    List<Map<String, Object>> prompts = mcpSceneStateService.getPromptsList();
-                    return McpRpcResponse.success(id, Map.of("prompts", prompts));
+                    return McpRpcResponse.success(id, Map.of("prompts", mcpPromptRegistry.listPrompts()));
 
                 case "prompts/get":
                     Map<String, Object> promptParams = request.getParams();
@@ -283,8 +255,12 @@ public class McpController {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> promptArgs = promptParams.containsKey("arguments") && promptParams.get("arguments") instanceof Map<?, ?> m
                             ? (Map<String, Object>) m : Map.of();
-                    Map<String, Object> promptPayload = mcpSceneStateService.getPrompt(promptName, promptArgs);
-                    return McpRpcResponse.success(id, promptPayload);
+                    try {
+                        Map<String, Object> promptPayload = mcpPromptRegistry.getPrompt(promptName, promptArgs);
+                        return McpRpcResponse.success(id, promptPayload);
+                    } catch (IllegalArgumentException e) {
+                        return McpRpcResponse.error(id, -32602, e.getMessage(), null);
+                    }
 
                 case "tools/call":
                     Map<String, Object> params = request.getParams();
@@ -311,13 +287,18 @@ public class McpController {
                         arguments.put("prompt", enhanceCadPrompt(rawPrompt));
                     }
 
-                    // Procedural CAD tools (cad_create_primitive, cad_boolean_operation, cad_apply_modifier, cad_inspect_scene)
-                    // do not strictly require an AI token since they compile deterministic bpy geometry directly
+                    // Procedural CAD tools (cad_create_primitive, cad_boolean_operation, cad_apply_modifier, cad_inspect_scene,
+                    // cad_assemble_kit, cad_batch_csg, cad_apply_fillet_chamfer) compile deterministic bpy geometry directly
+                    // and do not strictly require an AI token.
                     boolean isProceduralTool = List.of(
                             "cad_create_primitive",
                             "cad_boolean_operation",
                             "cad_apply_modifier",
-                            "cad_inspect_scene"
+                            "cad_inspect_scene",
+                            "cad_assemble_kit",
+                            "cad_batch_csg",
+                            "cad_apply_fillet_chamfer",
+                            "cad_quick_fillet_chamfer"
                     ).contains(toolName.toLowerCase());
 
                     boolean hasRawScript = arguments.containsKey("script") && arguments.get("script") != null && !arguments.get("script").toString().isBlank();
@@ -438,47 +419,5 @@ public class McpController {
                 "- Origin & Floor: Align model bottom flush with ground plane (Z=0) with origin at bottom-center.",
                 trimmed
         );
-    }
-
-    private String resolveResourceContent(String uri) {
-        if ("kosh://scene/hierarchy".equals(uri)) {
-            return mcpSceneStateService.getSceneHierarchyJson();
-        } else if ("kosh://engine/capabilities".equals(uri)) {
-            return mcpSceneStateService.getEngineCapabilitiesJson();
-        } else if ("kosh://materials/catalog".equals(uri)) {
-            return mcpSceneStateService.getMaterialsCatalogJson();
-        } else if ("kosh://materials/library".equals(uri)) {
-            return """
-                {
-                    "presets": [
-                        {"id": "dark_titanium", "name": "Dark Titanium", "color": "#1f242d", "roughness": 0.28, "metalness": 0.95},
-                        {"id": "brushed_brass", "name": "Brushed Brass", "color": "#d4af37", "roughness": 0.35, "metalness": 0.90},
-                        {"id": "frosted_acrylic", "name": "Frosted Acrylic", "color": "#e0f2fe", "roughness": 0.15, "metalness": 0.05, "transmission": 0.85},
-                        {"id": "studio_clay", "name": "Studio Clay", "color": "#c2410c", "roughness": 0.75, "metalness": 0.0},
-                        {"id": "redwax_sculpt", "name": "Redwax Sculpt", "color": "#dc2626", "roughness": 0.40, "metalness": 0.10},
-                        {"id": "mirror_chrome", "name": "Mirror Chrome", "color": "#f8fafc", "roughness": 0.05, "metalness": 1.0},
-                        {"id": "cyber_neon_cyan", "name": "Cyber Neon Cyan", "color": "#06b6d4", "roughness": 0.20, "metalness": 0.80, "emission": "#22d3ee"}
-                    ]
-                }
-                """;
-        } else if ("kosh://scene/bounding-boxes".equals(uri)) {
-            return """
-                {
-                    "units": "meters",
-                    "coordinateSystem": "Z-up",
-                    "defaultAABB": {"min": [-1.0, -1.0, 0.0], "max": [1.0, 1.0, 2.0], "dimensions": [2.0, 2.0, 2.0]}
-                }
-                """;
-        } else if ("kosh://viewport/active-selection".equals(uri)) {
-            return """
-                {
-                    "selectedMesh": null,
-                    "modifiers": ["subdivision_surface", "boolean_csg", "bevel_modifier", "mirror_axis", "array_offset"],
-                    "transform": {"position": [0,0,0], "rotation": [0,0,0], "scale": [1,1,1]}
-                }
-                """;
-        } else {
-            return mcpSceneStateService.getSceneHierarchyJson();
-        }
     }
 }

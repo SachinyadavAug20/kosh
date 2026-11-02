@@ -25,6 +25,11 @@ public class McpToolRegistry {
             "cad_apply_modifier",
             "cad_inspect_scene",
             "cad_synthesize_composite",
+            // Instant Composite Assembly Tools (no LLM round-trip, pre-baked templates)
+            "cad_assemble_kit",
+            "cad_batch_csg",
+            "cad_apply_fillet_chamfer",
+            "cad_quick_fillet_chamfer",
             // Specialized DCC Pipeline Tools
             "blender_sculpt_op",
             "blender_mesh_ops",
@@ -193,6 +198,90 @@ public class McpToolRegistry {
                 "required", List.of("prompt")
         ));
         tools.add(synthTool);
+
+        // 6. cad_assemble_kit (instant pre-baked kitbashing assembly, zero LLM latency)
+        Map<String, Object> kitTool = new LinkedHashMap<>();
+        kitTool.put("name", "cad_assemble_kit");
+        kitTool.put("description", "Instantly assembles a pre-baked parametric kitbashing template (industrial flange, quadcopter frame, sci-fi panel, structural truss, low-poly tree). Deterministic script generation in <10ms with no LLM round-trip.");
+        kitTool.put("inputSchema", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "kitCategory", Map.of(
+                                "type", "string",
+                                "enum", List.of("industrial_flange", "quadcopter_frame", "scifi_panel", "structural_truss", "lowpoly_tree"),
+                                "description", "Kit template category to spawn"
+                        ),
+                        "parameters", Map.of(
+                                "type", "object",
+                                "description", "Optional kit parameters",
+                                "properties", Map.of(
+                                        "scale", Map.of("type", "number", "default", 1.0, "description", "Uniform scale multiplier applied to all kit dimensions"),
+                                        "boltCount", Map.of("type", "integer", "default", 6, "description", "Fastener hole count (flange) or bay count (truss)"),
+                                        "hollow", Map.of("type", "boolean", "default", true, "description", "Open/shell construction instead of solid fill")
+                                )
+                        ),
+                        "targetPosition", Map.of(
+                                "type", "array",
+                                "items", Map.of("type", "number"),
+                                "minItems", 3,
+                                "maxItems", 3,
+                                "description", "World placement [x, y, z] in meters (default: [0, 0, 0])"
+                        ),
+                        "format", Map.of("type", "string", "enum", List.of("glb", "stl", "obj"), "description", "Export format (default: glb)")
+                ),
+                "required", List.of("kitCategory")
+        ));
+        tools.add(kitTool);
+
+        // 7. cad_batch_csg (chained boolean pipeline in a single round-trip)
+        Map<String, Object> batchCsgTool = new LinkedHashMap<>();
+        batchCsgTool.put("name", "cad_batch_csg");
+        batchCsgTool.put("description", "Executes a base primitive plus a sequential array of CSG boolean operations (DIFFERENCE, UNION, INTERSECT) in one single transaction round-trip, avoiding multi-call network latency.");
+        batchCsgTool.put("inputSchema", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "baseShape", Map.of("type", "string", "enum", List.of("box", "cylinder", "sphere"), "description", "Foundational solid primitive"),
+                        "baseDimensions", Map.of(
+                                "type", "array",
+                                "items", Map.of("type", "number"),
+                                "description", "Base dimensions: [width, height, depth] for box, [radius, depth] for cylinder, [radius] for sphere"
+                        ),
+                        "operations", Map.of(
+                                "type", "array",
+                                "description", "Ordered boolean operations applied sequentially to the base",
+                                "items", Map.of(
+                                        "type", "object",
+                                        "properties", Map.of(
+                                                "op", Map.of("type", "string", "enum", List.of("DIFFERENCE", "UNION", "INTERSECT"), "description", "CSG operation type"),
+                                                "shape", Map.of("type", "string", "enum", List.of("cylinder", "box", "slot", "chamfer"), "description", "Cutter/tool primitive shape"),
+                                                "transform", Map.of("type", "array", "items", Map.of("type", "number"), "description", "Cutter world position [x, y, z] in meters"),
+                                                "scale", Map.of("type", "array", "items", Map.of("type", "number"), "description", "Cutter size: [radius, depth] for cylinder, [width, height, depth] for box/slot/chamfer")
+                                        ),
+                                        "required", List.of("op", "shape", "transform")
+                                )
+                        ),
+                        "format", Map.of("type", "string", "enum", List.of("glb", "stl", "obj"), "description", "Export format (default: glb)")
+                ),
+                "required", List.of("baseShape", "baseDimensions", "operations")
+        ));
+        tools.add(batchCsgTool);
+
+        // 8. cad_apply_fillet_chamfer (edge rounding / metric beveling without mesh rewrite)
+        Map<String, Object> filletTool = new LinkedHashMap<>();
+        filletTool.put("name", "cad_apply_fillet_chamfer");
+        filletTool.put("description", "Applies edge rounding (fillet) or metric beveling to an existing named mesh via a parametric BEVEL modifier, without rewriting the entire mesh. Alias: cad_quick_fillet_chamfer.");
+        filletTool.put("inputSchema", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "targetObjectName", Map.of("type", "string", "description", "Name of the mesh object to bevel"),
+                        "offsetMm", Map.of("type", "number", "default", 2.0, "description", "Bevel distance in millimeters"),
+                        "segments", Map.of("type", "integer", "default", 3, "description", "Bevel segment count for rounded fillets (1 = flat chamfer)"),
+                        "affectOnlyEdges", Map.of("type", "boolean", "default", true, "description", "Limit bevel to sharp edges only (angle-limited) instead of every edge"),
+                        "format", Map.of("type", "string", "enum", List.of("glb", "stl", "obj"), "description", "Export format (default: glb)")
+                ),
+                "required", List.of("targetObjectName")
+        ));
+        tools.add(filletTool);
 
         // Specialized DCC Pipeline Tools
         tools.add(createToolSchema(
@@ -473,6 +562,12 @@ public class McpToolRegistry {
             finalScript = buildBooleanOperationScript(arguments, format);
         } else if ("cad_apply_modifier".equals(normalizedName)) {
             finalScript = buildApplyModifierScript(arguments, format);
+        } else if ("cad_assemble_kit".equals(normalizedName)) {
+            finalScript = buildAssembleKitScript(arguments, format);
+        } else if ("cad_batch_csg".equals(normalizedName)) {
+            finalScript = buildBatchCsgScript(arguments, format);
+        } else if ("cad_apply_fillet_chamfer".equals(normalizedName) || "cad_quick_fillet_chamfer".equals(normalizedName)) {
+            finalScript = buildFilletChamferScript(arguments, format);
         } else if ("cad_synthesize_composite".equals(normalizedName)) {
             String userPrompt = (prompt != null && !prompt.isBlank()) ? prompt : "Precision Parametric Mechanical CAD Component";
             String style = arguments != null && arguments.containsKey("style") && arguments.get("style") != null
@@ -692,6 +787,424 @@ public class McpToolRegistry {
 
         sb.append("bpy.ops.object.modifier_apply(modifier=mod.name)\n");
         return sb.toString();
+    }
+
+    // ---------------------------------------------------------------
+    // Instant composite assembly tools (deterministic bpy, no LLM call)
+    // ---------------------------------------------------------------
+
+    private static final String KIT_HELPER_PY = """
+            def _cut(target, cutter):
+                m = target.modifiers.new(name="CSG", type='BOOLEAN')
+                m.operation = 'DIFFERENCE'
+                m.solver = 'EXACT'
+                m.object = cutter
+                bpy.context.view_layer.objects.active = target
+                bpy.ops.object.modifier_apply(modifier=m.name)
+                bpy.data.objects.remove(cutter, do_unlink=True)
+
+            def _bevel(target, width, segments=2):
+                m = target.modifiers.new(name="EdgeBreak", type='BEVEL')
+                m.width = width
+                m.segments = segments
+                if hasattr(m, 'limit_method'):
+                    m.limit_method = 'ANGLE'
+                if hasattr(m, 'clamp_overlap'):
+                    m.clamp_overlap = True
+                bpy.context.view_layer.objects.active = target
+                bpy.ops.object.modifier_apply(modifier=m.name)
+
+            def _mat(name, color, rough, metal):
+                mt = bpy.data.materials.new(name=name)
+                if hasattr(mt, "use_nodes") and not mt.use_nodes:
+                    mt.use_nodes = True
+                if mt.node_tree:
+                    bsdf = mt.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        if "Base Color" in bsdf.inputs:
+                            bsdf.inputs["Base Color"].default_value = color
+                        if "Roughness" in bsdf.inputs:
+                            bsdf.inputs["Roughness"].default_value = rough
+                        if "Metallic" in bsdf.inputs:
+                            bsdf.inputs["Metallic"].default_value = metal
+                return mt
+
+            def _apply_mat(obj, mat):
+                if obj.data.materials:
+                    obj.data.materials[0] = mat
+                else:
+                    obj.data.materials.append(mat)
+
+            def _paint_all(mat):
+                for o in bpy.data.objects:
+                    if o.type == 'MESH':
+                        _apply_mat(o, mat)
+
+            """;
+
+    private String buildAssembleKitScript(Map<String, Object> arguments, String format) {
+        String category = arguments != null && arguments.get("kitCategory") != null
+                ? arguments.get("kitCategory").toString().trim().toLowerCase()
+                : "industrial_flange";
+        Set<String> validCategories = Set.of(
+                "industrial_flange", "quadcopter_frame", "scifi_panel", "structural_truss", "lowpoly_tree");
+        if (!validCategories.contains(category)) {
+            throw new IllegalArgumentException("Unknown kitCategory: " + category
+                    + ". Valid categories: " + String.join(", ", validCategories));
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> params = arguments != null && arguments.get("parameters") instanceof Map<?, ?> m
+                ? (Map<String, Object>) m : Map.of();
+
+        double scale = params.get("scale") instanceof Number n ? n.doubleValue() : 1.0;
+        if (scale <= 0) scale = 1.0;
+        int boltCount = params.get("boltCount") instanceof Number n ? n.intValue() : 6;
+        boltCount = Math.max(2, Math.min(16, boltCount));
+        boolean hollow = true;
+        if (params.get("hollow") instanceof Boolean b) {
+            hollow = b;
+        }
+
+        List<Double> pos = parseDoubleList(arguments != null ? arguments.get("targetPosition") : null, List.of(0.0, 0.0, 0.0));
+        double px = pos.size() > 0 ? pos.get(0) : 0.0;
+        double py = pos.size() > 1 ? pos.get(1) : 0.0;
+        double pz = pos.size() > 2 ? pos.get(2) : 0.0;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("import bpy, math\n\n");
+        sb.append("for o in list(bpy.data.objects):\n    bpy.data.objects.remove(o, do_unlink=True)\n");
+        sb.append("for m in list(bpy.data.meshes):\n    bpy.data.meshes.remove(m, do_unlink=True)\n\n");
+        sb.append(KIT_HELPER_PY);
+        sb.append(String.format(Locale.US,
+                "s = %.4f\nbolts = %d\nhollow = %s\npx, py, pz = %.4f, %.4f, %.4f\n\n",
+                scale, boltCount, hollow ? "True" : "False", px, py, pz));
+
+        switch (category) {
+            case "industrial_flange" -> {
+                sb.append("""
+                        R = 0.5 * s
+                        H = 0.12 * s
+                        bore_r = 0.30 * s if hollow else 0.16 * s
+
+                        bpy.ops.mesh.primitive_cylinder_add(radius=R, depth=H, vertices=64, location=(px, py, pz + H / 2))
+                        flange = bpy.context.active_object
+                        flange.name = "Kit_Industrial_Flange"
+
+                        bpy.ops.mesh.primitive_cylinder_add(radius=bore_r, depth=H * 4, vertices=48, location=(px, py, pz + H / 2))
+                        _cut(flange, bpy.context.active_object)
+
+                        ring_r = (R + bore_r) / 2.0
+                        for i in range(bolts):
+                            a = 2.0 * math.pi * i / bolts
+                            bx = px + ring_r * math.cos(a)
+                            by = py + ring_r * math.sin(a)
+                            bpy.ops.mesh.primitive_cylinder_add(radius=0.045 * s, depth=H * 4, vertices=16, location=(bx, by, pz + H / 2))
+                            _cut(flange, bpy.context.active_object)
+
+                        _bevel(flange, 0.01 * s, 2)
+                        _paint_all(_mat("KitPBR_Flange", (0.62, 0.65, 0.68, 1.0), 0.30, 0.90))
+                        """);
+            }
+            case "quadcopter_frame" -> {
+                sb.append("""
+                        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px, py, pz + 0.015 * s))
+                        plate = bpy.context.active_object
+                        plate.name = "Kit_Quadcopter_Frame"
+                        plate.dimensions = (0.26 * s, 0.26 * s, 0.03 * s)
+
+                        bpy.ops.mesh.primitive_cylinder_add(radius=0.05 * s, depth=0.4 * s, vertices=24, location=(px, py, pz + 0.015 * s))
+                        _cut(plate, bpy.context.active_object)
+
+                        for ang_deg in (45, 135, 225, 315):
+                            a = math.radians(ang_deg)
+                            arm_len = 0.30 * s
+                            cx = px + math.cos(a) * arm_len * 0.5
+                            cy = py + math.sin(a) * arm_len * 0.5
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(cx, cy, pz + 0.015 * s))
+                            arm = bpy.context.active_object
+                            arm.name = "Kit_QuadArm"
+                            arm.dimensions = (arm_len, 0.045 * s, 0.025 * s)
+                            arm.rotation_euler = (0.0, 0.0, a)
+
+                            mx = px + math.cos(a) * arm_len
+                            my = py + math.sin(a) * arm_len
+                            bpy.ops.mesh.primitive_cylinder_add(radius=0.055 * s, depth=0.03 * s, vertices=24, location=(mx, my, pz + 0.015 * s))
+                            mount = bpy.context.active_object
+                            mount.name = "Kit_MotorMount"
+                            bpy.ops.mesh.primitive_cylinder_add(radius=0.035 * s, depth=0.4 * s, vertices=16, location=(mx, my, pz + 0.015 * s))
+                            _cut(mount, bpy.context.active_object)
+
+                        if hollow:
+                            for sx in (-1, 1):
+                                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px + sx * 0.09 * s, py, pz + 0.015 * s))
+                                pocket = bpy.context.active_object
+                                pocket.dimensions = (0.05 * s, 0.14 * s, 0.4 * s)
+                                _cut(plate, pocket)
+
+                        _paint_all(_mat("KitPBR_Frame", (0.10, 0.11, 0.13, 1.0), 0.45, 0.55))
+                        """);
+            }
+            case "scifi_panel" -> {
+                sb.append("""
+                        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px, py, pz + 0.025 * s))
+                        panel = bpy.context.active_object
+                        panel.name = "Kit_SciFi_Panel"
+                        panel.dimensions = (0.6 * s, 0.4 * s, 0.05 * s)
+
+                        for i in range(4):
+                            vx = px - 0.18 * s + i * 0.12 * s
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(vx, py, pz + 0.05 * s))
+                            slot = bpy.context.active_object
+                            slot.dimensions = (0.05 * s, 0.26 * s, 0.1 * s)
+                            _cut(panel, slot)
+
+                        if hollow:
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px, py, pz + 0.012 * s))
+                            cavity = bpy.context.active_object
+                            cavity.dimensions = (0.54 * s, 0.34 * s, 0.06 * s)
+                            _cut(panel, cavity)
+
+                        for gx, gy, gw, gh in ((-0.22, 0.16, 0.14, 0.05), (0.0, -0.17, 0.20, 0.045), (0.22, 0.15, 0.10, 0.06)):
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px + gx * s, py + gy * s, pz + 0.055 * s))
+                            g = bpy.context.active_object
+                            g.name = "Kit_Greeble"
+                            g.dimensions = (gw * s, gh * s, 0.02 * s)
+
+                        _bevel(panel, 0.008 * s, 2)
+                        _paint_all(_mat("KitPBR_Panel", (0.92, 0.35, 0.05, 1.0), 0.55, 0.10))
+                        """);
+            }
+            case "structural_truss" -> {
+                int bays = Math.max(2, Math.min(8, boltCount));
+                sb.append(String.format(Locale.US, "bays = %d\n", bays));
+                sb.append("""
+                        bay_w = 0.12 * s
+                        total_len = bays * bay_w
+                        depth = 0.28 * s
+                        z_bot = pz + 0.015 * s
+                        z_top = pz + depth
+
+                        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px, py, z_bot))
+                        bottom = bpy.context.active_object
+                        bottom.name = "Kit_Truss_BottomChord"
+                        bottom.dimensions = (total_len, 0.035 * s, 0.03 * s)
+
+                        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px, py, z_top))
+                        top = bpy.context.active_object
+                        top.name = "Kit_Truss_TopChord"
+                        top.dimensions = (total_len, 0.035 * s, 0.03 * s)
+
+                        for i in range(bays + 1):
+                            vx = px - total_len / 2.0 + i * bay_w
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(vx, py, (z_bot + z_top) / 2.0))
+                            v = bpy.context.active_object
+                            v.name = "Kit_Truss_Vertical"
+                            v.dimensions = (0.025 * s, 0.025 * s, depth)
+
+                        diag_len = math.sqrt(bay_w * bay_w + depth * depth)
+                        slope = math.atan2(depth, bay_w)
+                        for i in range(bays):
+                            x0 = px - total_len / 2.0 + i * bay_w
+                            mx = x0 + bay_w / 2.0
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(mx, py, (z_bot + z_top) / 2.0))
+                            d = bpy.context.active_object
+                            d.name = "Kit_Truss_Diagonal"
+                            d.dimensions = (diag_len, 0.022 * s, 0.022 * s)
+                            d.rotation_euler = (0.0, -slope if i % 2 == 0 else slope, 0.0)
+
+                        if not hollow:
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px, py, z_bot + 0.0225 * s))
+                            deck = bpy.context.active_object
+                            deck.name = "Kit_Truss_Deck"
+                            deck.dimensions = (total_len, 0.26 * s, 0.015 * s)
+
+                        _paint_all(_mat("KitPBR_Truss", (0.55, 0.58, 0.62, 1.0), 0.40, 0.85))
+                        """);
+            }
+            case "lowpoly_tree" -> {
+                sb.append("""
+                        bpy.ops.mesh.primitive_cylinder_add(radius=0.06 * s, depth=0.4 * s, vertices=8, location=(px, py, pz + 0.2 * s))
+                        trunk = bpy.context.active_object
+                        trunk.name = "Kit_LowPoly_Tree_Trunk"
+                        _apply_mat(trunk, _mat("KitPBR_Trunk", (0.35, 0.24, 0.15, 1.0), 0.85, 0.0))
+
+                        foliage_mat = _mat("KitPBR_Foliage", (0.18, 0.42, 0.20, 1.0), 0.75, 0.0)
+                        for tier, (r, d, cz) in enumerate(((0.34, 0.42, 0.48), (0.26, 0.38, 0.74), (0.17, 0.34, 0.98))):
+                            bpy.ops.mesh.primitive_cone_add(radius1=r * s, depth=d * s, vertices=7, location=(px, py, pz + cz * s))
+                            cone = bpy.context.active_object
+                            cone.name = "Kit_LowPoly_Tree_Foliage_%d" % tier
+                            _apply_mat(cone, foliage_mat)
+                        """);
+            }
+            default -> { }
+        }
+
+        return sb.toString();
+    }
+
+    private String buildBatchCsgScript(Map<String, Object> arguments, String format) {
+        String baseShape = arguments != null && arguments.get("baseShape") != null
+                ? arguments.get("baseShape").toString().trim().toLowerCase() : "box";
+        if (!Set.of("box", "cylinder", "sphere").contains(baseShape)) {
+            throw new IllegalArgumentException("Invalid baseShape: " + baseShape + ". Valid: box, cylinder, sphere");
+        }
+
+        List<Double> baseDims = parseDoubleList(arguments != null ? arguments.get("baseDimensions") : null, List.of());
+        Object opsRaw = arguments != null ? arguments.get("operations") : null;
+        if (!(opsRaw instanceof List<?> ops) || ops.isEmpty()) {
+            throw new IllegalArgumentException("Invalid params: 'operations' must be a non-empty array for cad_batch_csg");
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("import bpy, math\n\n");
+        sb.append("for o in list(bpy.data.objects):\n    bpy.data.objects.remove(o, do_unlink=True)\n");
+        sb.append("for m in list(bpy.data.meshes):\n    bpy.data.meshes.remove(m, do_unlink=True)\n\n");
+        sb.append(KIT_HELPER_PY);
+        sb.append("""
+                def _cutter(shape, transform, scale):
+                    tx, ty, tz = transform
+                    if shape == "cylinder":
+                        r = scale[0] if len(scale) > 0 else 0.15
+                        d = scale[1] if len(scale) > 1 else 2.0
+                        bpy.ops.mesh.primitive_cylinder_add(radius=r, depth=d, vertices=48, location=(tx, ty, tz))
+                    elif shape in ("box", "slot", "chamfer"):
+                        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(tx, ty, tz))
+                        o = bpy.context.active_object
+                        if len(scale) >= 3:
+                            o.dimensions = (scale[0], scale[1], scale[2])
+                        elif len(scale) > 0:
+                            o.dimensions = (scale[0], scale[0], scale[0])
+                        else:
+                            o.dimensions = (0.4, 0.1, 0.5)
+                        if shape == "chamfer":
+                            o.rotation_euler = (0.0, math.radians(45.0), 0.0)
+                    else:
+                        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(tx, ty, tz))
+                        o = bpy.context.active_object
+                        if len(scale) >= 3:
+                            o.dimensions = (scale[0], scale[1], scale[2])
+                    return bpy.context.active_object
+
+                def _apply_op(base, op, shape, transform, scale):
+                    cutter = _cutter(shape, transform, scale)
+                    m = base.modifiers.new(name="CSG", type='BOOLEAN')
+                    m.operation = op
+                    m.solver = 'EXACT'
+                    m.object = cutter
+                    bpy.context.view_layer.objects.active = base
+                    bpy.ops.object.modifier_apply(modifier=m.name)
+                    bpy.data.objects.remove(cutter, do_unlink=True)
+
+                """);
+
+        // Base solid
+        switch (baseShape) {
+            case "cylinder" -> {
+                double r = baseDims.size() > 0 ? baseDims.get(0) : 0.5;
+                double d = baseDims.size() > 1 ? baseDims.get(1) : 1.0;
+                sb.append(String.format(Locale.US,
+                        "bpy.ops.mesh.primitive_cylinder_add(radius=%.4f, depth=%.4f, vertices=64, location=(0, 0, 0))\n",
+                        r, d));
+            }
+            case "sphere" -> {
+                double r = baseDims.size() > 0 ? baseDims.get(0) : 0.5;
+                sb.append(String.format(Locale.US,
+                        "bpy.ops.mesh.primitive_uv_sphere_add(radius=%.4f, segments=48, ring_count=24, location=(0, 0, 0))\n",
+                        r));
+            }
+            default -> { // box
+                double dx = baseDims.size() > 0 ? baseDims.get(0) : 1.0;
+                double dy = baseDims.size() > 1 ? baseDims.get(1) : 1.0;
+                double dz = baseDims.size() > 2 ? baseDims.get(2) : 1.0;
+                sb.append("bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 0))\n");
+                sb.append(String.format(Locale.US, "base = bpy.context.active_object\nbase.dimensions = (%.4f, %.4f, %.4f)\n", dx, dy, dz));
+            }
+        }
+        if (!"box".equals(baseShape)) {
+            sb.append("base = bpy.context.active_object\n");
+        }
+        sb.append("base.name = \"Batch_CSG_Result\"\n\n");
+
+        // Sequential boolean pipeline (single round-trip)
+        Set<String> validOps = Set.of("DIFFERENCE", "UNION", "INTERSECT");
+        Set<String> validCutterShapes = Set.of("cylinder", "box", "slot", "chamfer");
+        for (Object opRaw : ops) {
+            if (!(opRaw instanceof Map)) {
+                throw new IllegalArgumentException("Invalid params: each entry in 'operations' must be an object");
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> opMap = (Map<String, Object>) opRaw;
+            String op = String.valueOf(opMap.getOrDefault("op", "")).trim().toUpperCase();
+            String shape = String.valueOf(opMap.getOrDefault("shape", "")).trim().toLowerCase();
+            if (!validOps.contains(op)) {
+                throw new IllegalArgumentException("Invalid CSG op: " + op + ". Valid: DIFFERENCE, UNION, INTERSECT");
+            }
+            if (!validCutterShapes.contains(shape)) {
+                throw new IllegalArgumentException("Invalid cutter shape: " + shape + ". Valid: cylinder, box, slot, chamfer");
+            }
+            List<Double> transform = parseDoubleList(opMap.get("transform"), List.of(0.0, 0.0, 0.0));
+            double tx = transform.size() > 0 ? transform.get(0) : 0.0;
+            double ty = transform.size() > 1 ? transform.get(1) : 0.0;
+            double tz = transform.size() > 2 ? transform.get(2) : 0.0;
+            List<Double> scaleList = parseDoubleList(opMap.get("scale"), List.of());
+            StringBuilder scaleTuple = new StringBuilder("(");
+            for (int i = 0; i < scaleList.size(); i++) {
+                if (i > 0) scaleTuple.append(", ");
+                scaleTuple.append(String.format(Locale.US, "%.4f", scaleList.get(i)));
+            }
+            scaleTuple.append(")");
+            if (scaleList.isEmpty()) {
+                scaleTuple = new StringBuilder("()");
+            }
+
+            sb.append(String.format(Locale.US,
+                    "_apply_op(base, \"%s\", \"%s\", (%.4f, %.4f, %.4f), %s)\n",
+                    op, shape, tx, ty, tz, scaleTuple));
+        }
+
+        sb.append("\nbpy.context.view_layer.objects.active = base\n");
+        sb.append("_paint_csg = _mat(\"BatchCSG_PBR\", (0.45, 0.48, 0.52, 1.0), 0.35, 0.80)\n");
+        sb.append("_apply_mat(base, _paint_csg)\n");
+        return sb.toString();
+    }
+
+    private String buildFilletChamferScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetObjectName") != null
+                ? arguments.get("targetObjectName").toString()
+                : (arguments != null && arguments.get("targetMesh") != null
+                ? arguments.get("targetMesh").toString() : "Target_Part");
+        double offsetMm = arguments != null && arguments.get("offsetMm") instanceof Number n
+                ? n.doubleValue() : 2.0;
+        int segments = arguments != null && arguments.get("segments") instanceof Number n
+                ? Math.max(1, Math.min(12, n.intValue())) : 3;
+        boolean affectOnlyEdges = !(arguments != null && arguments.get("affectOnlyEdges") instanceof Boolean b) || b;
+        double widthM = Math.max(0.0001, offsetMm) / 1000.0;
+        String limitMethod = affectOnlyEdges ? "ANGLE" : "NONE";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("import bpy\n\n");
+        sb.append(String.format(Locale.US,
+                "target = bpy.data.objects.get(\"%s\")\n", escapePy(targetName)));
+        sb.append("if not target:\n");
+        sb.append("    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 0.5))\n");
+        sb.append("    target = bpy.context.active_object\n");
+        sb.append(String.format(Locale.US, "    target.name = \"%s\"\n", escapePy(targetName)));
+        sb.append("    target.dimensions = (1.0, 1.0, 1.0)\n\n");
+        sb.append("bpy.context.view_layer.objects.active = target\n");
+        sb.append("mod = target.modifiers.new(name=\"CAD_FilletChamfer\", type='BEVEL')\n");
+        sb.append(String.format(Locale.US, "mod.width = %.6f\n", widthM));
+        sb.append(String.format(Locale.US, "mod.segments = %d\n", segments));
+        sb.append(String.format(Locale.US, "mod.limit_method = \"%s\"\n", limitMethod));
+        sb.append("if hasattr(mod, 'clamp_overlap'):\n    mod.clamp_overlap = True\n");
+        sb.append("if hasattr(mod, 'harden_normals'):\n    mod.harden_normals = True\n");
+        sb.append("bpy.ops.object.modifier_apply(modifier=mod.name)\n");
+        return sb.toString();
+    }
+
+    private String escapePy(String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private List<Double> parseDoubleList(Object raw, List<Double> defaults) {

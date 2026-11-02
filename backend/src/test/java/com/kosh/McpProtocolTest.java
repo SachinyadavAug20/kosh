@@ -87,6 +87,9 @@ class McpProtocolTest {
         assertTrue(toolNames.contains("cad_apply_modifier"));
         assertTrue(toolNames.contains("cad_inspect_scene"));
         assertTrue(toolNames.contains("cad_synthesize_composite"));
+        assertTrue(toolNames.contains("cad_assemble_kit"));
+        assertTrue(toolNames.contains("cad_batch_csg"));
+        assertTrue(toolNames.contains("cad_apply_fillet_chamfer"));
     }
 
     @Test
@@ -113,6 +116,10 @@ class McpProtocolTest {
         assertTrue(uris.contains("kosh://scene/hierarchy"));
         assertTrue(uris.contains("kosh://engine/capabilities"));
         assertTrue(uris.contains("kosh://materials/catalog"));
+        assertTrue(uris.contains("kosh://specs/hardware/metric-fasteners"));
+        assertTrue(uris.contains("kosh://materials/pbr-presets"));
+        assertTrue(uris.contains("kosh://guidelines/fdm-tolerances"));
+        assertEquals(9, resources.size());
     }
 
     @Test
@@ -188,6 +195,10 @@ class McpProtocolTest {
         List<String> promptNames = prompts.stream().map(p -> p.get("name").toString()).toList();
         assertTrue(promptNames.contains("harden_mechanical_part"));
         assertTrue(promptNames.contains("decompose_narrative_object"));
+        assertTrue(promptNames.contains("scaffold_parametric_enclosure"));
+        assertTrue(promptNames.contains("optimize_manifold_topology"));
+        assertTrue(promptNames.contains("lowpoly_stylized_environment"));
+        assertEquals(5, prompts.size());
     }
 
     @Test
@@ -306,6 +317,241 @@ class McpProtocolTest {
         assertTrue(execution.isSuccess());
         assertNotNull(execution.getAssetName());
     }
- 
+
+    @Test
+    @DisplayName("Engineering spec resources should serve cached ground truth (fasteners, PBR, FDM)")
+    void testReadEngineeringSpecResources() throws Exception {
+        // Metric fasteners: M3 close-fit clearance hole must be 3.4mm
+        McpRpcRequest reqFasteners = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("read-fasteners")
+                .method("resources/read")
+                .params(Map.of("uri", "kosh://specs/hardware/metric-fasteners"))
+                .build();
+        ResponseEntity<McpRpcResponse> respFasteners = mcpController.handleRpcRequest(null, reqFasteners, null, null, null, null, null);
+        assertNotNull(respFasteners.getBody());
+        assertNull(respFasteners.getBody().getError());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resFasteners = (Map<String, Object>) respFasteners.getBody().getResult();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> contentsFasteners = (List<Map<String, Object>>) resFasteners.get("contents");
+        Map<?, ?> fastenersMap = objectMapper.readValue(contentsFasteners.get(0).get("text").toString(), Map.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> sizes = (Map<String, Object>) fastenersMap.get("sizes");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> m3 = (Map<String, Object>) sizes.get("M3");
+        assertEquals(3.4, ((Number) m3.get("clearanceHoleDiaMm")).doubleValue());
+        assertEquals(2.5, ((Number) m3.get("tapDrillDiaMm")).doubleValue());
+
+        // Curated PBR presets must include AnodizedDarkTitanium
+        McpRpcRequest reqPbr = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("read-pbr")
+                .method("resources/read")
+                .params(Map.of("uri", "kosh://materials/pbr-presets"))
+                .build();
+        ResponseEntity<McpRpcResponse> respPbr = mcpController.handleRpcRequest(null, reqPbr, null, null, null, null, null);
+        assertNotNull(respPbr.getBody());
+        assertNull(respPbr.getBody().getError());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resPbr = (Map<String, Object>) respPbr.getBody().getResult();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> contentsPbr = (List<Map<String, Object>>) resPbr.get("contents");
+        Map<?, ?> pbrMap = objectMapper.readValue(contentsPbr.get(0).get("text").toString(), Map.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> presets = (Map<String, Object>) pbrMap.get("presets");
+        assertTrue(presets.containsKey("AnodizedDarkTitanium"));
+        assertTrue(presets.containsKey("MachinedAluminum"));
+        assertTrue(presets.containsKey("MatteCarbonFiber"));
+
+        // FDM design rules must enforce 1.2mm minimum wall thickness
+        McpRpcRequest reqFdm = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("read-fdm")
+                .method("resources/read")
+                .params(Map.of("uri", "kosh://guidelines/fdm-tolerances"))
+                .build();
+        ResponseEntity<McpRpcResponse> respFdm = mcpController.handleRpcRequest(null, reqFdm, null, null, null, null, null);
+        assertNotNull(respFdm.getBody());
+        assertNull(respFdm.getBody().getError());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resFdm = (Map<String, Object>) respFdm.getBody().getResult();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> contentsFdm = (List<Map<String, Object>>) resFdm.get("contents");
+        Map<?, ?> fdmMap = objectMapper.readValue(contentsFdm.get(0).get("text").toString(), Map.class);
+        assertEquals(1.2, ((Number) fdmMap.get("minWallThicknessMm")).doubleValue());
+        assertEquals(45.0, ((Number) fdmMap.get("maxOverhangAngleDeg")).doubleValue());
+    }
+
+    @Test
+    @DisplayName("resources/read with unknown URI should return JSON-RPC error")
+    void testReadUnknownResourceReturnsError() {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("read-unknown")
+                .method("resources/read")
+                .params(Map.of("uri", "kosh://does/not/exist"))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response.getBody());
+        assertNotNull(response.getBody().getError());
+        assertTrue(response.getBody().getError().getMessage().contains("Unknown resource URI"));
+    }
+
+    @Test
+    @DisplayName("scaffold_parametric_enclosure prompt should return filled enclosure blueprint")
+    void testGetScaffoldEnclosurePrompt() {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("prompt-scaffold-1")
+                .method("prompts/get")
+                .params(Map.of(
+                        "name", "scaffold_parametric_enclosure",
+                        "arguments", Map.of(
+                                "lengthMm", "100",
+                                "widthMm", "60",
+                                "heightMm", "40",
+                                "wallThicknessMm", "2.4"
+                        )
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response.getBody());
+        assertNull(response.getBody().getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) response.getBody().getResult();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> messages = (List<Map<String, Object>>) result.get("messages");
+        assertNotNull(messages);
+        assertFalse(messages.isEmpty());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> content = (Map<String, Object>) messages.get(0).get("content");
+        String text = content.get("text").toString();
+        assertTrue(text.contains("Parametric Enclosure Engineer"));
+        assertTrue(text.contains("100mm x 60mm x 40mm"));
+        assertTrue(text.contains("2.4mm walls"));
+        assertTrue(text.contains("cad_apply_fillet_chamfer"));
+        assertTrue(text.contains("kosh://specs/hardware/metric-fasteners"));
+    }
+
+    @Test
+    @DisplayName("cad_assemble_kit should spawn a pre-baked flange kit without LLM round-trip")
+    void testAssembleKitTool() {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("kit-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "cad_assemble_kit",
+                        "arguments", Map.of(
+                                "kitCategory", "industrial_flange",
+                                "parameters", Map.of("scale", 0.5, "boltCount", 8, "hollow", true),
+                                "targetPosition", List.of(0.0, 0.0, 0.1),
+                                "format", "glb"
+                        )
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertEquals(false, result.get("isError"));
+
+        com.kosh.dto.ToolExecutionDto.Result execution = (com.kosh.dto.ToolExecutionDto.Result) result.get("execution");
+        assertNotNull(execution);
+        assertTrue(execution.isSuccess(), "kit assembly failed: " + execution.getStderr());
+        assertNotNull(execution.getAssetName());
+    }
+
+    @Test
+    @DisplayName("cad_batch_csg should run base plus boolean pipeline in one round-trip")
+    void testBatchCsgTool() {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("batch-csg-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "cad_batch_csg",
+                        "arguments", Map.of(
+                                "baseShape", "box",
+                                "baseDimensions", List.of(0.8, 0.8, 0.4),
+                                "operations", List.of(
+                                        Map.of(
+                                                "op", "DIFFERENCE",
+                                                "shape", "cylinder",
+                                                "transform", List.of(0.0, 0.0, 0.4),
+                                                "scale", List.of(0.25, 1.0)
+                                        ),
+                                        Map.of(
+                                                "op", "DIFFERENCE",
+                                                "shape", "box",
+                                                "transform", List.of(0.0, 0.0, 0.4),
+                                                "scale", List.of(0.15, 0.15, 1.0)
+                                        )
+                                ),
+                                "format", "glb"
+                        )
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertEquals(false, result.get("isError"));
+
+        com.kosh.dto.ToolExecutionDto.Result execution = (com.kosh.dto.ToolExecutionDto.Result) result.get("execution");
+        assertNotNull(execution);
+        assertTrue(execution.isSuccess(), "batch CSG failed: " + execution.getStderr());
+        assertNotNull(execution.getAssetName());
+    }
+
+    @Test
+    @DisplayName("cad_quick_fillet_chamfer alias should apply parametric bevel modifier")
+    void testFilletChamferToolAlias() {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("fillet-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "cad_quick_fillet_chamfer",
+                        "arguments", Map.of(
+                                "targetObjectName", "Bevel_Test_Part",
+                                "offsetMm", 2.5,
+                                "segments", 3,
+                                "affectOnlyEdges", true,
+                                "format", "glb"
+                        )
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertEquals(false, result.get("isError"));
+
+        com.kosh.dto.ToolExecutionDto.Result execution = (com.kosh.dto.ToolExecutionDto.Result) result.get("execution");
+        assertNotNull(execution);
+        assertTrue(execution.isSuccess(), "fillet/chamfer failed: " + execution.getStderr());
+        assertNotNull(execution.getAssetName());
+    }
 
 }
