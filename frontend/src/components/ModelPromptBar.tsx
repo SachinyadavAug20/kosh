@@ -76,7 +76,6 @@ export function ModelPromptBar({
   };
 
   const isKeyConfigured = !!token && token.trim() !== "";
-  const isDemoKey = token === "demo";
 
   return (
     <div className="absolute bottom-9 left-1/2 -translate-x-1/2 z-30 w-full max-w-2xl px-3 pointer-events-auto select-none font-mono">

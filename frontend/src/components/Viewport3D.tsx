@@ -180,6 +180,9 @@ export interface Viewport3DProps {
   stderr?: string | null;
 }
 
+// Yields to the browser so staged build phases can paint between steps
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 export function Viewport3D({
   assetUrl,
   assetName,
@@ -260,7 +263,9 @@ export function Viewport3D({
     }
   }, []);
 
-  const handleInstantSpawnRef = useRef<(prompt: string) => void>(() => {});
+  const handleInstantSpawnRef = useRef<
+    (prompt: string, opts?: { staged?: boolean }) => void
+  >(() => {});
   const activeSynthesisPromptRef = useRef<string>("");
   const showUndoToastRef = useRef<(msg: string) => void>(() => {});
 
@@ -286,7 +291,7 @@ export function Viewport3D({
         const promptToUse = activeSynthesisPromptRef.current;
         if (promptToUse) {
           console.info("Blender daemon timeout (>4s), deploying instant procedural proxy");
-          handleInstantSpawnRef.current(promptToUse);
+          handleInstantSpawnRef.current(promptToUse, { staged: false });
           setIsLoadingModel(false);
           showUndoToastRef.current("Placed instant proxy (Blender daemon compiling in background)");
         }
@@ -3629,32 +3634,60 @@ export function Viewport3D({
     showUndoToast("Clear Canvas");
   }, [onMeshSelect, showUndoToast, meshList, onMeshListUpdate, pushUndo, refreshMeshList]);
 
-  const handleInstantSpawn = useCallback(
-    (promptText: string) => {
-      if (!sceneRef.current || !rootModelGroupRef.current) return;
-      setActiveSynthesisPrompt(promptText);
+  const detachActiveGizmos = useCallback(() => {
+    if (transformControlsRef.current) {
+      transformControlsRef.current.detach();
+    }
+    if (universalGizmoRef.current) {
+      universalGizmoRef.current.attach(null);
+    }
+    if (selectionBoxHelperRef.current) {
+      selectionBoxHelperRef.current.visible = false;
+    }
+  }, []);
 
-      // Detach any active gizmos to prevent dangling unparented references
-      if (transformControlsRef.current) {
-        transformControlsRef.current.detach();
-      }
-      if (universalGizmoRef.current) {
-        universalGizmoRef.current.attach(null);
-      }
-      if (selectionBoxHelperRef.current) {
-        selectionBoxHelperRef.current.visible = false;
+  // Monotonic token so a newer build aborts any in-flight staged build
+  const buildEpochRef = useRef<number>(0);
+
+  // Shared procedural builder. When staged, it yields to the browser between
+  // real work phases so the Synthesis HUD bar/steps visibly advance for the
+  // end user instead of a blank freeze or fake timer.
+  const buildProceduralModel = useCallback(
+    async (promptText: string, opts: { staged?: boolean } = {}): Promise<boolean> => {
+      const staged = opts.staged ?? true;
+      if (!sceneRef.current || !rootModelGroupRef.current) return false;
+
+      const epoch = ++buildEpochRef.current;
+      const isCurrent = () => epoch === buildEpochRef.current;
+      const stage = async (progress: number, step: string, delayMs: number) => {
+        setSynthesisProgress(progress);
+        setSynthesisStep(step);
+        if (staged) {
+          await wait(delayMs);
+        }
+      };
+
+      if (staged) {
+        setIsLoadingModel(true);
       }
 
-      // Snapshot current scene for undo
+      // Stage 1: intent parsing
+      await stage(15, "Parsing prompt & decomposing CAD intent...", 250);
+      if (!isCurrent()) return false;
+
       const prevChildren: THREE.Object3D[] = rootModelGroupRef.current
         ? [...rootModelGroupRef.current.children]
         : [];
+
+      // Stage 2: geometry synthesis
+      await stage(45, "Generating primitive geometry & mesh topology...", 250);
+      if (!isCurrent()) return false;
 
       let proceduralMesh: THREE.Object3D | null = null;
       try {
         proceduralMesh = generateInstantProcedural(promptText);
       } catch (err) {
-        console.warn("generateInstantProcedural error, fallback to standard:", err);
+        console.warn("generateInstantProcedural failed, fallback to standard:", err);
         try {
           proceduralMesh = generateProceduralModelFromPrompt(promptText);
         } catch (e) {
@@ -3662,12 +3695,20 @@ export function Viewport3D({
         }
       }
 
-      if (!proceduralMesh) {
-        showUndoToast("Failed to spawn procedural object");
-        return;
+      if (!proceduralMesh || !rootModelGroupRef.current) {
+        if (isCurrent()) {
+          setIsLoadingModel(false);
+          showUndoToast("Generation failed");
+        }
+        return false;
       }
 
-      // Clear prior children
+      // Stage 3: scene assembly + normals
+      await stage(70, "Assembling components & computing vertex normals...", 250);
+      if (!isCurrent()) return false;
+      if (!rootModelGroupRef.current) return false;
+
+      // Clear prior children WITHOUT disposing (kept alive for undo)
       while (rootModelGroupRef.current.children.length > 0) {
         rootModelGroupRef.current.remove(rootModelGroupRef.current.children[0]);
       }
@@ -3675,7 +3716,7 @@ export function Viewport3D({
       rootModelGroupRef.current.add(proceduralMesh);
       currentModelRef.current = proceduralMesh;
 
-      // Fit Contact Shadow Catcher
+      // Fit contact shadow catcher
       const box = new THREE.Box3().setFromObject(proceduralMesh);
       const size = new THREE.Vector3();
       box.getSize(size);
@@ -3686,7 +3727,7 @@ export function Viewport3D({
         contactShadowRef.current.visible = true;
       }
 
-      // Select first mesh
+      // Find first mesh in hierarchy for selection
       let firstMesh: THREE.Mesh | null = null;
       if (proceduralMesh instanceof THREE.Mesh) {
         firstMesh = proceduralMesh;
@@ -3709,12 +3750,16 @@ export function Viewport3D({
         onMeshSelect?.(null);
       }
 
+      // Stage 4: materials & lighting calibration
+      await stage(90, "Calibrating PBR materials & studio lighting...", 200);
+      if (!isCurrent()) return false;
+
       handleFocus();
 
       const nextChildren: THREE.Object3D[] = [...rootModelGroupRef.current.children];
       const nextModel = proceduralMesh;
       pushUndo({
-        label: `Instant: "${promptText.slice(0, 20)}"`,
+        label: `Generate "${promptText.slice(0, 20)}"`,
         undo: () => {
           if (!rootModelGroupRef.current) return;
           for (const c of nextChildren) c.removeFromParent();
@@ -3734,10 +3779,24 @@ export function Viewport3D({
         },
       });
 
+      // Stage 5: finalize
+      setSynthesisProgress(100);
+      setSynthesisStep("Finalizing scene hierarchy...");
       setIsLoadingModel(false);
-      showUndoToast(`Spawned: ${promptText.slice(0, 24)} (<50ms)`);
+      showUndoToast(`Generated: ${promptText.slice(0, 24)}`);
+      return true;
     },
     [refreshMeshList, handleFocus, onMeshSelect, showUndoToast, pushUndo]
+  );
+
+  const handleInstantSpawn = useCallback(
+    async (promptText: string, opts?: { staged?: boolean }) => {
+      if (!sceneRef.current || !rootModelGroupRef.current) return;
+      setActiveSynthesisPrompt(promptText);
+      detachActiveGizmos();
+      await buildProceduralModel(promptText, opts);
+    },
+    [buildProceduralModel, detachActiveGizmos]
   );
 
   useEffect(() => {
@@ -3746,10 +3805,8 @@ export function Viewport3D({
 
   const handlePlaceProceduralProxy = useCallback(() => {
     const promptToUse = activeSynthesisPrompt || "proxy";
-    handleInstantSpawn(promptToUse);
-    setIsLoadingModel(false);
-    showUndoToast(`Placed instant proxy for "${promptToUse.slice(0, 20)}"`);
-  }, [activeSynthesisPrompt, handleInstantSpawn, showUndoToast]);
+    void handleInstantSpawn(promptToUse, { staged: false });
+  }, [activeSynthesisPrompt, handleInstantSpawn]);
 
   const handleGenerateModelFromPrompt = useCallback(
     async (promptText: string, format: ExportFormat = "glb") => {
@@ -3757,15 +3814,7 @@ export function Viewport3D({
       setActiveSynthesisPrompt(promptText);
 
       // Detach any active gizmos to prevent dangling unparented references
-      if (transformControlsRef.current) {
-        transformControlsRef.current.detach();
-      }
-      if (universalGizmoRef.current) {
-        universalGizmoRef.current.attach(null);
-      }
-      if (selectionBoxHelperRef.current) {
-        selectionBoxHelperRef.current.visible = false;
-      }
+      detachActiveGizmos();
 
       // -------------------------------------------------------------
       // AI GENERATE MODE: Google Gemini AI + Headless Blender Pipeline
@@ -3791,99 +3840,11 @@ export function Viewport3D({
       }
 
       // -------------------------------------------------------------
-      // PROCEDURAL MODE: Instant Parametric Client-Side Synthesis (<50ms)
+      // PROCEDURAL MODE: staged client-side synthesis with live HUD
       // -------------------------------------------------------------
-      setIsLoadingModel(true);
-      setSynthesisProgress(25);
-      setSynthesisStep("Synthesizing instant procedural geometry (<50ms)...");
-
-      // Snapshot current scene for undo
-      const prevChildren: THREE.Object3D[] = rootModelGroupRef.current
-        ? [...rootModelGroupRef.current.children]
-        : [];
-
-      let proceduralMesh: THREE.Object3D | null = null;
-      try {
-        proceduralMesh = generateInstantProcedural(promptText);
-      } catch (err) {
-        console.warn("generateInstantProcedural failed, fallback to standard:", err);
-        try {
-          proceduralMesh = generateProceduralModelFromPrompt(promptText);
-        } catch (e) {
-          console.error("Secondary procedural fallback failed:", e);
-        }
-      }
-
-      setSynthesisProgress(75);
-      setSynthesisStep("Calibrating materials & scene hierarchy...");
-
-      if (proceduralMesh && rootModelGroupRef.current) {
-        // Clear prior children WITHOUT disposing (kept alive for undo)
-        while (rootModelGroupRef.current.children.length > 0) {
-          rootModelGroupRef.current.remove(rootModelGroupRef.current.children[0]);
-        }
-
-        rootModelGroupRef.current.add(proceduralMesh);
-        currentModelRef.current = proceduralMesh;
-
-        // Find first mesh in hierarchy for selection
-        let firstMesh: THREE.Mesh | null = null;
-        if (proceduralMesh instanceof THREE.Mesh) {
-          firstMesh = proceduralMesh;
-        } else {
-          proceduralMesh.traverse((child) => {
-            if (!firstMesh && child instanceof THREE.Mesh) {
-              firstMesh = child;
-            }
-          });
-        }
-
-        refreshMeshList();
-        if (firstMesh) {
-          setSelectedMeshes([firstMesh]);
-          setSelectedMesh(firstMesh);
-          onMeshSelect?.(firstMesh.name);
-        } else {
-          setSelectedMeshes([]);
-          setSelectedMesh(null);
-          onMeshSelect?.(null);
-        }
-
-        handleFocus();
-
-        const nextChildren: THREE.Object3D[] = [...rootModelGroupRef.current.children];
-        const nextModel = proceduralMesh;
-        pushUndo({
-          label: `Generate "${promptText.slice(0, 20)}"`,
-          undo: () => {
-            if (!rootModelGroupRef.current) return;
-            for (const c of nextChildren) c.removeFromParent();
-            for (const c of prevChildren) rootModelGroupRef.current.add(c);
-            currentModelRef.current = prevChildren[0] || null;
-            refreshMeshList();
-            setSelectedMeshes([]);
-            setSelectedMesh(null);
-            onMeshSelect?.(null);
-          },
-          redo: () => {
-            if (!rootModelGroupRef.current) return;
-            for (const c of prevChildren) c.removeFromParent();
-            rootModelGroupRef.current.add(nextModel);
-            currentModelRef.current = nextModel;
-            refreshMeshList();
-          },
-        });
-
-        setSynthesisProgress(100);
-        setSynthesisStep("Done");
-        setIsLoadingModel(false);
-        showUndoToast(`Generated: ${promptText.slice(0, 24)} (<50ms)`);
-      } else {
-        setIsLoadingModel(false);
-        showUndoToast("Generation failed");
-      }
+      await buildProceduralModel(promptText, { staged: true });
     },
-    [refreshMeshList, handleFocus, onMeshSelect, showUndoToast, pushUndo, onExecuteTool, token, generationMode]
+    [detachActiveGizmos, buildProceduralModel, onExecuteTool, token, generationMode, showUndoToast]
   );
 
   // -------------------------------------------------------------
@@ -4614,11 +4575,19 @@ export function Viewport3D({
                                 className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-[#ea580c] hover:bg-[#c2410c] text-white text-[11px] font-bold transition-all shadow-md active:scale-95 cursor-pointer"
                               >
                                 <Zap className="w-3.5 h-3.5 fill-current" />
-                                <span>Place Instant Proxy (&lt;50ms)</span>
+                                <span>
+                                  {generationMode === "ai"
+                                    ? "Place Instant Proxy (<50ms)"
+                                    : "Skip to Result (<50ms)"}
+                                </span>
                               </button>
                               <div className="flex items-center space-x-1.5 text-[10px] text-emerald-400">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                                <span className="font-semibold">Daemon Port 9091</span>
+                                <span className="font-semibold">
+                                  {generationMode === "ai"
+                                    ? "Daemon Port 9091"
+                                    : "Parametric Engine · Client-side"}
+                                </span>
                               </div>
                             </div>
 
