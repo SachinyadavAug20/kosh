@@ -74,7 +74,7 @@ public class AssetController {
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + file.getName() + "\"")
-                .header(HttpHeaders.CACHE_CONTROL, "public, max-age=86400")
+                .header(HttpHeaders.CACHE_CONTROL, "public, max-age=86400, immutable")
                 .contentType(mediaType)
                 .contentLength(file.length())
                 .body(resource);

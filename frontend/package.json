@@ -6,15 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postinstall": "cp node_modules/manifold-3d/manifold.wasm public/manifold.wasm"
   },
   "dependencies": {
+    "idb-keyval": "^6.3.0",
     "lucide-react": "^0.468.0",
+    "manifold-3d": "^3.5.4",
     "mp4-muxer": "^5.2.2",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "three": "^0.171.0",
+    "three-bvh-csg": "^0.0.17",
     "webm-muxer": "^5.1.4"
   },
   "devDependencies": {

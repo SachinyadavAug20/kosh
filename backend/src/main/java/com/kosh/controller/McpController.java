@@ -28,7 +28,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 @Slf4j
 @RestController
@@ -40,7 +39,7 @@ public class McpController {
     private final McpPromptRegistry mcpPromptRegistry;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Map<String, SseEmitter> activeSseSessions = new ConcurrentHashMap<>();
-    private final ExecutorService asyncWorkerPool = Executors.newCachedThreadPool();
+    private final ExecutorService asyncWorkerPool;
 
     @org.springframework.beans.factory.annotation.Value("${kosh.gemini.api-key:}")
     private String defaultGeminiApiKey;
@@ -50,10 +49,13 @@ public class McpController {
 
     public McpController(McpToolRegistry mcpToolRegistry,
                          McpResourceRegistry mcpResourceRegistry,
-                         McpPromptRegistry mcpPromptRegistry) {
+                         McpPromptRegistry mcpPromptRegistry,
+                         @org.springframework.beans.factory.annotation.Qualifier("mcpWorkerPool")
+                         ExecutorService asyncWorkerPool) {
         this.mcpToolRegistry = mcpToolRegistry;
         this.mcpResourceRegistry = mcpResourceRegistry;
         this.mcpPromptRegistry = mcpPromptRegistry;
+        this.asyncWorkerPool = asyncWorkerPool;
     }
 
     /**

@@ -46,6 +46,8 @@ import {
   generateProceduralModelFromPrompt,
 } from "../lib/narrative/LowPolyProceduralLibrary";
 import { generateInstantProcedural } from "../lib/procedural/ProceduralPrimitives";
+import { disposeObjectTree } from "../lib/scene/disposeObjectTree";
+import { syncSceneMeshRegistry } from "../lib/cad/ClientCsgEngine";
 import { LowPolyCharacter } from "../lib/narrative/LowPolyCharacterRig";
 import { DirectorCameraRig } from "../lib/narrative/DirectorCameraRig";
 import {
@@ -245,6 +247,7 @@ export function Viewport3D({
   const [isXRay, setIsXRay] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isLoadingModel, setIsLoadingModel] = useState<boolean>(false);
+  const [webglContextLost, setWebglContextLost] = useState<boolean>(false);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
 
   // Generation Mode: AI Generate (Google Gemini AI + Headless Blender) vs Procedural (Instant Parametric)
@@ -858,6 +861,16 @@ export function Viewport3D({
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      setWebglContextLost(true);
+    };
+    const handleContextRestored = () => {
+      setWebglContextLost(false);
+    };
+    renderer.domElement.addEventListener("webglcontextlost", handleContextLost);
+    renderer.domElement.addEventListener("webglcontextrestored", handleContextRestored);
+
     // High-Fidelity Post-Processing Chain (SSAO + Bloom + Output tone mapping)
     try {
       const post = new PostProcessingPipeline(
@@ -1336,6 +1349,8 @@ export function Viewport3D({
       if (postPipelineRef.current) {
         postPipelineRef.current.dispose();
       }
+      renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
+      renderer.domElement.removeEventListener("webglcontextrestored", handleContextRestored);
       renderer.dispose();
       universalGizmo.dispose();
       if (container.contains(renderer.domElement)) {
@@ -1447,12 +1462,14 @@ export function Viewport3D({
     if (!assetUrl || !rootModelGroupRef.current || !sceneRef.current) return;
 
     setIsLoadingModel(true);
-    const resolvedUrl = assetUrl.startsWith("http") ? assetUrl : `${apiBase}${assetUrl}`;
+    const resolvedUrl = /^(https?:|blob:|data:)/.test(assetUrl)
+      ? assetUrl
+      : `${apiBase}${assetUrl}`;
 
-    // Clear old models
+    // Clear old models and release their GPU resources
     while (rootModelGroupRef.current.children.length > 0) {
       const obj = rootModelGroupRef.current.children[0];
-      rootModelGroupRef.current.remove(obj);
+      disposeObjectTree(obj);
     }
     if (wireOverlayGroupRef.current) {
       while (wireOverlayGroupRef.current.children.length > 0) {
@@ -1531,6 +1548,7 @@ export function Viewport3D({
 
       setMeshList(detectedMeshes);
       onMeshListUpdate?.(detectedMeshes);
+      syncSceneMeshRegistry(detectedMeshes);
 
       // Auto-select the first detected mesh so the gizmo/inspector are never empty
       if (detectedMeshes.length > 0) {
@@ -2610,6 +2628,7 @@ export function Viewport3D({
 
     setMeshList(list);
     onMeshListUpdate?.(list);
+    syncSceneMeshRegistry(list);
   }, [onMeshListUpdate]);
 
   // Duplicate Selected Sub-Meshes (Shift + D)
@@ -3708,9 +3727,9 @@ export function Viewport3D({
       if (!isCurrent()) return false;
       if (!rootModelGroupRef.current) return false;
 
-      // Clear prior children WITHOUT disposing (kept alive for undo)
+      // Clear prior children; undo restores them by re-uploading freed GPU buffers
       while (rootModelGroupRef.current.children.length > 0) {
-        rootModelGroupRef.current.remove(rootModelGroupRef.current.children[0]);
+        disposeObjectTree(rootModelGroupRef.current.children[0]);
       }
 
       rootModelGroupRef.current.add(proceduralMesh);
@@ -3865,17 +3884,7 @@ export function Viewport3D({
 
       // 1. Clear prior narrative scene group
       if (narrativeRootGroupRef.current) {
-        sceneRef.current.remove(narrativeRootGroupRef.current);
-        narrativeRootGroupRef.current.traverse((child) => {
-          if ((child as any).geometry) (child as any).geometry.dispose();
-          if ((child as any).material) {
-            if (Array.isArray((child as any).material)) {
-              (child as any).material.forEach((m: any) => m.dispose());
-            } else {
-              (child as any).material.dispose();
-            }
-          }
-        });
+        disposeObjectTree(narrativeRootGroupRef.current);
         narrativeRootGroupRef.current = null;
       }
 
@@ -3984,17 +3993,7 @@ export function Viewport3D({
 
   const handleResetNarrativeScene = useCallback(() => {
     if (narrativeRootGroupRef.current && sceneRef.current) {
-      sceneRef.current.remove(narrativeRootGroupRef.current);
-      narrativeRootGroupRef.current.traverse((child) => {
-        if ((child as any).geometry) (child as any).geometry.dispose();
-        if ((child as any).material) {
-          if (Array.isArray((child as any).material)) {
-            (child as any).material.forEach((m: any) => m.dispose());
-          } else {
-            (child as any).material.dispose();
-          }
-        }
-      });
+      disposeObjectTree(narrativeRootGroupRef.current);
       narrativeRootGroupRef.current = null;
     }
     if (sceneRef.current) {
@@ -4274,7 +4273,9 @@ export function Viewport3D({
   // Raw Server Asset Download
   const handleDownloadOriginal = () => {
     if (!assetUrl) return;
-    const resolvedUrl = assetUrl.startsWith("http") ? assetUrl : `${apiBase}${assetUrl}`;
+    const resolvedUrl = /^(https?:|blob:|data:)/.test(assetUrl)
+      ? assetUrl
+      : `${apiBase}${assetUrl}`;
     const a = document.createElement("a");
     a.href = resolvedUrl;
     a.download = assetName || `kosh_model.${format}`;
@@ -4515,6 +4516,16 @@ export function Viewport3D({
                           <span className="font-bold text-[#ea580c] uppercase">{liveDragBadge.type}</span>
                           <span className="text-[#52525b]">|</span>
                           <span className="font-bold text-[#f4f4f5]">{liveDragBadge.text}</span>
+                        </div>
+                      )}
+
+                      {/* WebGL Context Loss Recovery Banner */}
+                      {webglContextLost && (
+                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 select-none">
+                          <div className="px-4 py-3 rounded bg-[#141416] border border-[#ea580c] font-mono text-xs text-[#f4f4f5] flex items-center space-x-2">
+                            <Loader2 className="w-4 h-4 animate-spin text-[#ea580c]" />
+                            <span>WEBGL CONTEXT LOST — RECOVERING GPU STATE...</span>
+                          </div>
                         </div>
                       )}
 

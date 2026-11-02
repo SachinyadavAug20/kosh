@@ -153,7 +153,8 @@ public class BlenderExecutionService {
         long startTime = System.currentTimeMillis();
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(daemonHost, daemonPort), 1500);
-            socket.setSoTimeout(4000); // Strict 4-second socket timeout
+            socket.setKeepAlive(true);
+            socket.setSoTimeout(3000); // Strict 3-second socket timeout
 
             Map<String, Object> req = Map.of(
                     "assetId", assetId,

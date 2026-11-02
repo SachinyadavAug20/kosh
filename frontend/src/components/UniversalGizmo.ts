@@ -1,4 +1,9 @@
 import * as THREE from "three";
+import {
+  pooledGeometry,
+  isPooledGeometry,
+  disposeGizmoGeometryPool,
+} from "../lib/rendering/GizmoGeometryPool";
 
 export type GizmoMode = "all" | "translate" | "rotate" | "scale" | "select";
 
@@ -223,10 +228,10 @@ export class UniversalGizmo {
     // -------------------------------------------------------------
     // 1. Translation Arrows (X, Y, Z)
     // -------------------------------------------------------------
-    const arrowShaftGeo = new THREE.CylinderGeometry(0.015, 0.015, 1.0, 12);
-    const arrowConeGeo = new THREE.ConeGeometry(0.065, 0.22, 16);
+    const arrowShaftGeo = pooledGeometry("gizmo_arrow_shaft", () => new THREE.CylinderGeometry(0.015, 0.015, 1.0, 12));
+    const arrowConeGeo = pooledGeometry("gizmo_arrow_cone", () => new THREE.ConeGeometry(0.065, 0.22, 16));
     // Generous hitbox (radius 0.16)
-    const shaftHitboxGeo = new THREE.CylinderGeometry(0.16, 0.16, 1.15, 8);
+    const shaftHitboxGeo = pooledGeometry("gizmo_shaft_hitbox", () => new THREE.CylinderGeometry(0.16, 0.16, 1.15, 8));
 
     // X Arrow
     const xArrowGroup = new THREE.Group();
@@ -291,8 +296,8 @@ export class UniversalGizmo {
     // -------------------------------------------------------------
     // 2. Planar Drag Squares (XY, XZ, YZ) - Double-sided with crisp edges
     // -------------------------------------------------------------
-    const planeGeo = new THREE.PlaneGeometry(0.22, 0.22);
-    const planeHitboxGeo = new THREE.BoxGeometry(0.35, 0.35, 0.12);
+    const planeGeo = pooledGeometry("gizmo_plane", () => new THREE.PlaneGeometry(0.22, 0.22));
+    const planeHitboxGeo = pooledGeometry("gizmo_plane_hitbox", () => new THREE.BoxGeometry(0.35, 0.35, 0.12));
 
     // XY Plane (Amber / Yellow)
     const xyPlane = new THREE.Mesh(planeGeo, createMat(0xf59e0b, 0.5, true));
@@ -343,9 +348,9 @@ export class UniversalGizmo {
     // -------------------------------------------------------------
     // 3. Rotation Arc Rings (X, Y, Z)
     // -------------------------------------------------------------
-    const ringGeo = new THREE.TorusGeometry(0.85, 0.016, 16, 64);
+    const ringGeo = pooledGeometry("gizmo_ring", () => new THREE.TorusGeometry(0.85, 0.016, 16, 64));
     // Generous torus hitbox (tube 0.14)
-    const ringHitboxGeo = new THREE.TorusGeometry(0.85, 0.14, 8, 32);
+    const ringHitboxGeo = pooledGeometry("gizmo_ring_hitbox", () => new THREE.TorusGeometry(0.85, 0.14, 8, 32));
 
     // X Ring
     const xRing = new THREE.Mesh(ringGeo, createMat(colX, 0.85));
@@ -387,7 +392,7 @@ export class UniversalGizmo {
     // -------------------------------------------------------------
     // 4. Scale Handles (Scale Shafts, Axis Cubes & Uniform Center)
     // -------------------------------------------------------------
-    const scaleShaftGeo = new THREE.CylinderGeometry(0.015, 0.015, 1.05, 8);
+    const scaleShaftGeo = pooledGeometry("gizmo_scale_shaft", () => new THREE.CylinderGeometry(0.015, 0.015, 1.05, 8));
     const xShaftScale = new THREE.Mesh(scaleShaftGeo, createMat(colX));
     xShaftScale.position.set(0.525, 0, 0);
     xShaftScale.rotation.z = -Math.PI / 2;
@@ -402,8 +407,8 @@ export class UniversalGizmo {
     zShaftScale.rotation.x = Math.PI / 2;
     this.scaleShaftsGroup.add(zShaftScale);
 
-    const scaleCubeGeo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
-    const scaleHitboxGeo = new THREE.BoxGeometry(0.28, 0.28, 0.28);
+    const scaleCubeGeo = pooledGeometry("gizmo_scale_cube", () => new THREE.BoxGeometry(0.12, 0.12, 0.12));
+    const scaleHitboxGeo = pooledGeometry("gizmo_scale_hitbox", () => new THREE.BoxGeometry(0.28, 0.28, 0.28));
     const initPos = 0.65;
 
     // X Scale Cube
@@ -455,8 +460,8 @@ export class UniversalGizmo {
     this.zScaleHitbox = zScaleHitbox;
 
     // Uniform Center Octahedron Handle (Faceted diamond with Kosh orange edges)
-    const centerGeo = new THREE.OctahedronGeometry(0.12, 0);
-    const centerHitboxGeo = new THREE.BoxGeometry(0.32, 0.32, 0.32);
+    const centerGeo = pooledGeometry("gizmo_center", () => new THREE.OctahedronGeometry(0.12, 0));
+    const centerHitboxGeo = pooledGeometry("gizmo_center_hitbox", () => new THREE.BoxGeometry(0.32, 0.32, 0.32));
     const centerCube = new THREE.Mesh(centerGeo, createMat(0xf4f4f5, 0.85, true));
     addEdges(centerCube, 0xea580c, 0.95);
     this.scaleGroup.add(centerCube);
@@ -906,10 +911,13 @@ export class UniversalGizmo {
 
   public dispose() {
     this.colliders.forEach((c) => {
-      c.geometry.dispose();
+      if (!isPooledGeometry(c.geometry)) {
+        c.geometry.dispose();
+      }
       (c.material as THREE.Material).dispose();
     });
     this.highlightMaterial.dispose();
+    disposeGizmoGeometryPool();
     if (this.group.parent) {
       this.group.parent.remove(this.group);
     }
