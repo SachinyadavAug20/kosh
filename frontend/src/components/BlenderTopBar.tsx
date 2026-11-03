@@ -36,6 +36,7 @@ import {
   Download,
   RotateCcw,
   Trash2,
+  Camera,
 } from "lucide-react";
 
 export type InteractionMode = "object" | "edit" | "sculpt" | "paint" | "weight";
@@ -61,6 +62,8 @@ export interface BlenderTopBarProps {
   onOpenShare: () => void;
   onOpenShowcase: () => void;
   onOpenKeyModal?: () => void;
+  isPhotoStudioOpen?: boolean;
+  onTogglePhotoStudio?: () => void;
   onExport?: (format: "glb" | "stl" | "obj" | "blend") => void;
   selectedCount?: number;
   onClearCanvas?: () => void;
@@ -139,6 +142,8 @@ export function BlenderTopBar({
   onOpenPasteBpy,
   onOpenShare,
   onOpenShowcase,
+  isPhotoStudioOpen = false,
+  onTogglePhotoStudio,
   headlampEnabled = true,
   onToggleHeadlamp,
   lightingPreset = "cad_studio",
@@ -966,6 +971,23 @@ export function BlenderTopBar({
         </div>
 
         <div className="w-px h-4 bg-[#27272a]" />
+
+        {/* Photo Studio & Camera Staging Trigger */}
+        {onTogglePhotoStudio && (
+          <button
+            type="button"
+            onClick={onTogglePhotoStudio}
+            title="Professional Photo Studio & Staging [F12 / Numpad 0]"
+            className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-mono font-semibold transition-colors border ${
+              isPhotoStudioOpen
+                ? "bg-[#ea580c] border-[#ea580c] text-white shadow-md shadow-[#ea580c]/20"
+                : "bg-[#202024] border-[#27272a] text-[#f4f4f5] hover:border-[#ea580c] hover:text-[#ea580c]"
+            }`}
+          >
+            <Camera className="w-3.5 h-3.5" />
+            <span className="hidden xl:inline">Photo Studio</span>
+          </button>
+        )}
 
         {/* Hotkeys Modal Trigger (F1) */}
         <button

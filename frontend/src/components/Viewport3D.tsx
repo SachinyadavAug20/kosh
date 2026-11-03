@@ -30,6 +30,13 @@ import { BlenderTimeline } from "./BlenderTimeline";
 import { BlenderWorkspace, WorkspacePreset, LeafNode } from "./BlenderWorkspace";
 import { OutlinerEditor, PropertiesEditor, ScriptingEditor, DirectorEditor, McpConsoleEditor } from "./BlenderEditors";
 import { AspectRatioFramer, FramingMode } from "./narrative/AspectRatioFramer";
+import {
+  PhotoStudioPanel,
+  BackgroundMode,
+  GradientTheme,
+  LightingRigState,
+  StudioGridState,
+} from "./PhotoStudioPanel";
 import { VideoExportModal } from "./narrative/VideoExportModal";
 import { ModelPromptBar } from "./ModelPromptBar";
 import { ApiKeyModal } from "./ApiKeyModal";
@@ -105,6 +112,47 @@ export type InteractionMode = "object" | "edit" | "sculpt" | "paint" | "weight";
 export type EditElement = "vertex" | "edge" | "face";
 export type SculptBrush = "draw" | "clay" | "inflate" | "flatten" | "grab" | "crease" | "smooth";
 export type CameraView = "iso" | "front" | "back" | "top" | "bottom" | "right" | "left";
+function createStudioGradientTexture(theme: GradientTheme): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    const grad = ctx.createRadialGradient(256, 256, 40, 256, 256, 360);
+    if (theme === "cosmic_space") {
+      grad.addColorStop(0, "#1e1b4b");
+      grad.addColorStop(0.5, "#0f172a");
+      grad.addColorStop(1, "#030712");
+    } else if (theme === "blueprint_cad") {
+      grad.addColorStop(0, "#1e3a8a");
+      grad.addColorStop(0.6, "#0f172a");
+      grad.addColorStop(1, "#020617");
+    } else if (theme === "clean_white") {
+      grad.addColorStop(0, "#ffffff");
+      grad.addColorStop(0.7, "#f1f5f9");
+      grad.addColorStop(1, "#e2e8f0");
+    } else if (theme === "sunset_warm") {
+      grad.addColorStop(0, "#78350f");
+      grad.addColorStop(0.5, "#451a03");
+      grad.addColorStop(1, "#1c1917");
+    } else if (theme === "cyber_neon") {
+      grad.addColorStop(0, "#0369a1");
+      grad.addColorStop(0.5, "#0f172a");
+      grad.addColorStop(1, "#050505");
+    } else {
+      // studio_dark default
+      grad.addColorStop(0, "#27272a");
+      grad.addColorStop(0.5, "#18181b");
+      grad.addColorStop(1, "#09090b");
+    }
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 512, 512);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 export type AxisConstraint = "none" | "x" | "y" | "z" | "shift-x" | "shift-y" | "shift-z";
 export type SnapTarget = "closest" | "center" | "median" | "active";
 export type TransformMode =
@@ -769,6 +817,106 @@ export function Viewport3D({
       postPipelineRef.current.setEnabled(isPostProcessingEnabled);
     }
   }, [isPostProcessingEnabled]);
+
+  // Photo Studio & Staging State
+  const [isPhotoStudioOpen, setIsPhotoStudioOpen] = useState<boolean>(false);
+  const [studioGridState, setStudioGridState] = useState<StudioGridState>({
+    visible: true,
+    colorMajor: "#3f3f46",
+    colorMinor: "#27272a",
+    size: 1.0,
+    opacity: 1.0,
+  });
+  const [studioBgMode, setStudioBgMode] = useState<BackgroundMode>("solid");
+  const [studioBgColor, setStudioBgColor] = useState<string>("#141416");
+  const [studioBgGradient, setStudioBgGradient] = useState<GradientTheme>("studio_dark");
+  const [studioBgImage, setStudioBgImage] = useState<string | null>(null);
+
+  // Studio Lighting Rig State
+  const [studioLighting, setStudioLighting] = useState<LightingRigState>({
+    keyIntensity: 2.0,
+    keyColor: "#ffffff",
+    fillIntensity: 0.8,
+    fillColor: "#e2e8f0",
+    rimIntensity: 1.2,
+    rimColor: "#f1f5f9",
+    headlamp: true,
+  });
+
+  // Camera & Lens State
+  const [isCameraViewActive, setIsCameraViewActive] = useState<boolean>(false);
+  const [studioFocalLength, setStudioFocalLength] = useState<number>(50);
+  const [studioFramingAspect, setStudioFramingAspect] = useState<FramingMode>("full");
+  const [showFramingGuides, setShowFramingGuides] = useState<boolean>(true);
+  const [transparentSnapshot, setTransparentSnapshot] = useState<boolean>(false);
+  const [resolutionScale, setResolutionScale] = useState<number>(1);
+  const [shutterFlash, setShutterFlash] = useState<boolean>(false);
+
+  // Studio Grid Dynamic Updates
+  useEffect(() => {
+    if (!fadeGridRef.current) return;
+    fadeGridRef.current.visible = studioGridState.visible;
+    const mat = fadeGridRef.current.material as THREE.ShaderMaterial;
+    if (mat && mat.uniforms) {
+      if (mat.uniforms.uColorMajor) {
+        mat.uniforms.uColorMajor.value.set(studioGridState.colorMajor);
+      }
+      if (mat.uniforms.uColorMinor) {
+        mat.uniforms.uColorMinor.value.set(studioGridState.colorMinor);
+      }
+      if (mat.uniforms.uSize) {
+        mat.uniforms.uSize.value = studioGridState.size;
+        mat.uniforms.uMajorSize.value = studioGridState.size * 5.0;
+      }
+    }
+  }, [studioGridState]);
+
+  // Studio Background Dynamic Updates
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const scene = sceneRef.current;
+
+    if (studioBgMode === "solid") {
+      scene.background = new THREE.Color(studioBgColor);
+    } else if (studioBgMode === "gradient") {
+      const tex = createStudioGradientTexture(studioBgGradient);
+      scene.background = tex;
+    } else if (studioBgMode === "image" && studioBgImage) {
+      const loader = new THREE.TextureLoader();
+      loader.load(studioBgImage, (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        scene.background = tex;
+      });
+    }
+  }, [studioBgMode, studioBgColor, studioBgGradient, studioBgImage]);
+
+  // Studio Lighting Dynamic Updates
+  useEffect(() => {
+    if (keyLightRef.current) {
+      keyLightRef.current.intensity = studioLighting.keyIntensity;
+      keyLightRef.current.color.set(studioLighting.keyColor);
+    }
+    if (fillLightRef.current) {
+      fillLightRef.current.intensity = studioLighting.fillIntensity;
+      fillLightRef.current.color.set(studioLighting.fillColor);
+    }
+    if (rimLightRef.current) {
+      rimLightRef.current.intensity = studioLighting.rimIntensity;
+      rimLightRef.current.color.set(studioLighting.rimColor);
+    }
+    if (headlampRef.current) {
+      headlampRef.current.visible = studioLighting.headlamp;
+    }
+  }, [studioLighting]);
+
+  // Studio Camera Lens (Focal Length / FOV) Dynamic Updates
+  useEffect(() => {
+    if (!cameraRef.current) return;
+    const fovMap: Record<number, number> = { 24: 84, 35: 63, 50: 46, 85: 28 };
+    const fov = fovMap[studioFocalLength] || 45;
+    cameraRef.current.fov = fov;
+    cameraRef.current.updateProjectionMatrix();
+  }, [studioFocalLength]);
 
   const syncMeshTransformRef = useRef<((mesh: THREE.Object3D | null) => void) | null>(null);
 
@@ -2919,30 +3067,124 @@ export function Viewport3D({
     if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
   }, []);
 
-  const handleCaptureSnapshot = useCallback((transparentBg: boolean) => {
+  const handleApplyStudioLightingPreset = useCallback((preset: "cad_studio" | "high_key" | "dramatic_rim" | "cyber_neon" | "sunset_warm") => {
+    if (preset === "cad_studio") {
+      setStudioLighting({
+        keyIntensity: 2.0,
+        keyColor: "#ffffff",
+        fillIntensity: 0.8,
+        fillColor: "#e2e8f0",
+        rimIntensity: 1.2,
+        rimColor: "#f1f5f9",
+        headlamp: true,
+      });
+      showUndoToast("Lighting Preset: 3-Point Studio CAD");
+    } else if (preset === "high_key") {
+      setStudioLighting({
+        keyIntensity: 3.2,
+        keyColor: "#ffffff",
+        fillIntensity: 1.6,
+        fillColor: "#ffffff",
+        rimIntensity: 0.8,
+        rimColor: "#f8fafc",
+        headlamp: true,
+      });
+      showUndoToast("Lighting Preset: High-Key Product");
+    } else if (preset === "dramatic_rim") {
+      setStudioLighting({
+        keyIntensity: 1.2,
+        keyColor: "#ffffff",
+        fillIntensity: 0.2,
+        fillColor: "#64748b",
+        rimIntensity: 2.8,
+        rimColor: "#38bdf8",
+        headlamp: false,
+      });
+      showUndoToast("Lighting Preset: Dramatic Rim");
+    } else if (preset === "cyber_neon") {
+      setStudioLighting({
+        keyIntensity: 2.2,
+        keyColor: "#06b6d4",
+        fillIntensity: 0.6,
+        fillColor: "#1e1b4b",
+        rimIntensity: 2.4,
+        rimColor: "#d946ef",
+        headlamp: false,
+      });
+      showUndoToast("Lighting Preset: Cyber Neon");
+    } else if (preset === "sunset_warm") {
+      setStudioLighting({
+        keyIntensity: 2.5,
+        keyColor: "#f59e0b",
+        fillIntensity: 0.8,
+        fillColor: "#7c2d12",
+        rimIntensity: 1.8,
+        rimColor: "#fbbf24",
+        headlamp: true,
+      });
+      showUndoToast("Lighting Preset: Warm Sunset");
+    }
+  }, [showUndoToast]);
+
+  const handleToggleCameraView = useCallback(() => {
+    setIsCameraViewActive((prev) => {
+      const next = !prev;
+      if (next) {
+        if (studioFramingAspect === "full") {
+          setStudioFramingAspect("16:9");
+        }
+        if (cameraRef.current && orbitControlsRef.current) {
+          cameraRef.current.position.set(4.5, 3.2, 4.5);
+          orbitControlsRef.current.target.set(0, 0.7, 0);
+          orbitControlsRef.current.update();
+        }
+        showUndoToast("Camera View Active [Numpad 0]");
+      } else {
+        setStudioFramingAspect("full");
+        showUndoToast("Free Orbit View");
+      }
+      return next;
+    });
+  }, [studioFramingAspect, showUndoToast]);
+
+  const handleTakeStudioSnapshot = useCallback(() => {
     if (!rendererRef.current || !sceneRef.current || !cameraRef.current) return;
     const renderer = rendererRef.current;
     const scene = sceneRef.current;
     const cam = isOrtho && orthoCameraRef.current ? orthoCameraRef.current : cameraRef.current;
 
+    // Trigger visual shutter flash
+    setShutterFlash(true);
+    setTimeout(() => setShutterFlash(false), 250);
+
     const prevBg = scene.background;
-    if (transparentBg) {
+    if (transparentSnapshot) {
       scene.background = null;
     }
 
+    const prevPixelRatio = renderer.getPixelRatio();
+    renderer.setPixelRatio(window.devicePixelRatio * resolutionScale);
     renderer.render(scene, cam);
     const dataUrl = renderer.domElement.toDataURL("image/png");
+    renderer.setPixelRatio(prevPixelRatio);
 
-    if (transparentBg) {
+    if (transparentSnapshot) {
       scene.background = prevBg;
       renderer.render(scene, cam);
     }
 
     const link = document.createElement("a");
-    link.download = `kosh-render-${Date.now()}.png`;
+    link.download = `kosh-photo-render-${Date.now()}.png`;
     link.href = dataUrl;
     link.click();
-  }, [isOrtho]);
+
+    showUndoToast(transparentSnapshot ? "Photo Captured: Transparent PNG" : "Photo Captured: Studio Render");
+  }, [isOrtho, transparentSnapshot, resolutionScale, showUndoToast]);
+
+  const handleCaptureSnapshot = useCallback((transparentBg: boolean) => {
+    setTransparentSnapshot(transparentBg);
+    handleTakeStudioSnapshot();
+  }, [handleTakeStudioSnapshot]);
 
   // -------------------------------------------------------------
   // 7. Comprehensive Native Blender Keyboard Events
@@ -3374,7 +3616,14 @@ export function Viewport3D({
       }
       if (e.key === "0" || e.code === "Numpad0") {
         e.preventDefault();
-        setCameraPreset("iso");
+        handleToggleCameraView();
+        return;
+      }
+
+      // F12 -> Take Photo / Render Snapshot
+      if (e.key === "F12") {
+        e.preventDefault();
+        handleTakeStudioSnapshot();
         return;
       }
 
@@ -3439,6 +3688,8 @@ export function Viewport3D({
     handleDelete,
     handleFocus,
     setCameraPreset,
+    handleToggleCameraView,
+    handleTakeStudioSnapshot,
     onMeshSelect,
     onOpenShortcuts,
   ]);
@@ -4380,6 +4631,8 @@ export function Viewport3D({
         onOpenShare={onOpenShare || (() => {})}
         onOpenShowcase={onOpenShowcase || (() => {})}
         onOpenKeyModal={() => setIsKeyModalOpen(true)}
+        isPhotoStudioOpen={isPhotoStudioOpen}
+        onTogglePhotoStudio={() => setIsPhotoStudioOpen((prev) => !prev)}
         onExport={handleExportDirect}
         selectedCount={selectedMeshes.length}
         onClearCanvas={handleClearCanvas}
@@ -4504,6 +4757,53 @@ export function Viewport3D({
                       onDoubleClick={handleDoubleClick}
                       className="flex-1 w-full h-full relative overflow-hidden outline-none cursor-grab active:cursor-grabbing"
                     >
+                      {/* Aspect Ratio Framing Guides (Numpad 0 Active Camera View) */}
+                      <AspectRatioFramer
+                        mode={studioFramingAspect}
+                        showGuides={showFramingGuides}
+                        containerRef={containerRef}
+                      />
+
+                      {/* Visual Shutter Flash Effect */}
+                      {shutterFlash && (
+                        <div className="absolute inset-0 z-50 bg-white pointer-events-none transition-opacity duration-200" />
+                      )}
+
+                      {/* Professional Photo Studio & Staging Drawer */}
+                      <PhotoStudioPanel
+                        isOpen={isPhotoStudioOpen}
+                        onClose={() => setIsPhotoStudioOpen(false)}
+                        gridState={studioGridState}
+                        onUpdateGrid={(up) => setStudioGridState((prev) => ({ ...prev, ...up }))}
+                        bgMode={studioBgMode}
+                        onSetBgMode={setStudioBgMode}
+                        bgColor={studioBgColor}
+                        onSetBgColor={setStudioBgColor}
+                        bgGradient={studioBgGradient}
+                        onSetBgGradient={setStudioBgGradient}
+                        bgImage={studioBgImage}
+                        onSetBgImage={setStudioBgImage}
+                        lightingState={studioLighting}
+                        onUpdateLighting={(up) => setStudioLighting((prev) => ({ ...prev, ...up }))}
+                        onApplyLightingPreset={handleApplyStudioLightingPreset}
+                        isCameraView={isCameraViewActive}
+                        onToggleCameraView={handleToggleCameraView}
+                        focalLength={studioFocalLength}
+                        onSetFocalLength={setStudioFocalLength}
+                        framingAspect={studioFramingAspect}
+                        onSetFramingAspect={setStudioFramingAspect}
+                        showGuides={showFramingGuides}
+                        onToggleGuides={() => setShowFramingGuides((prev) => !prev)}
+                        isOrtho={isOrtho}
+                        onToggleOrtho={() => setIsOrtho((prev) => !prev)}
+                        onFrameSelected={handleFocus}
+                        transparentExport={transparentSnapshot}
+                        onSetTransparentExport={setTransparentSnapshot}
+                        resolutionScale={resolutionScale}
+                        onSetResolutionScale={setResolutionScale}
+                        onCaptureSnapshot={handleTakeStudioSnapshot}
+                      />
+
                       {/* Friendly Live Numeric Dragging Badge (Attached to Mouse) */}
                       {liveDragBadge && (
                         <div

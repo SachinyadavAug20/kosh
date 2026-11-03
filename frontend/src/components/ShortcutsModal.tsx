@@ -147,8 +147,14 @@ const SHORTCUTS: ShortcutItem[] = [
   },
   {
     keys: ["Num 0", "or", "0"],
-    title: "Default Camera",
-    description: "Reset camera to standard 3/4 isometric viewpoint",
+    title: "Camera View",
+    description: "Look through active camera with aspect ratio safe framing guides",
+    category: "View & Navigation",
+  },
+  {
+    keys: ["F12"],
+    title: "Take Photo / Render",
+    description: "Capture high-resolution snapshot with calibrated studio lighting or transparent PNG cutout",
     category: "View & Navigation",
   },
 
