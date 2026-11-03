@@ -121,6 +121,33 @@ def auto_export(output_path, fmt):
         except Exception:
             pass
         return output_path, ext
+    elif ext in ("png", "jpg", "jpeg") or any(output_path.lower().endswith(x) for x in (".png", ".jpg", ".jpeg")):
+        if not bpy.context.scene.camera:
+            cam_data = bpy.data.cameras.new("Kosh_Render_Cam")
+            cam_obj = bpy.data.objects.new("Kosh_Render_Cam", cam_data)
+            bpy.context.scene.collection.objects.link(cam_obj)
+            bpy.context.scene.camera = cam_obj
+            cam_obj.location = (4.5, -4.5, 3.5)
+            direction = mathutils.Vector((0, 0, 0.5)) - cam_obj.location
+            cam_obj.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
+
+        if not any(o.type == 'LIGHT' for o in bpy.data.objects):
+            sun_data = bpy.data.lights.new(name="Kosh_Sun", type='SUN')
+            sun_data.energy = 4.0
+            sun_obj = bpy.data.objects.new("Kosh_Sun", sun_data)
+            bpy.context.scene.collection.objects.link(sun_obj)
+            sun_obj.location = (5, -4, 8)
+
+        bpy.context.scene.render.image_settings.file_format = 'JPEG' if ext in ("jpg", "jpeg") else 'PNG'
+        bpy.context.scene.render.filepath = output_path
+        bpy.context.scene.render.resolution_x = 1920
+        bpy.context.scene.render.resolution_y = 1080
+        bpy.context.scene.render.resolution_percentage = 100
+        try:
+            bpy.ops.render.render(write_still=True)
+        except Exception as re:
+            print(f"Error rendering image: {re}", file=sys.stderr)
+        return output_path, ext
     else:
         # Pre-verify NumPy availability before gltf export
         try:
@@ -246,6 +273,32 @@ def execute_request(req):
             telem_path = os.path.join(base_dir, base_name + ".json")
             with open(telem_path, "w") as tf:
                 json.dump(telemetry, tf)
+
+            # Generate preview snapshot render if not already rendered and not already an image
+            snap_path = os.path.join(base_dir, base_name + ".png")
+            if not actual_path.lower().endswith(".png") and not os.path.exists(snap_path):
+                try:
+                    if not bpy.context.scene.camera:
+                        cdata = bpy.data.cameras.new("Kosh_Snap_Cam")
+                        cobj = bpy.data.objects.new("Kosh_Snap_Cam", cdata)
+                        bpy.context.scene.collection.objects.link(cobj)
+                        bpy.context.scene.camera = cobj
+                        cobj.location = (4.5, -4.5, 3.5)
+                        direction = mathutils.Vector((0, 0, 0.5)) - cobj.location
+                        cobj.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
+                    if not any(o.type == 'LIGHT' for o in bpy.data.objects):
+                        ldata = bpy.data.lights.new(name="Kosh_Sun", type='SUN')
+                        ldata.energy = 4.0
+                        lobj = bpy.data.objects.new("Kosh_Sun", ldata)
+                        bpy.context.scene.collection.objects.link(lobj)
+                        lobj.location = (4, 4, 8)
+                    bpy.context.scene.render.image_settings.file_format = 'PNG'
+                    bpy.context.scene.render.filepath = snap_path
+                    bpy.context.scene.render.resolution_x = 800
+                    bpy.context.scene.render.resolution_y = 600
+                    bpy.ops.render.render(write_still=True)
+                except Exception as se:
+                    pass
         except Exception:
             pass
 

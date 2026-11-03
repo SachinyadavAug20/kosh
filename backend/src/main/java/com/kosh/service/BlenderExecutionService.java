@@ -111,7 +111,7 @@ public class BlenderExecutionService {
     public BlenderRunResult executeScript(String script, String format) {
         String requestedExt = (format != null) ? format.trim().toLowerCase() : "glb";
         String ext;
-        if (java.util.Set.of("stl", "obj", "fbx", "usdz", "usd", "blend").contains(requestedExt)) {
+        if (java.util.Set.of("stl", "obj", "fbx", "usdz", "usd", "blend", "png", "jpg").contains(requestedExt)) {
             ext = requestedExt;
         } else {
             ext = "glb";
@@ -138,7 +138,7 @@ public class BlenderExecutionService {
             }
         }
 
-        // Tier 2: Direct Process Execution with Strict 4s Timeout
+        // Tier 2: Direct Process Execution with Strict Timeout
         return executeViaDirectProcess(sanitizedScript, ext, assetId, assetFileName, outputFile);
     }
 
@@ -154,7 +154,8 @@ public class BlenderExecutionService {
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(daemonHost, daemonPort), 1500);
             socket.setKeepAlive(true);
-            socket.setSoTimeout(3000); // Strict 3-second socket timeout
+            int socketTimeoutMs = (ext.equals("png") || ext.equals("jpg")) ? 15000 : 8000;
+            socket.setSoTimeout(socketTimeoutMs);
 
             Map<String, Object> req = Map.of(
                     "assetId", assetId,
@@ -662,6 +663,103 @@ public class BlenderExecutionService {
         }
 
         return outputBlend;
+    }
+
+    /**
+     * Executes photorealistic raytraced render of GLB scene bytes or existing scene asset using Blender.
+     */
+    public BlenderRunResult renderGlbScene(byte[] glbBytes, Map<String, Object> options) {
+        String assetId = UUID.randomUUID().toString().substring(0, 12);
+        String assetFileName = "kosh_render_" + assetId + ".png";
+        Path outputFile = storagePath.resolve(assetFileName);
+        Path tempGlb = storagePath.resolve("temp_render_" + assetId + ".glb");
+
+        try {
+            if (glbBytes != null && glbBytes.length > 0) {
+                Files.write(tempGlb, glbBytes);
+            }
+
+            int resX = options != null && options.containsKey("resolutionX") ? ((Number) options.get("resolutionX")).intValue() : 1920;
+            int resY = options != null && options.containsKey("resolutionY") ? ((Number) options.get("resolutionY")).intValue() : 1080;
+            boolean transparent = options != null && Boolean.TRUE.equals(options.get("transparent"));
+            double focalLength = options != null && options.containsKey("focalLength") ? ((Number) options.get("focalLength")).doubleValue() : 50.0;
+
+            String renderScript = String.format("""
+                import bpy, os, sys, mathutils
+                from mathutils import Vector, Euler
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+
+                glb_file = "%s"
+                if os.path.exists(glb_file):
+                    bpy.ops.import_scene.gltf(filepath=glb_file)
+
+                # Camera setup
+                cam_data = bpy.data.cameras.new("Kosh_Render_Cam")
+                cam_data.lens = %.1f
+                cam_obj = bpy.data.objects.new("Kosh_Render_Cam", cam_data)
+                bpy.context.scene.collection.objects.link(cam_obj)
+                bpy.context.scene.camera = cam_obj
+                cam_obj.location = (4.5, -4.5, 3.5)
+                direction = Vector((0, 0, 0.5)) - cam_obj.location
+                cam_obj.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
+
+                # 3-Point Studio Lighting
+                key_data = bpy.data.lights.new(name="Key_Sun", type='SUN')
+                key_data.energy = 4.5
+                key_obj = bpy.data.objects.new("Key_Sun", key_data)
+                bpy.context.scene.collection.objects.link(key_obj)
+                key_obj.location = (5.0, -4.0, 8.0)
+                key_obj.rotation_euler = (0.785, 0.3, 0.5)
+
+                fill_data = bpy.data.lights.new(name="Fill_Light", type='POINT')
+                fill_data.energy = 250.0
+                fill_obj = bpy.data.objects.new("Fill_Light", fill_data)
+                bpy.context.scene.collection.objects.link(fill_obj)
+                fill_obj.location = (-4.0, -3.0, 4.0)
+
+                rim_data = bpy.data.lights.new(name="Rim_Light", type='POINT')
+                rim_data.energy = 400.0
+                rim_obj = bpy.data.objects.new("Rim_Light", rim_data)
+                bpy.context.scene.collection.objects.link(rim_obj)
+                rim_obj.location = (2.0, 6.0, 5.0)
+
+                # Render configuration
+                scene = bpy.context.scene
+                scene.render.image_settings.file_format = 'PNG'
+                scene.render.filepath = "%s"
+                scene.render.resolution_x = %d
+                scene.render.resolution_y = %d
+                scene.render.resolution_percentage = 100
+                scene.render.film_transparent = %s
+
+                try:
+                    scene.render.engine = 'BLENDER_EEVEE'
+                except Exception:
+                    pass
+
+                bpy.ops.render.render(write_still=True)
+                """,
+                tempGlb.toAbsolutePath().toString(),
+                focalLength,
+                outputFile.toAbsolutePath().toString(),
+                resX,
+                resY,
+                transparent ? "True" : "False"
+            );
+
+            BlenderRunResult res = executeScript(renderScript, "png");
+            if (Files.exists(tempGlb)) {
+                try { Files.deleteIfExists(tempGlb); } catch (Exception ignored) {}
+            }
+            return res;
+        } catch (Exception e) {
+            log.error("Failed to render GLB scene in Blender: {}", e.getMessage(), e);
+            return BlenderRunResult.builder()
+                    .success(false)
+                    .errorMessage("Blender render failed: " + e.getMessage())
+                    .build();
+        }
     }
 
     private String readStream(InputStream inputStream) {

@@ -149,4 +149,46 @@ public class AssetController {
 
         return ResponseEntity.ok(assets);
     }
+
+    /**
+     * Executes photorealistic raytraced render of an existing asset or uploaded scene bytes in Blender.
+     */
+    @org.springframework.web.bind.annotation.PostMapping(value = "/render", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> renderScene(@org.springframework.web.bind.annotation.RequestBody Map<String, Object> req) {
+        try {
+            byte[] glbBytes = null;
+            if (req.containsKey("glbBase64") && req.get("glbBase64") != null) {
+                String b64 = req.get("glbBase64").toString();
+                if (b64.contains(",")) {
+                    b64 = b64.substring(b64.indexOf(",") + 1);
+                }
+                glbBytes = java.util.Base64.getDecoder().decode(b64);
+            } else if (req.containsKey("assetName") && req.get("assetName") != null) {
+                String name = req.get("assetName").toString();
+                Path assetPath = blenderExecutionService.getStoragePath().resolve(name);
+                if (Files.exists(assetPath)) {
+                    glbBytes = Files.readAllBytes(assetPath);
+                }
+            }
+
+            BlenderExecutionService.BlenderRunResult result = blenderExecutionService.renderGlbScene(glbBytes, req);
+            if (result.isSuccess()) {
+                return ResponseEntity.ok(Map.of(
+                        "success", true,
+                        "imageUrl", "/api/assets/" + result.getAssetFileName(),
+                        "fileName", result.getAssetFileName(),
+                        "engine", "Blender EEVEE",
+                        "executionTimeMs", result.getExecutionTimeMs()
+                ));
+            } else {
+                return ResponseEntity.status(500).body(Map.of(
+                        "success", false,
+                        "error", result.getErrorMessage() != null ? result.getErrorMessage() : "Render failed"
+                ));
+            }
+        } catch (Exception e) {
+            log.error("Asset render error: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("success", false, "error", e.getMessage()));
+        }
+    }
 }

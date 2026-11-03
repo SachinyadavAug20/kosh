@@ -91,6 +91,7 @@ class McpProtocolTest {
         assertTrue(toolNames.contains("cad_batch_csg"));
         assertTrue(toolNames.contains("cad_apply_fillet_chamfer"));
         assertTrue(toolNames.contains("cad_compose_compound_scene"));
+        assertTrue(toolNames.contains("cad_render_frame"));
     }
 
     @Test

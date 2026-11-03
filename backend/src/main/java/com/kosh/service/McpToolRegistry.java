@@ -26,6 +26,8 @@ public class McpToolRegistry {
             "cad_inspect_scene",
             "cad_synthesize_composite",
             "cad_compose_compound_scene",
+            "cad_render_frame",
+            "blender_render_frame",
             // Instant Composite Assembly Tools (no LLM round-trip, pre-baked templates)
             "cad_assemble_kit",
             "cad_batch_csg",
@@ -214,6 +216,25 @@ public class McpToolRegistry {
                 "required", List.of("subject", "environment")
         ));
         tools.add(compoundTool);
+
+        // 5c. cad_render_frame (Physically-based photorealistic rendering in Blender EEVEE/Cycles)
+        Map<String, Object> renderTool = new LinkedHashMap<>();
+        renderTool.put("name", "cad_render_frame");
+        renderTool.put("description", "Executes an actual physically-based raytraced render of the 3D model or scene using Blender's EEVEE or Cycles engine with studio lighting and camera framing, producing a photorealistic 2D rendered image.");
+        renderTool.put("inputSchema", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "assetName", Map.of("type", "string", "description", "Optional existing asset file name to render"),
+                        "prompt", Map.of("type", "string", "description", "Optional natural language scene/object description to synthesize and render"),
+                        "script", Map.of("type", "string", "description", "Optional custom bpy python script to render"),
+                        "resolutionX", Map.of("type", "integer", "description", "Render width in pixels (default: 1920)"),
+                        "resolutionY", Map.of("type", "integer", "description", "Render height in pixels (default: 1080)"),
+                        "engine", Map.of("type", "string", "enum", List.of("eevee", "cycles"), "description", "Blender render engine (default: eevee)"),
+                        "transparentBg", Map.of("type", "boolean", "description", "Render with transparent alpha background for cutout/logo use"),
+                        "focalLength", Map.of("type", "number", "description", "Camera lens focal length in mm (default: 50.0)")
+                )
+        ));
+        tools.add(renderTool);
 
         // 6. cad_assemble_kit (instant pre-baked kitbashing assembly, zero LLM latency)
         Map<String, Object> kitTool = new LinkedHashMap<>();
@@ -594,6 +615,39 @@ public class McpToolRegistry {
             format = targetFmt;
             String compoundPrompt = String.format("%s in %s", subject, env);
             finalScript = googleGeminiClient.generateProceduralModelScript(compoundPrompt, "blender_mesh", format);
+        } else if ("cad_render_frame".equals(normalizedName) || "blender_render_frame".equals(normalizedName)) {
+            format = "png";
+            if (arguments != null && arguments.containsKey("assetName") && arguments.get("assetName") != null) {
+                String name = arguments.get("assetName").toString();
+                Path assetPath = blenderExecutionService.getStoragePath().resolve(name);
+                byte[] glbBytes = null;
+                if (java.nio.file.Files.exists(assetPath)) {
+                    glbBytes = java.nio.file.Files.readAllBytes(assetPath);
+                }
+                BlenderExecutionService.BlenderRunResult renderRes = blenderExecutionService.renderGlbScene(glbBytes, arguments);
+                return ToolExecutionDto.Result.builder()
+                        .success(renderRes.isSuccess())
+                        .toolName(normalizedName)
+                        .assetId(renderRes.getAssetId())
+                        .assetName(renderRes.getAssetFileName())
+                        .assetUrl("/api/assets/" + renderRes.getAssetFileName())
+                        .snapshotUrl("/api/assets/" + renderRes.getAssetFileName())
+                        .format("png")
+                        .sizeBytes(renderRes.getSizeBytes())
+                        .executionTimeMs(renderRes.getExecutionTimeMs())
+                        .build();
+            }
+            if (rawScript != null && !rawScript.isBlank()) {
+                finalScript = rawScript;
+            } else if (prompt != null && !prompt.isBlank()) {
+                finalScript = googleGeminiClient.generateBlenderScript(prompt, previousScript, normalizedName, token, "png");
+            } else {
+                finalScript = """
+                    import bpy
+                    bpy.ops.wm.read_factory_settings(use_empty=True)
+                    bpy.ops.mesh.primitive_cylinder_add(radius=1.0, depth=2.0)
+                    """;
+            }
         } else if ("cad_synthesize_composite".equals(normalizedName)) {
             String userPrompt = (prompt != null && !prompt.isBlank()) ? prompt : "Precision Parametric Mechanical CAD Component";
             String style = arguments != null && arguments.containsKey("style") && arguments.get("style") != null
