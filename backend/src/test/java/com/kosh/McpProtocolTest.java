@@ -90,6 +90,7 @@ class McpProtocolTest {
         assertTrue(toolNames.contains("cad_assemble_kit"));
         assertTrue(toolNames.contains("cad_batch_csg"));
         assertTrue(toolNames.contains("cad_apply_fillet_chamfer"));
+        assertTrue(toolNames.contains("cad_compose_compound_scene"));
     }
 
     @Test
@@ -119,7 +120,8 @@ class McpProtocolTest {
         assertTrue(uris.contains("kosh://specs/hardware/metric-fasteners"));
         assertTrue(uris.contains("kosh://materials/pbr-presets"));
         assertTrue(uris.contains("kosh://guidelines/fdm-tolerances"));
-        assertEquals(9, resources.size());
+        assertTrue(uris.contains("kosh://library/modular-models"));
+        assertEquals(10, resources.size());
     }
 
     @Test

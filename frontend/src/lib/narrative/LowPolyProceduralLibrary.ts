@@ -1344,6 +1344,560 @@ export function createProceduralCat(): THREE.Group {
   return group;
 }
 
+export function createProceduralDog(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Dog";
+
+  const furMat = createLowPolyMaterial("#d97706", { roughness: 0.7, metalness: 0.05 });
+  const bellyMat = createLowPolyMaterial("#fef3c7", { roughness: 0.75, metalness: 0.0 });
+  const noseMat = createLowPolyMaterial("#18181b", { roughness: 0.25, metalness: 0.1 });
+  const eyeMat = createLowPolyMaterial("#27272a", { roughness: 0.1, metalness: 0.2, emissive: new THREE.Color("#18181b"), emissiveIntensity: 0.2 });
+  const tongueMat = createLowPolyMaterial("#f43f5e", { roughness: 0.4, metalness: 0.0 });
+  const collarMat = createLowPolyMaterial("#0284c7", { roughness: 0.4, metalness: 0.3 });
+  const tagMat = createLowPolyMaterial("#f59e0b", { roughness: 0.2, metalness: 0.95 });
+
+  // 1. Torso / Body (stout, sturdy canine build)
+  const bodyGeo = new THREE.CylinderGeometry(0.36, 0.42, 1.35, 16);
+  bodyGeo.rotateX(Math.PI / 2);
+  bodyGeo.computeVertexNormals();
+  const body = new THREE.Mesh(bodyGeo, furMat);
+  body.name = "Dog_Body";
+  body.position.set(0, 0.72, 0);
+  body.castShadow = true;
+  body.receiveShadow = true;
+  group.add(body);
+
+  // 2. Chest & Belly Pad
+  const chestGeo = new THREE.BoxGeometry(0.52, 0.42, 0.9);
+  chestGeo.computeVertexNormals();
+  const chest = new THREE.Mesh(chestGeo, bellyMat);
+  chest.name = "Dog_Chest";
+  chest.position.set(0, 0.62, 0.2);
+  group.add(chest);
+
+  // 3. Head
+  const headGeo = new THREE.SphereGeometry(0.4, 16, 12);
+  headGeo.scale(1.0, 0.95, 1.05);
+  headGeo.computeVertexNormals();
+  const head = new THREE.Mesh(headGeo, furMat);
+  head.name = "Dog_Head";
+  head.position.set(0, 1.08, 0.72);
+  head.castShadow = true;
+  group.add(head);
+
+  // 4. Snout / Muzzle
+  const muzzleGeo = new THREE.BoxGeometry(0.3, 0.22, 0.35);
+  muzzleGeo.computeVertexNormals();
+  const muzzle = new THREE.Mesh(muzzleGeo, bellyMat);
+  muzzle.name = "Dog_Muzzle";
+  muzzle.position.set(0, 0.96, 1.15);
+  muzzle.castShadow = true;
+  group.add(muzzle);
+
+  // Nose
+  const noseGeo = new THREE.BoxGeometry(0.12, 0.09, 0.1);
+  noseGeo.computeVertexNormals();
+  const nose = new THREE.Mesh(noseGeo, noseMat);
+  nose.name = "Dog_Nose";
+  nose.position.set(0, 1.04, 1.32);
+  group.add(nose);
+
+  // Tongue
+  const tongueGeo = new THREE.BoxGeometry(0.12, 0.04, 0.16);
+  tongueGeo.computeVertexNormals();
+  const tongue = new THREE.Mesh(tongueGeo, tongueMat);
+  tongue.name = "Dog_Tongue";
+  tongue.position.set(0, 0.88, 1.25);
+  tongue.rotation.x = 0.25;
+  group.add(tongue);
+
+  // 5. Floppy Ears (Left & Right)
+  for (const [side, sx] of [["Left", -0.28], ["Right", 0.28]] as const) {
+    const earGeo = new THREE.BoxGeometry(0.14, 0.32, 0.12);
+    earGeo.computeVertexNormals();
+    const ear = new THREE.Mesh(earGeo, furMat);
+    ear.name = `Dog_Ear_${side}`;
+    ear.position.set(sx, 1.22, 0.65);
+    ear.rotation.set(0.15, 0, sx < 0 ? -0.45 : 0.45);
+    ear.castShadow = true;
+    group.add(ear);
+  }
+
+  // 6. Eyes
+  for (const [side, sx] of [["Left", -0.16], ["Right", 0.16]] as const) {
+    const eyeGeo = new THREE.SphereGeometry(0.07, 10, 8);
+    eyeGeo.computeVertexNormals();
+    const eye = new THREE.Mesh(eyeGeo, eyeMat);
+    eye.name = `Dog_Eye_${side}`;
+    eye.position.set(sx, 1.15, 1.05);
+    group.add(eye);
+  }
+
+  // 7. Four Legs with Paws
+  const dogLegPositions = [
+    { name: "Dog_Leg_Front_Left", x: -0.24, y: 0.36, z: 0.45 },
+    { name: "Dog_Leg_Front_Right", x: 0.24, y: 0.36, z: 0.45 },
+    { name: "Dog_Leg_Back_Left", x: -0.26, y: 0.36, z: -0.45 },
+    { name: "Dog_Leg_Back_Right", x: 0.26, y: 0.36, z: -0.45 },
+  ];
+  const dogLegGeo = new THREE.CylinderGeometry(0.1, 0.08, 0.65, 12);
+  dogLegGeo.computeVertexNormals();
+  const dogPawGeo = new THREE.BoxGeometry(0.18, 0.1, 0.22);
+  dogPawGeo.computeVertexNormals();
+
+  dogLegPositions.forEach((pos) => {
+    const leg = new THREE.Mesh(dogLegGeo, furMat);
+    leg.name = pos.name;
+    leg.position.set(pos.x, pos.y, pos.z);
+    leg.castShadow = true;
+    leg.receiveShadow = true;
+    group.add(leg);
+
+    const paw = new THREE.Mesh(dogPawGeo, bellyMat);
+    paw.name = `${pos.name}_Paw`;
+    paw.position.set(pos.x, 0.06, pos.z + 0.04);
+    paw.castShadow = true;
+    group.add(paw);
+  });
+
+  // 8. Wagging Tail
+  const dogTailSegments = [
+    { x: 0, y: 0.8, z: -0.75, rx: -0.8 },
+    { x: 0, y: 1.05, z: -0.92, rx: -0.5 },
+    { x: 0, y: 1.3, z: -0.95, rx: 0.2 },
+    { x: 0, y: 1.48, z: -0.82, rx: 0.8 },
+  ];
+  const dogTailGeo = new THREE.CylinderGeometry(0.07, 0.05, 0.28, 10);
+  dogTailGeo.computeVertexNormals();
+  dogTailSegments.forEach((seg, i) => {
+    const tailSeg = new THREE.Mesh(dogTailGeo, furMat);
+    tailSeg.name = `Dog_Tail_Segment_${i + 1}`;
+    tailSeg.position.set(seg.x, seg.y, seg.z);
+    tailSeg.rotation.x = seg.rx;
+    tailSeg.castShadow = true;
+    group.add(tailSeg);
+  });
+
+  // 9. Collar & Tag
+  const collarGeo = new THREE.TorusGeometry(0.38, 0.04, 8, 24);
+  collarGeo.rotateX(Math.PI / 2);
+  collarGeo.computeVertexNormals();
+  const collar = new THREE.Mesh(collarGeo, collarMat);
+  collar.name = "Dog_Collar";
+  collar.position.set(0, 0.85, 0.65);
+  group.add(collar);
+
+  const tagGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.02, 12);
+  tagGeo.rotateX(Math.PI / 2);
+  tagGeo.computeVertexNormals();
+  const tag = new THREE.Mesh(tagGeo, tagMat);
+  tag.name = "Dog_Tag";
+  tag.position.set(0, 0.72, 1.02);
+  group.add(tag);
+
+  return group;
+}
+
+export function createProceduralElephant(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Elephant";
+
+  const hideMat = createLowPolyMaterial("#64748b", { roughness: 0.85, metalness: 0.05 });
+  const innerEarMat = createLowPolyMaterial("#cbd5e1", { roughness: 0.75, metalness: 0.0 });
+  const tuskMat = createLowPolyMaterial("#fef08a", { roughness: 0.25, metalness: 0.2 });
+  const eyeMat = createLowPolyMaterial("#1e293b", { roughness: 0.1, metalness: 0.1 });
+  const padMat = createLowPolyMaterial("#475569", { roughness: 0.9, metalness: 0.0 });
+
+  // 1. Massive Rounded Barrel Torso
+  const bodyGeo = new THREE.CylinderGeometry(0.75, 0.82, 1.85, 18);
+  bodyGeo.rotateX(Math.PI / 2);
+  bodyGeo.computeVertexNormals();
+  const body = new THREE.Mesh(bodyGeo, hideMat);
+  body.name = "Elephant_Body";
+  body.position.set(0, 1.45, 0);
+  body.castShadow = true;
+  body.receiveShadow = true;
+  group.add(body);
+
+  // 2. Large Head
+  const headGeo = new THREE.SphereGeometry(0.68, 16, 14);
+  headGeo.scale(1.0, 1.05, 1.0);
+  headGeo.computeVertexNormals();
+  const head = new THREE.Mesh(headGeo, hideMat);
+  head.name = "Elephant_Head";
+  head.position.set(0, 1.75, 1.05);
+  head.castShadow = true;
+  group.add(head);
+
+  // 3. Huge Flapping Ears
+  for (const [side, sx] of [["Left", -0.75], ["Right", 0.75]] as const) {
+    const earGeo = new THREE.BoxGeometry(0.12, 0.95, 0.75);
+    earGeo.computeVertexNormals();
+    const ear = new THREE.Mesh(earGeo, hideMat);
+    ear.name = `Elephant_Ear_${side}`;
+    ear.position.set(sx, 1.82, 0.95);
+    ear.rotation.set(0.1, sx < 0 ? -0.35 : 0.35, sx < 0 ? 0.2 : -0.2);
+    ear.castShadow = true;
+    group.add(ear);
+
+    const innerEarGeo = new THREE.BoxGeometry(0.06, 0.8, 0.6);
+    innerEarGeo.computeVertexNormals();
+    const innerEar = new THREE.Mesh(innerEarGeo, innerEarMat);
+    innerEar.name = `Elephant_Inner_Ear_${side}`;
+    innerEar.position.set(sx * 0.96, 1.82, 0.96);
+    innerEar.rotation.set(0.1, sx < 0 ? -0.35 : 0.35, sx < 0 ? 0.2 : -0.2);
+    group.add(innerEar);
+  }
+
+  // 4. Curved Trunk in 5 Segments
+  const trunkSegments = [
+    { y: 1.45, z: 1.55, r1: 0.22, r2: 0.19, len: 0.35, rx: 0.3 },
+    { y: 1.25, z: 1.72, r1: 0.19, r2: 0.16, len: 0.32, rx: 0.6 },
+    { y: 1.1, z: 1.92, r1: 0.16, r2: 0.14, len: 0.3, rx: 0.9 },
+    { y: 1.05, z: 2.15, r1: 0.14, r2: 0.12, len: 0.28, rx: 1.35 },
+    { y: 1.18, z: 2.32, r1: 0.12, r2: 0.09, len: 0.25, rx: 1.85 },
+  ];
+  trunkSegments.forEach((t, i) => {
+    const segGeo = new THREE.CylinderGeometry(t.r2, t.r1, t.len, 12);
+    segGeo.computeVertexNormals();
+    const seg = new THREE.Mesh(segGeo, hideMat);
+    seg.name = `Elephant_Trunk_Segment_${i + 1}`;
+    seg.position.set(0, t.y, t.z);
+    seg.rotation.x = t.rx;
+    seg.castShadow = true;
+    group.add(seg);
+  });
+
+  // 5. Majestic Ivory Tusks
+  for (const [side, sx] of [["Left", -0.28], ["Right", 0.28]] as const) {
+    const tuskGeo = new THREE.CylinderGeometry(0.04, 0.09, 0.65, 10);
+    tuskGeo.computeVertexNormals();
+    const tusk = new THREE.Mesh(tuskGeo, tuskMat);
+    tusk.name = `Elephant_Tusk_${side}`;
+    tusk.position.set(sx, 1.32, 1.62);
+    tusk.rotation.set(0.9, sx < 0 ? -0.2 : 0.2, sx < 0 ? 0.15 : -0.15);
+    tusk.castShadow = true;
+    group.add(tusk);
+  }
+
+  // 6. Eyes
+  for (const [side, sx] of [["Left", -0.48], ["Right", 0.48]] as const) {
+    const eyeGeo = new THREE.SphereGeometry(0.065, 10, 8);
+    eyeGeo.computeVertexNormals();
+    const eye = new THREE.Mesh(eyeGeo, eyeMat);
+    eye.name = `Elephant_Eye_${side}`;
+    eye.position.set(sx, 1.88, 1.45);
+    group.add(eye);
+  }
+
+  // 7. Four Pillar Legs with Foot Pads
+  const elephantLegPositions = [
+    { name: "Elephant_Leg_Front_Left", x: -0.42, y: 0.65, z: 0.6 },
+    { name: "Elephant_Leg_Front_Right", x: 0.42, y: 0.65, z: 0.6 },
+    { name: "Elephant_Leg_Back_Left", x: -0.44, y: 0.65, z: -0.6 },
+    { name: "Elephant_Leg_Back_Right", x: 0.44, y: 0.65, z: -0.6 },
+  ];
+  const eleLegGeo = new THREE.CylinderGeometry(0.25, 0.28, 1.3, 14);
+  eleLegGeo.computeVertexNormals();
+  const elePadGeo = new THREE.CylinderGeometry(0.29, 0.31, 0.12, 14);
+  elePadGeo.computeVertexNormals();
+
+  elephantLegPositions.forEach((pos) => {
+    const leg = new THREE.Mesh(eleLegGeo, hideMat);
+    leg.name = pos.name;
+    leg.position.set(pos.x, pos.y, pos.z);
+    leg.castShadow = true;
+    leg.receiveShadow = true;
+    group.add(leg);
+
+    const pad = new THREE.Mesh(elePadGeo, padMat);
+    pad.name = `${pos.name}_Pad`;
+    pad.position.set(pos.x, 0.06, pos.z);
+    pad.castShadow = true;
+    group.add(pad);
+  });
+
+  // 8. Tail with Tuft
+  const tailGeo = new THREE.CylinderGeometry(0.04, 0.03, 0.7, 8);
+  tailGeo.computeVertexNormals();
+  const tail = new THREE.Mesh(tailGeo, hideMat);
+  tail.name = "Elephant_Tail";
+  tail.position.set(0, 1.25, -1.0);
+  tail.rotation.x = -0.3;
+  tail.castShadow = true;
+  group.add(tail);
+
+  const tuftGeo = new THREE.ConeGeometry(0.08, 0.18, 6);
+  tuftGeo.computeVertexNormals();
+  const tuft = new THREE.Mesh(tuftGeo, padMat);
+  tuft.name = "Elephant_Tail_Tuft";
+  tuft.position.set(0, 0.92, -1.1);
+  tuft.rotation.x = -0.3;
+  group.add(tuft);
+
+  return group;
+}
+
+export function createProceduralAstronaut(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "Procedural_Astronaut";
+
+  const suitMat = createLowPolyMaterial("#f1f5f9", { roughness: 0.6, metalness: 0.1 });
+  const visorMat = createLowPolyMaterial("#f59e0b", { roughness: 0.08, metalness: 0.95 });
+  const packMat = createLowPolyMaterial("#334155", { roughness: 0.4, metalness: 0.5 });
+  const bootMat = createLowPolyMaterial("#1e293b", { roughness: 0.8, metalness: 0.1 });
+  const cyanLightMat = createLowPolyMaterial("#06b6d4", { roughness: 0.1, metalness: 0.1, emissive: new THREE.Color("#00f0ff"), emissiveIntensity: 2.0 });
+
+  // 1. Torso / Spacesuit Core
+  const chestGeo = new THREE.BoxGeometry(0.65, 0.75, 0.45);
+  chestGeo.computeVertexNormals();
+  const chest = new THREE.Mesh(chestGeo, suitMat);
+  chest.name = "Astronaut_Torso";
+  chest.position.set(0, 1.2, 0);
+  chest.castShadow = true;
+  group.add(chest);
+
+  // Chest Telemetry Control Unit
+  const unitGeo = new THREE.BoxGeometry(0.35, 0.28, 0.12);
+  unitGeo.computeVertexNormals();
+  const unit = new THREE.Mesh(unitGeo, packMat);
+  unit.name = "Astronaut_Chest_Pack";
+  unit.position.set(0, 1.25, 0.26);
+  group.add(unit);
+
+  const ledGeo = new THREE.SphereGeometry(0.03, 8, 8);
+  const led = new THREE.Mesh(ledGeo, cyanLightMat);
+  led.name = "Astronaut_LED_Status";
+  led.position.set(0.1, 1.3, 0.33);
+  group.add(led);
+
+  // 2. Helmet
+  const helmetGeo = new THREE.SphereGeometry(0.36, 16, 14);
+  helmetGeo.computeVertexNormals();
+  const helmet = new THREE.Mesh(helmetGeo, suitMat);
+  helmet.name = "Astronaut_Helmet";
+  helmet.position.set(0, 1.78, 0);
+  helmet.castShadow = true;
+  group.add(helmet);
+
+  // Gold Reflective Bubble Visor
+  const visorGeo = new THREE.SphereGeometry(0.28, 16, 14, 0, Math.PI);
+  visorGeo.rotateY(-Math.PI / 2);
+  visorGeo.computeVertexNormals();
+  const visor = new THREE.Mesh(visorGeo, visorMat);
+  visor.name = "Astronaut_Visor";
+  visor.position.set(0, 1.78, 0.12);
+  group.add(visor);
+
+  // 3. PLSS Backpack
+  const packGeo = new THREE.BoxGeometry(0.55, 0.85, 0.32);
+  packGeo.computeVertexNormals();
+  const pack = new THREE.Mesh(packGeo, packMat);
+  pack.name = "Astronaut_Backpack";
+  pack.position.set(0, 1.25, -0.36);
+  pack.castShadow = true;
+  group.add(pack);
+
+  for (const [side, sx] of [["Left", -0.15], ["Right", 0.15]] as const) {
+    const tankGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.45, 12);
+    tankGeo.computeVertexNormals();
+    const tank = new THREE.Mesh(tankGeo, suitMat);
+    tank.name = `Astronaut_O2_Tank_${side}`;
+    tank.position.set(sx, 1.72, -0.36);
+    group.add(tank);
+  }
+
+  // 4. Arms & Gloves
+  for (const [side, sx] of [["Left", -0.48], ["Right", 0.48]] as const) {
+    const armGeo = new THREE.CylinderGeometry(0.12, 0.1, 0.6, 10);
+    armGeo.computeVertexNormals();
+    const arm = new THREE.Mesh(armGeo, suitMat);
+    arm.name = `Astronaut_Arm_${side}`;
+    arm.position.set(sx, 1.15, 0);
+    arm.rotation.z = sx < 0 ? 0.25 : -0.25;
+    arm.castShadow = true;
+    group.add(arm);
+
+    const gloveGeo = new THREE.BoxGeometry(0.14, 0.16, 0.16);
+    gloveGeo.computeVertexNormals();
+    const glove = new THREE.Mesh(gloveGeo, bootMat);
+    glove.name = `Astronaut_Glove_${side}`;
+    glove.position.set(sx * 1.25, 0.8, 0.05);
+    group.add(glove);
+  }
+
+  // 5. Legs & Boots
+  for (const [side, sx] of [["Left", -0.2], ["Right", 0.2]] as const) {
+    const legGeo = new THREE.CylinderGeometry(0.14, 0.12, 0.7, 12);
+    legGeo.computeVertexNormals();
+    const leg = new THREE.Mesh(legGeo, suitMat);
+    leg.name = `Astronaut_Leg_${side}`;
+    leg.position.set(sx, 0.5, 0);
+    leg.castShadow = true;
+    group.add(leg);
+
+    const bootGeo = new THREE.BoxGeometry(0.22, 0.16, 0.36);
+    bootGeo.computeVertexNormals();
+    const boot = new THREE.Mesh(bootGeo, bootMat);
+    boot.name = `Astronaut_Boot_${side}`;
+    boot.position.set(sx, 0.08, 0.06);
+    boot.castShadow = true;
+    group.add(boot);
+  }
+
+  return group;
+}
+
+export function createCompoundSpaceScene(prompt: string): THREE.Group {
+  const scene = new THREE.Group();
+  scene.name = "Compound_Space_Scene";
+
+  const p = prompt.toLowerCase();
+
+  let subject: THREE.Object3D;
+  const helmetOffset = new THREE.Vector3(0, 1.0, 0.7);
+  let helmetRadius = 0.45;
+  const platformY = -0.15;
+
+  if (p.includes("dog") || p.includes("puppy") || p.includes("canine") || p.includes("hound") || p.includes("retriever") || p.includes("husky")) {
+    subject = createProceduralDog();
+    helmetOffset.set(0, 1.12, 0.95);
+    helmetRadius = 0.52;
+  } else if (p.includes("elephant") || p.includes("mammoth") || p.includes("pachyderm")) {
+    subject = createProceduralElephant();
+    helmetOffset.set(0, 1.85, 1.4);
+    helmetRadius = 0.95;
+  } else if (p.includes("car") || p.includes("automobile") || p.includes("truck") || p.includes("van")) {
+    subject = createProceduralCar();
+    helmetRadius = 0;
+  } else if (p.includes("astronaut") || p.includes("cosmonaut") || p.includes("spaceman")) {
+    subject = createProceduralAstronaut();
+    helmetRadius = 0;
+  } else if (p.includes("robot") || p.includes("droid") || p.includes("mech")) {
+    subject = createProceduralRobot();
+    helmetRadius = 0;
+  } else if (p.includes("cow") || p.includes("bull") || p.includes("ox")) {
+    subject = createProceduralCow();
+    helmetOffset.set(0, 1.25, 0.95);
+    helmetRadius = 0.65;
+  } else if (p.includes("sheep") || p.includes("ram") || p.includes("lamb")) {
+    subject = createProceduralSheep();
+    helmetOffset.set(0, 1.05, 0.75);
+    helmetRadius = 0.5;
+  } else {
+    // Default subject: Cat in Space
+    subject = createProceduralCat();
+    helmetOffset.set(0, 1.05, 0.75);
+    helmetRadius = 0.48;
+  }
+
+  subject.position.y = 0.45;
+  scene.add(subject);
+
+  // Translucent astronaut helmet bubble for animal subjects
+  if (helmetRadius > 0) {
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: 0xe0f2fe,
+      transmission: 0.92,
+      opacity: 0.85,
+      transparent: true,
+      roughness: 0.05,
+      metalness: 0.1,
+      ior: 1.45,
+    });
+    const goldRimMat = createLowPolyMaterial("#f59e0b", { roughness: 0.2, metalness: 0.95 });
+
+    const bubbleGeo = new THREE.SphereGeometry(helmetRadius, 20, 16);
+    bubbleGeo.computeVertexNormals();
+    const bubble = new THREE.Mesh(bubbleGeo, glassMat);
+    bubble.name = "Cosmic_Helmet_Glass";
+    bubble.position.copy(helmetOffset).add(subject.position);
+    scene.add(bubble);
+
+    const sealGeo = new THREE.TorusGeometry(helmetRadius * 0.9, 0.04, 8, 24);
+    sealGeo.rotateX(Math.PI / 2);
+    sealGeo.computeVertexNormals();
+    const seal = new THREE.Mesh(sealGeo, goldRimMat);
+    seal.name = "Cosmic_Helmet_Seal";
+    seal.position.copy(bubble.position);
+    seal.position.y -= helmetRadius * 0.75;
+    scene.add(seal);
+  }
+
+  // Floating Cratered Lunar Asteroid Pedestal
+  const moonMat = createLowPolyMaterial("#334155", { roughness: 0.85, metalness: 0.1 });
+  const craterMat = createLowPolyMaterial("#1e293b", { roughness: 0.95, metalness: 0.05 });
+
+  const rockGeo = new THREE.CylinderGeometry(2.2, 1.6, 0.65, 9);
+  rockGeo.computeVertexNormals();
+  const rock = new THREE.Mesh(rockGeo, moonMat);
+  rock.name = "Lunar_Asteroid_Pedestal";
+  rock.position.set(0, platformY, 0);
+  rock.receiveShadow = true;
+  scene.add(rock);
+
+  // Sub-craters on asteroid surface
+  const craterPositions = [
+    { x: 1.2, z: 0.8, r: 0.35, d: 0.08 },
+    { x: -1.1, z: 1.0, r: 0.42, d: 0.1 },
+    { x: 0.9, z: -1.2, r: 0.38, d: 0.09 },
+    { x: -1.3, z: -0.8, r: 0.28, d: 0.06 },
+  ];
+  craterPositions.forEach((cp, idx) => {
+    const cGeo = new THREE.CylinderGeometry(cp.r, cp.r * 0.7, cp.d, 8);
+    cGeo.computeVertexNormals();
+    const cMesh = new THREE.Mesh(cGeo, craterMat);
+    cMesh.name = `Asteroid_Crater_${idx + 1}`;
+    cMesh.position.set(cp.x, platformY + 0.32, cp.z);
+    scene.add(cMesh);
+  });
+
+  // Floating Celestial Planetary Dust Ring
+  const ringMat = new THREE.MeshStandardMaterial({
+    color: 0x38bdf8,
+    emissive: new THREE.Color("#0284c7"),
+    emissiveIntensity: 0.6,
+    roughness: 0.3,
+    metalness: 0.8,
+    transparent: true,
+    opacity: 0.75,
+  });
+  const ringGeo = new THREE.RingGeometry(3.0, 3.4, 32);
+  ringGeo.rotateX(Math.PI / 2.3);
+  ringGeo.rotateZ(0.35);
+  ringGeo.computeVertexNormals();
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.name = "Cosmic_Planetary_Ring";
+  ring.position.set(0, platformY + 0.2, 0);
+  scene.add(ring);
+
+  // Orbiting Glowing Cosmic Crystals
+  const crystalColors = ["#38bdf8", "#a855f7", "#ec4899", "#10b981", "#fbbf24"];
+  for (let i = 0; i < 7; i++) {
+    const angle = (i / 7) * Math.PI * 2;
+    const rad = 2.4 + ((i % 3) * 0.3);
+    const cx = Math.cos(angle) * rad;
+    const cz = Math.sin(angle) * rad;
+    const cy = platformY + 0.8 + Math.sin(i * 1.7) * 0.6;
+
+    const cMat = createLowPolyMaterial(crystalColors[i % crystalColors.length], {
+      roughness: 0.15,
+      metalness: 0.2,
+      emissive: new THREE.Color(crystalColors[i % crystalColors.length]),
+      emissiveIntensity: 1.5,
+    });
+    const cGeo = new THREE.OctahedronGeometry(0.14 + (i % 3) * 0.05, 0);
+    cGeo.computeVertexNormals();
+    const crystal = new THREE.Mesh(cGeo, cMat);
+    crystal.name = `Cosmic_Crystal_${i + 1}`;
+    crystal.position.set(cx, cy, cz);
+    crystal.rotation.set(i * 0.4, i * 0.8, i * 0.3);
+    scene.add(crystal);
+  }
+
+  return scene;
+}
+
 export function createProceduralRocketShip(): THREE.Group {
   const group = new THREE.Group();
   group.name = "Procedural_RocketShip";
@@ -2433,6 +2987,13 @@ export function createDynamicGenerativeCadModel(prompt: string): THREE.Group {
 export function generateProceduralModelFromPrompt(prompt: string): THREE.Object3D {
   const p = prompt.toLowerCase();
 
+  // 0. Compound Scene Composition (e.g. "cat in space", "dog on moon", "elephant in orbit")
+  const isSpaceContext = p.includes("space") || p.includes("cosmos") || p.includes("galaxy") || p.includes("moon") || p.includes("asteroid") || p.includes("orbit") || p.includes("lunar");
+  const hasSubject = p.includes("cat") || p.includes("dog") || p.includes("puppy") || p.includes("elephant") || p.includes("car") || p.includes("robot") || p.includes("astronaut") || p.includes("cow") || p.includes("sheep");
+  if (isSpaceContext && (hasSubject || p.includes("in space") || p.includes("on the moon") || p.includes("space scene"))) {
+    return createCompoundSpaceScene(prompt);
+  }
+
   // 1. Vehicles: Car, Automobile, Truck
   if (
     p.includes("car") ||
@@ -2575,6 +3136,21 @@ export function generateProceduralModelFromPrompt(prompt: string): THREE.Object3
   // 18b. Animals: Cat, Kitten, Kitty, Feline
   if (p.includes("cat") || p.includes("kitten") || p.includes("kitty") || p.includes("feline") || p.includes("meow")) {
     return createProceduralCat();
+  }
+
+  // 18c. Animals: Dog, Puppy, Canine, Hound
+  if (p.includes("dog") || p.includes("puppy") || p.includes("hound") || p.includes("canine") || p.includes("corgi") || p.includes("retriever") || p.includes("husky")) {
+    return createProceduralDog();
+  }
+
+  // 18d. Animals: Elephant, Mammoth, Pachyderm
+  if (p.includes("elephant") || p.includes("mammoth") || p.includes("pachyderm")) {
+    return createProceduralElephant();
+  }
+
+  // 18e. Characters: Astronaut, Cosmonaut, Spaceman
+  if (p.includes("astronaut") || p.includes("cosmonaut") || p.includes("spaceman") || p.includes("spacewalk")) {
+    return createProceduralAstronaut();
   }
 
   // 19. Space: Rocket, Starship, Spaceship

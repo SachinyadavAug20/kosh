@@ -106,6 +106,34 @@ public class McpResourceRegistry {
                 }
                 """
         );
+        registerStatic(
+                "kosh://library/modular-models",
+                "Modular Low-Poly 3D Model Catalog",
+                "Instant procedural low-poly entities and compound scene composer presets (Cat, Dog, Elephant, Astronaut, Car, Spaceship, Compound Space Scenes)",
+                """
+                {
+                    "categories": {
+                        "animals": [
+                            {"id": "cat", "name": "Ginger Tabby Cat", "parts": ["body", "head", "ears", "snout", "paws", "tail", "bell_collar"]},
+                            {"id": "dog", "name": "Golden Retriever Dog", "parts": ["body", "head", "snout", "nose", "floppy_ears", "paws", "wagging_tail", "tag_collar"]},
+                            {"id": "elephant", "name": "Majestic Elephant", "parts": ["barrel_body", "head", "fan_ears", "segmented_trunk", "ivory_tusks", "pillar_legs", "tufted_tail"]}
+                        ],
+                        "characters": [
+                            {"id": "astronaut", "name": "Apollo EVA Astronaut", "parts": ["spacesuit_torso", "gold_bubble_visor", "plss_backpack", "oxygen_tanks", "moon_boots"]}
+                        ],
+                        "environments": [
+                            {"id": "space", "name": "Cosmic Space", "elements": ["lunar_asteroid_pedestal", "craters", "planetary_dust_ring", "orbiting_crystals"]},
+                            {"id": "studio", "name": "Photo Studio CAD", "elements": ["custom_grid", "backdrop", "3_point_lighting"]}
+                        ],
+                        "compound_presets": [
+                            {"id": "cat_in_space", "prompt": "generate a cat in space", "composition": "Ginger cat with astronaut glass helmet on cratered lunar asteroid encircled by planetary dust ring and crystals"},
+                            {"id": "dog_on_moon", "prompt": "dog on moon", "composition": "Golden retriever with bubble helmet on lunar pedestal with orbiting cosmic crystals"},
+                            {"id": "elephant_in_orbit", "prompt": "elephant in space", "composition": "Majestic elephant with custom helmet on celestial rock"}
+                        ]
+                    }
+                }
+                """
+        );
 
         // --- Cached engineering ground truth (served in <2ms, zero LLM hallucination) ---
         registerStatic(

@@ -25,6 +25,7 @@ public class McpToolRegistry {
             "cad_apply_modifier",
             "cad_inspect_scene",
             "cad_synthesize_composite",
+            "cad_compose_compound_scene",
             // Instant Composite Assembly Tools (no LLM round-trip, pre-baked templates)
             "cad_assemble_kit",
             "cad_batch_csg",
@@ -198,6 +199,21 @@ public class McpToolRegistry {
                 "required", List.of("prompt")
         ));
         tools.add(synthTool);
+
+        // 5b. cad_compose_compound_scene (combines subjects and cosmic environments)
+        Map<String, Object> compoundTool = new LinkedHashMap<>();
+        compoundTool.put("name", "cad_compose_compound_scene");
+        compoundTool.put("description", "Composes a rich compound 3D scene (e.g. low-poly subject like cat, dog, elephant, astronaut situated in space on a lunar asteroid with planetary rings and glowing cosmic crystals).");
+        compoundTool.put("inputSchema", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "subject", Map.of("type", "string", "description", "Main subject: cat, dog, elephant, astronaut, car, robot"),
+                        "environment", Map.of("type", "string", "description", "Environment theme: space, moon, asteroid, orbit"),
+                        "targetFormat", Map.of("type", "string", "enum", List.of("glb", "stl", "obj"), "description", "Output format (default: glb)")
+                ),
+                "required", List.of("subject", "environment")
+        ));
+        tools.add(compoundTool);
 
         // 6. cad_assemble_kit (instant pre-baked kitbashing assembly, zero LLM latency)
         Map<String, Object> kitTool = new LinkedHashMap<>();
@@ -568,6 +584,16 @@ public class McpToolRegistry {
             finalScript = buildBatchCsgScript(arguments, format);
         } else if ("cad_apply_fillet_chamfer".equals(normalizedName) || "cad_quick_fillet_chamfer".equals(normalizedName)) {
             finalScript = buildFilletChamferScript(arguments, format);
+        } else if ("cad_compose_compound_scene".equals(normalizedName)) {
+            String subject = arguments != null && arguments.containsKey("subject") && arguments.get("subject") != null
+                    ? arguments.get("subject").toString() : "cat";
+            String env = arguments != null && arguments.containsKey("environment") && arguments.get("environment") != null
+                    ? arguments.get("environment").toString() : "space";
+            String targetFmt = arguments != null && arguments.containsKey("targetFormat") && arguments.get("targetFormat") != null
+                    ? arguments.get("targetFormat").toString() : format;
+            format = targetFmt;
+            String compoundPrompt = String.format("%s in %s", subject, env);
+            finalScript = googleGeminiClient.generateProceduralModelScript(compoundPrompt, "blender_mesh", format);
         } else if ("cad_synthesize_composite".equals(normalizedName)) {
             String userPrompt = (prompt != null && !prompt.isBlank()) ? prompt : "Precision Parametric Mechanical CAD Component";
             String style = arguments != null && arguments.containsKey("style") && arguments.get("style") != null

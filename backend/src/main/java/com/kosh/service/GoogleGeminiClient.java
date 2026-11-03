@@ -1365,6 +1365,148 @@ public class GoogleGeminiClient {
                 """.formatted(format, exportCmd);
         }
 
+        // 10a. Compound Space Scene (e.g., Cat in Space, Dog on Moon, Elephant in Orbit)
+        boolean isSpaceContext = lowerPrompt.contains("space") || lowerPrompt.contains("cosmos") || lowerPrompt.contains("galaxy") || lowerPrompt.contains("moon") || lowerPrompt.contains("asteroid") || lowerPrompt.contains("orbit") || lowerPrompt.contains("lunar");
+        boolean hasCompoundSubject = lowerPrompt.contains("cat") || lowerPrompt.contains("kitten") || lowerPrompt.contains("dog") || lowerPrompt.contains("puppy") || lowerPrompt.contains("elephant") || lowerPrompt.contains("astronaut") || lowerPrompt.contains("car");
+        if (isSpaceContext && (hasCompoundSubject || lowerPrompt.contains("in space") || lowerPrompt.contains("on the moon") || lowerPrompt.contains("space scene"))) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, color, roughness=0.6, metallic=0.0, emission=None, emission_strength=1.0, transmission=0.0):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        bsdf.inputs["Base Color"].default_value = color
+                        bsdf.inputs["Roughness"].default_value = roughness
+                        bsdf.inputs["Metallic"].default_value = metallic
+                        if "Transmission Weight" in bsdf.inputs:
+                            bsdf.inputs["Transmission Weight"].default_value = transmission
+                        elif "Transmission" in bsdf.inputs:
+                            bsdf.inputs["Transmission"].default_value = transmission
+                        if emission:
+                            if "Emission Color" in bsdf.inputs:
+                                bsdf.inputs["Emission Color"].default_value = emission
+                                bsdf.inputs["Emission Strength"].default_value = emission_strength
+                            elif "Emission" in bsdf.inputs:
+                                bsdf.inputs["Emission"].default_value = emission
+                    return mat
+
+                mat_asteroid = make_mat("Asteroid_Surface", (0.18, 0.22, 0.28, 1.0), roughness=0.9, metallic=0.1)
+                mat_crater = make_mat("Asteroid_Crater", (0.08, 0.10, 0.14, 1.0), roughness=0.95, metallic=0.05)
+                mat_ring = make_mat("Cosmic_Dust_Ring", (0.2, 0.7, 1.0, 0.8), roughness=0.2, metallic=0.8, emission=(0.05, 0.5, 0.9, 1.0), emission_strength=2.5)
+                mat_crystal = make_mat("Cosmic_Crystal", (0.6, 0.2, 1.0, 1.0), roughness=0.1, metallic=0.1, emission=(0.7, 0.3, 1.0, 1.0), emission_strength=4.0)
+                mat_helmet_glass = make_mat("Helmet_Glass", (0.85, 0.95, 1.0, 0.8), roughness=0.05, metallic=0.1, transmission=0.9)
+                mat_gold = make_mat("Helmet_Seal_Gold", (0.95, 0.65, 0.08, 1.0), roughness=0.2, metallic=0.95)
+
+                # Subject Base (Cat in Space)
+                mat_fur = make_mat("Cat_Ginger_Fur", (0.92, 0.35, 0.05, 1.0), roughness=0.65, metallic=0.05)
+                mat_belly = make_mat("Cat_Cream_Belly", (0.98, 0.95, 0.85, 1.0), roughness=0.7, metallic=0.0)
+                mat_pink = make_mat("Cat_Ears_Nose", (0.95, 0.45, 0.65, 1.0), roughness=0.5, metallic=0.0)
+                mat_eyes = make_mat("Cat_Emerald_Eyes", (0.05, 0.72, 0.45, 1.0), roughness=0.1, metallic=0.1, emission=(0.02, 0.65, 0.38, 1.0), emission_strength=2.0)
+
+                # Cat Body on Asteroid
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.36, depth=1.2, location=(0, 0, 1.1))
+                body = bpy.context.active_object
+                body.name = "Cat_Body"
+                body.rotation_euler = (math.radians(90), 0, 0)
+                bpy.ops.object.transform_apply(rotation=True)
+                body.data.materials.append(mat_fur)
+
+                # Cat Head
+                bpy.ops.mesh.primitive_uv_sphere_add(radius=0.36, location=(0, 0.68, 1.43))
+                head = bpy.context.active_object
+                head.name = "Cat_Head"
+                head.scale = (1.0, 0.95, 0.92)
+                bpy.ops.object.transform_apply(scale=True)
+                head.data.materials.append(mat_fur)
+
+                # Ears
+                for sx, name in [(-0.2, "Left"), (0.2, "Right")]:
+                    bpy.ops.mesh.primitive_cone_add(radius1=0.14, depth=0.28, location=(sx, 0.65, 1.8))
+                    ear = bpy.context.active_object
+                    ear.name = f"Cat_Ear_{name}"
+                    ear.rotation_euler = (math.radians(-10), 0, math.radians(-15 if sx > 0 else 15))
+                    ear.data.materials.append(mat_fur)
+
+                # Four Legs
+                for leg_name, lx, ly, lz in [("Front_Left", -0.22, 0.42, 0.77), ("Front_Right", 0.22, 0.42, 0.77), ("Back_Left", -0.24, -0.42, 0.77), ("Back_Right", 0.24, -0.42, 0.77)]:
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.08, depth=0.58, location=(lx, ly, lz))
+                    leg = bpy.context.active_object
+                    leg.name = f"Cat_Leg_{leg_name}"
+                    leg.data.materials.append(mat_fur)
+
+                # Glass Space Bubble Helmet over Cat Head
+                bpy.ops.mesh.primitive_uv_sphere_add(radius=0.48, location=(0, 0.68, 1.5))
+                helmet = bpy.context.active_object
+                helmet.name = "Cosmic_Helmet_Bubble"
+                helmet.data.materials.append(mat_helmet_glass)
+
+                # Gold Collar Seal Ring
+                bpy.ops.mesh.primitive_torus_add(major_radius=0.42, minor_radius=0.035, location=(0, 0.68, 1.15))
+                seal = bpy.context.active_object
+                seal.name = "Cosmic_Helmet_Seal"
+                seal.data.materials.append(mat_gold)
+
+                # Lunar Asteroid Pedestal
+                bpy.ops.mesh.primitive_cylinder_add(vertices=10, radius=2.2, depth=0.7, location=(0, 0, 0.15))
+                pedestal = bpy.context.active_object
+                pedestal.name = "Asteroid_Pedestal"
+                pedestal.data.materials.append(mat_asteroid)
+
+                # Craters on Asteroid
+                for c_idx, (cx, cy, cr) in enumerate([(1.2, 0.8, 0.4), (-1.1, 1.0, 0.45), (0.9, -1.2, 0.38), (-1.3, -0.8, 0.3)]):
+                    bpy.ops.mesh.primitive_cylinder_add(vertices=8, radius=cr, depth=0.1, location=(cx, cy, 0.52))
+                    crater = bpy.context.active_object
+                    crater.name = f"Crater_{c_idx + 1}"
+                    crater.data.materials.append(mat_crater)
+
+                # Planetary Dust Ring
+                bpy.ops.mesh.primitive_torus_add(major_radius=3.2, minor_radius=0.08, location=(0, 0, 0.4))
+                ring = bpy.context.active_object
+                ring.name = "Cosmic_Planetary_Ring"
+                ring.rotation_euler = (math.radians(25), math.radians(15), 0)
+                ring.data.materials.append(mat_ring)
+
+                # Orbiting Cosmic Crystals
+                for i in range(6):
+                    ang = (i / 6.0) * math.pi * 2.0
+                    r = 2.5 + (i % 2) * 0.4
+                    px = math.cos(ang) * r
+                    py = math.sin(ang) * r
+                    pz = 0.8 + math.sin(i * 1.5) * 0.6
+                    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=0.15, location=(px, py, pz))
+                    crys = bpy.context.active_object
+                    crys.name = f"Cosmic_Crystal_{i + 1}"
+                    crys.data.materials.append(mat_crystal)
+
+                # Space Studio Lights
+                klight = bpy.data.lights.new("KeyLight", type='AREA')
+                klight.energy = 1400
+                kobj = bpy.data.objects.new("KeyLight", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (4, -4, 6)
+
+                rimlight = bpy.data.lights.new("RimLight", type='POINT')
+                rimlight.energy = 800
+                rimlight.color = (0.2, 0.6, 1.0)
+                rimobj = bpy.data.objects.new("RimLight", rimlight)
+                bpy.context.collection.objects.link(rimobj)
+                rimobj.location = (-4, 4, 3)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
         // 10b. Procedural Cat / Feline / Kitty
         if (lowerPrompt.contains("cat") || lowerPrompt.contains("kitten") || lowerPrompt.contains("kitty") || lowerPrompt.contains("feline") || lowerPrompt.contains("meow")) {
             return """
@@ -1508,6 +1650,341 @@ public class GoogleGeminiClient {
                 bell.data.materials.append(mat_bell)
 
                 # Studio Lights
+                klight = bpy.data.lights.new("KeyLight", type='AREA')
+                klight.energy = 1200
+                kobj = bpy.data.objects.new("KeyLight", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (4, -4, 6)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
+        // 10c. Procedural Dog / Canine / Puppy
+        if (lowerPrompt.contains("dog") || lowerPrompt.contains("puppy") || lowerPrompt.contains("hound") || lowerPrompt.contains("canine") || lowerPrompt.contains("corgi") || lowerPrompt.contains("retriever") || lowerPrompt.contains("husky")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, color, roughness=0.7, metallic=0.0):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        bsdf.inputs["Base Color"].default_value = color
+                        bsdf.inputs["Roughness"].default_value = roughness
+                        bsdf.inputs["Metallic"].default_value = metallic
+                    return mat
+
+                mat_fur = make_mat("Dog_Golden_Fur", (0.85, 0.48, 0.08, 1.0), roughness=0.7, metallic=0.05)
+                mat_belly = make_mat("Dog_Cream_Belly", (0.98, 0.95, 0.85, 1.0), roughness=0.75, metallic=0.0)
+                mat_nose = make_mat("Dog_Dark_Nose", (0.05, 0.05, 0.05, 1.0), roughness=0.25, metallic=0.1)
+                mat_collar = make_mat("Dog_Collar_Blue", (0.05, 0.45, 0.85, 1.0), roughness=0.4, metallic=0.3)
+                mat_tag = make_mat("Dog_Tag_Gold", (0.96, 0.65, 0.08, 1.0), roughness=0.2, metallic=0.95)
+
+                # 1. Torso
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.4, depth=1.35, location=(0, 0, 0.72))
+                body = bpy.context.active_object
+                body.name = "Dog_Body"
+                body.rotation_euler = (math.radians(90), 0, 0)
+                bpy.ops.object.transform_apply(rotation=True)
+                body.data.materials.append(mat_fur)
+
+                # 2. Chest & Belly
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0.2, 0.62))
+                chest = bpy.context.active_object
+                chest.name = "Dog_Chest"
+                chest.scale = (0.52, 0.9, 0.42)
+                bpy.ops.object.transform_apply(scale=True)
+                chest.data.materials.append(mat_belly)
+
+                # 3. Head
+                bpy.ops.mesh.primitive_uv_sphere_add(radius=0.4, location=(0, 0.72, 1.08))
+                head = bpy.context.active_object
+                head.name = "Dog_Head"
+                head.scale = (1.0, 1.05, 0.95)
+                bpy.ops.object.transform_apply(scale=True)
+                head.data.materials.append(mat_fur)
+
+                # 4. Snout & Nose
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 1.15, 0.96))
+                snout = bpy.context.active_object
+                snout.name = "Dog_Muzzle"
+                snout.scale = (0.3, 0.35, 0.22)
+                bpy.ops.object.transform_apply(scale=True)
+                snout.data.materials.append(mat_belly)
+
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 1.32, 1.04))
+                nose = bpy.context.active_object
+                nose.name = "Dog_Nose"
+                nose.scale = (0.12, 0.1, 0.09)
+                bpy.ops.object.transform_apply(scale=True)
+                nose.data.materials.append(mat_nose)
+
+                # 5. Floppy Ears
+                for sx, name in [(-0.28, "Left"), (0.28, "Right")]:
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(sx, 0.65, 1.22))
+                    ear = bpy.context.active_object
+                    ear.name = f"Dog_Ear_{name}"
+                    ear.scale = (0.14, 0.12, 0.32)
+                    ear.rotation_euler = (math.radians(10), 0, math.radians(-25 if sx > 0 else 25))
+                    bpy.ops.object.transform_apply(scale=True)
+                    ear.data.materials.append(mat_fur)
+
+                # 6. Four Legs & Paws
+                for leg_name, lx, ly, lz in [("Front_Left", -0.24, 0.45, 0.36), ("Front_Right", 0.24, 0.45, 0.36), ("Back_Left", -0.26, -0.45, 0.36), ("Back_Right", 0.26, -0.45, 0.36)]:
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.09, depth=0.65, location=(lx, ly, lz))
+                    leg = bpy.context.active_object
+                    leg.name = f"Dog_Leg_{leg_name}"
+                    leg.data.materials.append(mat_fur)
+
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(lx, ly + 0.04, 0.06))
+                    paw = bpy.context.active_object
+                    paw.name = f"Dog_Paw_{leg_name}"
+                    paw.scale = (0.18, 0.22, 0.1)
+                    bpy.ops.object.transform_apply(scale=True)
+                    paw.data.materials.append(mat_belly)
+
+                # 7. Wagging Tail
+                for idx, (tx, ty, tz, rx) in enumerate([(0, -0.75, 0.8, -45), (0, -0.92, 1.05, -30), (0, -0.95, 1.3, 15), (0, -0.82, 1.48, 50)]):
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.06, depth=0.28, location=(tx, ty, tz))
+                    tseg = bpy.context.active_object
+                    tseg.name = f"Dog_Tail_{idx + 1}"
+                    tseg.rotation_euler = (math.radians(rx), 0, 0)
+                    tseg.data.materials.append(mat_fur)
+
+                # 8. Collar & Tag
+                bpy.ops.mesh.primitive_torus_add(major_radius=0.38, minor_radius=0.04, location=(0, 0.65, 0.85))
+                collar = bpy.context.active_object
+                collar.name = "Dog_Collar"
+                collar.rotation_euler = (math.radians(90), 0, 0)
+                collar.data.materials.append(mat_collar)
+
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.07, depth=0.02, location=(0, 1.02, 0.72))
+                tag = bpy.context.active_object
+                tag.name = "Dog_Tag"
+                tag.rotation_euler = (math.radians(90), 0, 0)
+                tag.data.materials.append(mat_tag)
+
+                # Studio Lighting
+                klight = bpy.data.lights.new("KeyLight", type='AREA')
+                klight.energy = 1200
+                kobj = bpy.data.objects.new("KeyLight", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (4, -4, 6)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
+        // 10d. Procedural Elephant / Mammoth
+        if (lowerPrompt.contains("elephant") || lowerPrompt.contains("mammoth") || lowerPrompt.contains("pachyderm")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, color, roughness=0.8, metallic=0.0):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        bsdf.inputs["Base Color"].default_value = color
+                        bsdf.inputs["Roughness"].default_value = roughness
+                        bsdf.inputs["Metallic"].default_value = metallic
+                    return mat
+
+                mat_hide = make_mat("Elephant_Hide", (0.42, 0.48, 0.55, 1.0), roughness=0.85, metallic=0.05)
+                mat_inner = make_mat("Elephant_Inner_Ear", (0.78, 0.82, 0.88, 1.0), roughness=0.75, metallic=0.0)
+                mat_tusk = make_mat("Elephant_Tusk_Ivory", (0.98, 0.95, 0.75, 1.0), roughness=0.25, metallic=0.2)
+                mat_pad = make_mat("Elephant_Pad", (0.28, 0.32, 0.38, 1.0), roughness=0.9, metallic=0.0)
+
+                # Torso
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.78, depth=1.85, location=(0, 0, 1.45))
+                body = bpy.context.active_object
+                body.name = "Elephant_Body"
+                body.rotation_euler = (math.radians(90), 0, 0)
+                bpy.ops.object.transform_apply(rotation=True)
+                body.data.materials.append(mat_hide)
+
+                # Head
+                bpy.ops.mesh.primitive_uv_sphere_add(radius=0.68, location=(0, 1.05, 1.75))
+                head = bpy.context.active_object
+                head.name = "Elephant_Head"
+                head.data.materials.append(mat_hide)
+
+                # Ears
+                for sx, name in [(-0.75, "Left"), (0.75, "Right")]:
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(sx, 0.95, 1.82))
+                    ear = bpy.context.active_object
+                    ear.name = f"Elephant_Ear_{name}"
+                    ear.scale = (0.12, 0.75, 0.95)
+                    ear.rotation_euler = (math.radians(5), math.radians(-15 if sx > 0 else 15), math.radians(10 if sx < 0 else -10))
+                    bpy.ops.object.transform_apply(scale=True)
+                    ear.data.materials.append(mat_hide)
+
+                # Trunk (5 segments curving up)
+                for i, (ty, tz, r, rx) in enumerate([(1.55, 1.45, 0.20, 18), (1.72, 1.25, 0.17, 35), (1.92, 1.10, 0.15, 55), (2.15, 1.05, 0.13, 80), (2.32, 1.18, 0.10, 110)]):
+                    bpy.ops.mesh.primitive_cylinder_add(radius=r, depth=0.3, location=(0, ty, tz))
+                    tseg = bpy.context.active_object
+                    tseg.name = f"Elephant_Trunk_{i + 1}"
+                    tseg.rotation_euler = (math.radians(rx), 0, 0)
+                    tseg.data.materials.append(mat_hide)
+
+                # Tusks
+                for sx, name in [(-0.28, "Left"), (0.28, "Right")]:
+                    bpy.ops.mesh.primitive_cone_add(radius1=0.08, depth=0.65, location=(sx, 1.62, 1.32))
+                    tusk = bpy.context.active_object
+                    tusk.name = f"Elephant_Tusk_{name}"
+                    tusk.rotation_euler = (math.radians(55), math.radians(10 if sx > 0 else -10), 0)
+                    tusk.data.materials.append(mat_tusk)
+
+                # Four Legs
+                for leg_name, lx, ly in [("Front_Left", -0.42, 0.6), ("Front_Right", 0.42, 0.6), ("Back_Left", -0.44, -0.6), ("Back_Right", 0.44, -0.6)]:
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.26, depth=1.3, location=(lx, ly, 0.65))
+                    leg = bpy.context.active_object
+                    leg.name = f"Elephant_Leg_{leg_name}"
+                    leg.data.materials.append(mat_hide)
+
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.29, depth=0.12, location=(lx, ly, 0.06))
+                    pad = bpy.context.active_object
+                    pad.name = f"Elephant_Pad_{leg_name}"
+                    pad.data.materials.append(mat_pad)
+
+                # Studio Lighting
+                klight = bpy.data.lights.new("KeyLight", type='AREA')
+                klight.energy = 1400
+                kobj = bpy.data.objects.new("KeyLight", klight)
+                bpy.context.collection.objects.link(kobj)
+                kobj.location = (5, -5, 7)
+
+                %s
+                """.formatted(format, exportCmd);
+        }
+
+        // 10e. Procedural Astronaut / Spaceman
+        if (lowerPrompt.contains("astronaut") || lowerPrompt.contains("cosmonaut") || lowerPrompt.contains("spaceman") || lowerPrompt.contains("spacewalk")) {
+            return """
+                import bpy, sys, math, os, json
+                import mathutils
+
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def make_mat(name, color, roughness=0.5, metallic=0.1, emission=None, emission_strength=1.0):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+                    if bsdf:
+                        bsdf.inputs["Base Color"].default_value = color
+                        bsdf.inputs["Roughness"].default_value = roughness
+                        bsdf.inputs["Metallic"].default_value = metallic
+                        if emission:
+                            if "Emission Color" in bsdf.inputs:
+                                bsdf.inputs["Emission Color"].default_value = emission
+                                bsdf.inputs["Emission Strength"].default_value = emission_strength
+                            elif "Emission" in bsdf.inputs:
+                                bsdf.inputs["Emission"].default_value = emission
+                    return mat
+
+                mat_suit = make_mat("Astronaut_EVA_Suit", (0.92, 0.94, 0.96, 1.0), roughness=0.6, metallic=0.1)
+                mat_visor = make_mat("Astronaut_Visor_Gold", (0.95, 0.65, 0.08, 1.0), roughness=0.08, metallic=0.95)
+                mat_pack = make_mat("Astronaut_PLSS_Pack", (0.2, 0.25, 0.32, 1.0), roughness=0.4, metallic=0.5)
+                mat_boot = make_mat("Astronaut_Boots", (0.12, 0.15, 0.20, 1.0), roughness=0.8, metallic=0.1)
+
+                # Torso
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 1.2))
+                torso = bpy.context.active_object
+                torso.name = "Astronaut_Torso"
+                torso.scale = (0.65, 0.45, 0.75)
+                bpy.ops.object.transform_apply(scale=True)
+                torso.data.materials.append(mat_suit)
+
+                # Chest Control Pack
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0.26, 1.25))
+                cpack = bpy.context.active_object
+                cpack.name = "Astronaut_Chest_Pack"
+                cpack.scale = (0.35, 0.12, 0.28)
+                bpy.ops.object.transform_apply(scale=True)
+                cpack.data.materials.append(mat_pack)
+
+                # Helmet & Visor
+                bpy.ops.mesh.primitive_uv_sphere_add(radius=0.36, location=(0, 0, 1.78))
+                helmet = bpy.context.active_object
+                helmet.name = "Astronaut_Helmet"
+                helmet.data.materials.append(mat_suit)
+
+                bpy.ops.mesh.primitive_uv_sphere_add(radius=0.28, location=(0, 0.12, 1.78))
+                visor = bpy.context.active_object
+                visor.name = "Astronaut_Visor"
+                visor.scale = (0.95, 0.8, 0.85)
+                bpy.ops.object.transform_apply(scale=True)
+                visor.data.materials.append(mat_visor)
+
+                # PLSS Backpack & O2 Tanks
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, -0.36, 1.25))
+                backpack = bpy.context.active_object
+                backpack.name = "Astronaut_Backpack"
+                backpack.scale = (0.55, 0.32, 0.85)
+                bpy.ops.object.transform_apply(scale=True)
+                backpack.data.materials.append(mat_pack)
+
+                for sx, name in [(-0.15, "Left"), (0.15, "Right")]:
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.08, depth=0.45, location=(sx, -0.36, 1.72))
+                    tank = bpy.context.active_object
+                    tank.name = f"Astronaut_O2_Tank_{name}"
+                    tank.data.materials.append(mat_suit)
+
+                # Arms & Gloves
+                for sx, name in [(-0.48, "Left"), (0.48, "Right")]:
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.11, depth=0.6, location=(sx, 0, 1.15))
+                    arm = bpy.context.active_object
+                    arm.name = f"Astronaut_Arm_{name}"
+                    arm.rotation_euler = (0, 0, math.radians(15 if sx < 0 else -15))
+                    arm.data.materials.append(mat_suit)
+
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(sx * 1.25, 0.05, 0.8))
+                    glove = bpy.context.active_object
+                    glove.name = f"Astronaut_Glove_{name}"
+                    glove.scale = (0.14, 0.16, 0.16)
+                    bpy.ops.object.transform_apply(scale=True)
+                    glove.data.materials.append(mat_boot)
+
+                # Legs & Boots
+                for sx, name in [(-0.2, "Left"), (0.2, "Right")]:
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.13, depth=0.7, location=(sx, 0, 0.5))
+                    leg = bpy.context.active_object
+                    leg.name = f"Astronaut_Leg_{name}"
+                    leg.data.materials.append(mat_suit)
+
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(sx, 0.06, 0.08))
+                    boot = bpy.context.active_object
+                    boot.name = f"Astronaut_Boot_{name}"
+                    boot.scale = (0.22, 0.36, 0.16)
+                    bpy.ops.object.transform_apply(scale=True)
+                    boot.data.materials.append(mat_boot)
+
+                # Studio Lighting
                 klight = bpy.data.lights.new("KeyLight", type='AREA')
                 klight.energy = 1200
                 kobj = bpy.data.objects.new("KeyLight", klight)
