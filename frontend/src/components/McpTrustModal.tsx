@@ -69,7 +69,7 @@ export const McpTrustModal: React.FC<McpTrustModalProps> = ({
   if (!isOpen) return null;
 
   const badgeMarkdown =
-    "[![M8ven Score](https://m8ven.ai/badge/mcp/sachinyadavaug20/kosh)](https://m8ven.ai/mcp/sachinyadavaug20/kosh?s=readme)";
+    "[![M8ven Score](https://m8ven.ai/badge/mcp/sachinyadavaug20-kosh-17wrcp?v=bdd3e7f44215f953664d683e149f2666)](https://m8ven.ai/mcp/sachinyadavaug20-kosh-17wrcp?s=readme)";
 
   const handleCopyBadge = () => {
     navigator.clipboard.writeText(badgeMarkdown);
@@ -155,7 +155,7 @@ export const McpTrustModal: React.FC<McpTrustModalProps> = ({
           <div className="p-4 rounded-lg bg-[#18181b] border border-[#27272a] flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <img
-                src="https://m8ven.ai/badge/mcp/sachinyadavaug20/kosh"
+                src="https://m8ven.ai/badge/mcp/sachinyadavaug20-kosh-17wrcp?v=bdd3e7f44215f953664d683e149f2666"
                 alt="M8ven Score"
                 className="h-6 rounded border border-zinc-700/60"
               />
@@ -172,7 +172,7 @@ export const McpTrustModal: React.FC<McpTrustModalProps> = ({
                 {copiedBadge ? "Copied Badge" : "Copy Badge"}
               </button>
               <a
-                href="https://m8ven.ai/mcp/sachinyadavaug20/kosh?s=app"
+                href="https://m8ven.ai/mcp/sachinyadavaug20-kosh-17wrcp?s=app"
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white font-medium text-[11px] transition-colors"

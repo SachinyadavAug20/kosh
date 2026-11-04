@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://www.blender.org/"><img src="https://img.shields.io/badge/Blender-5.2%20LTS-E87D0D?style=flat-square&logo=blender&logoColor=white" alt="Blender 5.2" /></a>
   <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/Protocol-MCP%20JSON--RPC%202.0-blue?style=flat-square" alt="MCP Protocol" /></a>
-  <a href="https://m8ven.ai/mcp/sachinyadavaug20/kosh?s=readme"><img src="https://m8ven.ai/badge/mcp/sachinyadavaug20/kosh" alt="M8ven Score" /></a>
+  <a href="https://m8ven.ai/mcp/sachinyadavaug20-kosh-17wrcp?s=readme"><img src="https://m8ven.ai/badge/mcp/sachinyadavaug20-kosh-17wrcp?v=bdd3e7f44215f953664d683e149f2666" alt="M8ven Score" /></a>
   <a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-15.5-black?style=flat-square&logo=next.js" alt="Next.js" /></a>
   <a href="https://spring.io/projects/spring-boot"><img src="https://img.shields.io/badge/Spring%20Boot-3.3-6DB33F?style=flat-square&logo=springboot&logoColor=white" alt="Spring Boot" /></a>
   <a href="https://openjdk.org/"><img src="https://img.shields.io/badge/Java-21%20LTS-ED8B00?style=flat-square&logo=openjdk&logoColor=white" alt="Java 21" /></a>
@@ -254,5 +254,5 @@ curl -s -X POST http://localhost:8080/mcp \
 - **License:** Apache 2.0 ([LICENSE](LICENSE))
 - **Privacy Policy:** [PRIVACY.md](PRIVACY.md)
 - **M8ven Trust Index Verification:**
-  [![M8ven Score](https://m8ven.ai/badge/mcp/sachinyadavaug20/kosh)](https://m8ven.ai/mcp/sachinyadavaug20/kosh?s=readme)
+  [![M8ven Score](https://m8ven.ai/badge/mcp/sachinyadavaug20-kosh-17wrcp?v=bdd3e7f44215f953664d683e149f2666)](https://m8ven.ai/mcp/sachinyadavaug20-kosh-17wrcp?s=readme)
 - **Recursive MCP Vetting:** Built-in `mcp_check_tool` against 120,000+ indexed Model Context Protocol servers

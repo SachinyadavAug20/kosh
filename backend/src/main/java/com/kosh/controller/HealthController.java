@@ -46,7 +46,7 @@ public class HealthController {
                         "overallScore", 74,
                         "cves", 0,
                         "license", "Apache-2.0",
-                        "url", "https://m8ven.ai/mcp/sachinyadavaug20/kosh"
+                        "url", "https://m8ven.ai/mcp/sachinyadavaug20-kosh-17wrcp"
                 ),
                 "timestamp", System.currentTimeMillis()
         ));
