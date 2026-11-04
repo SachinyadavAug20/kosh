@@ -1748,6 +1748,430 @@ export function createProceduralAstronaut(): THREE.Group {
   return group;
 }
 
+// -------------------------------------------------------------
+// 18f. Procedural Low-Poly Bird (Bluebird / Falcon)
+// -------------------------------------------------------------
+export function createProceduralBird(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "LowPoly_Bird";
+
+  const primaryMat = createLowPolyMaterial("#0284c7", { roughness: 0.6, metalness: 0.1 });
+  const wingMat = createLowPolyMaterial("#0369a1", { roughness: 0.65, metalness: 0.1 });
+  const beakMat = createLowPolyMaterial("#f59e0b", { roughness: 0.3, metalness: 0.2 });
+  const eyeMat = createLowPolyMaterial("#18181b", { roughness: 0.1, metalness: 0.9 });
+  const legMat = createLowPolyMaterial("#d97706", { roughness: 0.5, metalness: 0.1 });
+
+  // Body
+  const bodyGeo = new THREE.ConeGeometry(0.42, 1.1, 7);
+  bodyGeo.rotateX(Math.PI / 2.3);
+  bodyGeo.computeVertexNormals();
+  const body = new THREE.Mesh(bodyGeo, primaryMat);
+  body.name = "Bird_Body";
+  body.position.set(0, 0.85, 0);
+  body.castShadow = true;
+  group.add(body);
+
+  // Head
+  const headGeo = new THREE.SphereGeometry(0.26, 7, 6);
+  headGeo.computeVertexNormals();
+  const head = new THREE.Mesh(headGeo, primaryMat);
+  head.name = "Bird_Head";
+  head.position.set(0, 1.25, 0.42);
+  head.castShadow = true;
+  group.add(head);
+
+  // Beak
+  const beakGeo = new THREE.ConeGeometry(0.09, 0.35, 4);
+  beakGeo.rotateX(Math.PI / 2);
+  beakGeo.computeVertexNormals();
+  const beak = new THREE.Mesh(beakGeo, beakMat);
+  beak.name = "Bird_Beak";
+  beak.position.set(0, 1.22, 0.72);
+  group.add(beak);
+
+  // Eyes
+  for (const [side, sx] of [["L", -0.16], ["R", 0.16]] as const) {
+    const eyeGeo = new THREE.SphereGeometry(0.045, 6, 5);
+    const eye = new THREE.Mesh(eyeGeo, eyeMat);
+    eye.name = `Bird_Eye_${side}`;
+    eye.position.set(sx, 1.28, 0.54);
+    group.add(eye);
+  }
+
+  // Wings (Outstretched / Gliding)
+  for (const [side, sx, rotZ] of [["L", -0.7, 0.25], ["R", 0.7, -0.25]] as const) {
+    const wingGeo = new THREE.BoxGeometry(0.9, 0.06, 0.45);
+    wingGeo.computeVertexNormals();
+    const wing = new THREE.Mesh(wingGeo, wingMat);
+    wing.name = `Bird_Wing_${side}`;
+    wing.position.set(sx, 0.95, -0.05);
+    wing.rotation.set(0.1, 0, rotZ);
+    wing.castShadow = true;
+    group.add(wing);
+  }
+
+  // Tail Feathers
+  const tailGeo = new THREE.BoxGeometry(0.35, 0.04, 0.6);
+  tailGeo.computeVertexNormals();
+  const tail = new THREE.Mesh(tailGeo, wingMat);
+  tail.name = "Bird_Tail";
+  tail.position.set(0, 0.72, -0.65);
+  tail.rotation.x = -0.3;
+  group.add(tail);
+
+  // Legs & Talons
+  for (const [side, sx] of [["L", -0.12], ["R", 0.12]] as const) {
+    const legGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.45, 5);
+    const leg = new THREE.Mesh(legGeo, legMat);
+    leg.name = `Bird_Leg_${side}`;
+    leg.position.set(sx, 0.35, 0);
+    group.add(leg);
+
+    const footGeo = new THREE.BoxGeometry(0.12, 0.03, 0.18);
+    const foot = new THREE.Mesh(footGeo, legMat);
+    foot.name = `Bird_Foot_${side}`;
+    foot.position.set(sx, 0.14, 0.04);
+    group.add(foot);
+  }
+
+  return group;
+}
+
+// -------------------------------------------------------------
+// 18g. Procedural Low-Poly Fish (Koi / Goldfish)
+// -------------------------------------------------------------
+export function createProceduralFish(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "LowPoly_Fish";
+
+  const orangeMat = createLowPolyMaterial("#f97316", { roughness: 0.5, metalness: 0.1 });
+  const whiteMat = createLowPolyMaterial("#f8fafc", { roughness: 0.55, metalness: 0.05 });
+  const finMat = createLowPolyMaterial("#ea580c", { roughness: 0.4, metalness: 0.15 });
+  const eyeMat = createLowPolyMaterial("#18181b", { roughness: 0.1, metalness: 0.9 });
+
+  // Streamlined Torso
+  const bodyGeo = new THREE.ConeGeometry(0.48, 1.6, 7);
+  bodyGeo.rotateX(-Math.PI / 2);
+  bodyGeo.computeVertexNormals();
+  const body = new THREE.Mesh(bodyGeo, orangeMat);
+  body.name = "Fish_Torso";
+  body.position.set(0, 0.65, 0);
+  body.scale.set(0.7, 1.0, 1.2);
+  body.castShadow = true;
+  group.add(body);
+
+  // Head
+  const headGeo = new THREE.ConeGeometry(0.45, 0.7, 7);
+  headGeo.rotateX(Math.PI / 2);
+  headGeo.computeVertexNormals();
+  const head = new THREE.Mesh(headGeo, orangeMat);
+  head.name = "Fish_Head";
+  head.position.set(0, 0.65, 0.85);
+  head.scale.set(0.68, 0.95, 1.0);
+  head.castShadow = true;
+  group.add(head);
+
+  // Belly / Stripe
+  const stripeGeo = new THREE.BoxGeometry(0.36, 0.18, 0.75);
+  stripeGeo.computeVertexNormals();
+  const stripe = new THREE.Mesh(stripeGeo, whiteMat);
+  stripe.name = "Fish_White_Stripe";
+  stripe.position.set(0, 0.48, 0.1);
+  group.add(stripe);
+
+  // Dorsal Top Fin
+  const dorsalGeo = new THREE.BoxGeometry(0.04, 0.42, 0.7);
+  dorsalGeo.computeVertexNormals();
+  const dorsal = new THREE.Mesh(dorsalGeo, finMat);
+  dorsal.name = "Fish_Dorsal_Fin";
+  dorsal.position.set(0, 1.15, -0.1);
+  dorsal.rotation.x = -0.3;
+  group.add(dorsal);
+
+  // Tail Fin (Caudal)
+  const tailGeo = new THREE.BoxGeometry(0.04, 0.75, 0.55);
+  tailGeo.computeVertexNormals();
+  const tail = new THREE.Mesh(tailGeo, finMat);
+  tail.name = "Fish_Tail_Fin";
+  tail.position.set(0, 0.65, -1.15);
+  tail.rotation.x = 0.35;
+  group.add(tail);
+
+  // Pectoral Side Fins
+  for (const [side, sx, rotZ] of [["L", -0.32, -0.4], ["R", 0.32, 0.4]] as const) {
+    const finGeo = new THREE.BoxGeometry(0.35, 0.04, 0.28);
+    finGeo.computeVertexNormals();
+    const fin = new THREE.Mesh(finGeo, finMat);
+    fin.name = `Fish_Pectoral_Fin_${side}`;
+    fin.position.set(sx, 0.55, 0.45);
+    fin.rotation.set(-0.2, 0, rotZ);
+    group.add(fin);
+  }
+
+  // Eyes
+  for (const [side, sx] of [["L", -0.26], ["R", 0.26]] as const) {
+    const eyeGeo = new THREE.SphereGeometry(0.06, 6, 5);
+    const eye = new THREE.Mesh(eyeGeo, eyeMat);
+    eye.name = `Fish_Eye_${side}`;
+    eye.position.set(sx, 0.72, 0.95);
+    group.add(eye);
+  }
+
+  return group;
+}
+
+// -------------------------------------------------------------
+// 18h. Procedural Low-Poly Dinosaur (T-Rex)
+// -------------------------------------------------------------
+export function createProceduralDinosaur(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "LowPoly_Dinosaur_TRex";
+
+  const bodyMat = createLowPolyMaterial("#15803d", { roughness: 0.65, metalness: 0.05 });
+  const bellyMat = createLowPolyMaterial("#ca8a04", { roughness: 0.7, metalness: 0.05 });
+  const darkMat = createLowPolyMaterial("#166534", { roughness: 0.6, metalness: 0.1 });
+  const teethMat = createLowPolyMaterial("#f8fafc", { roughness: 0.3, metalness: 0.1 });
+  const eyeMat = createLowPolyMaterial("#dc2626", { roughness: 0.2, metalness: 0.8 });
+
+  // Powerful Slanted Torso
+  const torsoGeo = new THREE.BoxGeometry(1.0, 1.3, 1.8);
+  torsoGeo.computeVertexNormals();
+  const torso = new THREE.Mesh(torsoGeo, bodyMat);
+  torso.name = "Dino_Torso";
+  torso.position.set(0, 1.85, 0);
+  torso.rotation.x = 0.25;
+  torso.castShadow = true;
+  group.add(torso);
+
+  // Pale Underbelly
+  const bellyGeo = new THREE.BoxGeometry(0.85, 0.2, 1.6);
+  bellyGeo.computeVertexNormals();
+  const belly = new THREE.Mesh(bellyGeo, bellyMat);
+  belly.name = "Dino_Underbelly";
+  belly.position.set(0, 1.45, 0.1);
+  belly.rotation.x = 0.25;
+  group.add(belly);
+
+  // Muscular Neck
+  const neckGeo = new THREE.BoxGeometry(0.65, 0.85, 0.85);
+  neckGeo.computeVertexNormals();
+  const neck = new THREE.Mesh(neckGeo, bodyMat);
+  neck.name = "Dino_Neck";
+  neck.position.set(0, 2.5, 0.8);
+  neck.rotation.x = -0.4;
+  neck.castShadow = true;
+  group.add(neck);
+
+  // Predatory Skull / Upper Jaw
+  const skullGeo = new THREE.BoxGeometry(0.75, 0.7, 1.25);
+  skullGeo.computeVertexNormals();
+  const skull = new THREE.Mesh(skullGeo, darkMat);
+  skull.name = "Dino_Skull";
+  skull.position.set(0, 2.9, 1.4);
+  skull.castShadow = true;
+  group.add(skull);
+
+  // Lower Jaw
+  const jawGeo = new THREE.BoxGeometry(0.65, 0.25, 1.1);
+  jawGeo.computeVertexNormals();
+  const jaw = new THREE.Mesh(jawGeo, darkMat);
+  jaw.name = "Dino_Lower_Jaw";
+  jaw.position.set(0, 2.45, 1.35);
+  jaw.rotation.x = 0.1;
+  group.add(jaw);
+
+  // Sharp White Teeth
+  const toothRowGeo = new THREE.BoxGeometry(0.68, 0.08, 0.95);
+  const teeth = new THREE.Mesh(toothRowGeo, teethMat);
+  teeth.name = "Dino_Teeth";
+  teeth.position.set(0, 2.6, 1.42);
+  group.add(teeth);
+
+  // Glowing Red Eyes
+  for (const [side, sx] of [["L", -0.4], ["R", 0.4]] as const) {
+    const eyeGeo = new THREE.BoxGeometry(0.08, 0.1, 0.12);
+    const eye = new THREE.Mesh(eyeGeo, eyeMat);
+    eye.name = `Dino_Eye_${side}`;
+    eye.position.set(sx, 3.05, 1.15);
+    group.add(eye);
+  }
+
+  // Strong Hind Legs (Thighs + Shins + Claws)
+  for (const [side, sx] of [["L", -0.65], ["R", 0.65]] as const) {
+    const thighGeo = new THREE.BoxGeometry(0.4, 0.95, 0.65);
+    thighGeo.computeVertexNormals();
+    const thigh = new THREE.Mesh(thighGeo, darkMat);
+    thigh.name = `Dino_Thigh_${side}`;
+    thigh.position.set(sx, 1.45, -0.15);
+    thigh.castShadow = true;
+    group.add(thigh);
+
+    const shinGeo = new THREE.BoxGeometry(0.28, 0.9, 0.35);
+    shinGeo.computeVertexNormals();
+    const shin = new THREE.Mesh(shinGeo, bodyMat);
+    shin.name = `Dino_Shin_${side}`;
+    shin.position.set(sx, 0.75, 0.05);
+    shin.rotation.x = -0.2;
+    shin.castShadow = true;
+    group.add(shin);
+
+    const footGeo = new THREE.BoxGeometry(0.45, 0.18, 0.65);
+    footGeo.computeVertexNormals();
+    const foot = new THREE.Mesh(footGeo, darkMat);
+    foot.name = `Dino_Foot_${side}`;
+    foot.position.set(sx, 0.1, 0.2);
+    foot.castShadow = true;
+    group.add(foot);
+  }
+
+  // Segmented Powerful Counter-Weight Tail
+  const tailBaseGeo = new THREE.ConeGeometry(0.48, 1.6, 6);
+  tailBaseGeo.rotateX(-Math.PI / 2.2);
+  tailBaseGeo.computeVertexNormals();
+  const tailBase = new THREE.Mesh(tailBaseGeo, bodyMat);
+  tailBase.name = "Dino_Tail_Base";
+  tailBase.position.set(0, 1.7, -1.45);
+  tailBase.castShadow = true;
+  group.add(tailBase);
+
+  const tailTipGeo = new THREE.ConeGeometry(0.28, 1.4, 5);
+  tailTipGeo.rotateX(-Math.PI / 2.3);
+  tailTipGeo.computeVertexNormals();
+  const tailTip = new THREE.Mesh(tailTipGeo, darkMat);
+  tailTip.name = "Dino_Tail_Tip";
+  tailTip.position.set(0, 1.5, -2.6);
+  tailTip.castShadow = true;
+  group.add(tailTip);
+
+  // Tiny Two-Fingered Forelimbs
+  for (const [side, sx] of [["L", -0.48], ["R", 0.48]] as const) {
+    const armGeo = new THREE.BoxGeometry(0.12, 0.38, 0.14);
+    armGeo.computeVertexNormals();
+    const arm = new THREE.Mesh(armGeo, bodyMat);
+    arm.name = `Dino_Arm_${side}`;
+    arm.position.set(sx, 1.8, 0.7);
+    arm.rotation.x = -0.5;
+    group.add(arm);
+  }
+
+  return group;
+}
+
+// -------------------------------------------------------------
+// 18i. Procedural Low-Poly Horse (Stallion / Equine)
+// -------------------------------------------------------------
+export function createProceduralHorse(): THREE.Group {
+  const group = new THREE.Group();
+  group.name = "LowPoly_Horse";
+
+  const coatMat = createLowPolyMaterial("#78350f", { roughness: 0.6, metalness: 0.1 });
+  const darkMat = createLowPolyMaterial("#1c1917", { roughness: 0.4, metalness: 0.2 });
+  const hoofMat = createLowPolyMaterial("#0f172a", { roughness: 0.3, metalness: 0.5 });
+  const eyeMat = createLowPolyMaterial("#09090b", { roughness: 0.1, metalness: 0.9 });
+
+  // Muscular Torso Barrel
+  const bodyGeo = new THREE.BoxGeometry(0.85, 1.05, 2.1);
+  bodyGeo.computeVertexNormals();
+  const body = new THREE.Mesh(bodyGeo, coatMat);
+  body.name = "Horse_Body";
+  body.position.set(0, 1.65, 0);
+  body.castShadow = true;
+  group.add(body);
+
+  // Arched High Neck
+  const neckGeo = new THREE.BoxGeometry(0.55, 1.25, 0.8);
+  neckGeo.computeVertexNormals();
+  const neck = new THREE.Mesh(neckGeo, coatMat);
+  neck.name = "Horse_Neck";
+  neck.position.set(0, 2.35, 0.85);
+  neck.rotation.x = -0.55;
+  neck.castShadow = true;
+  group.add(neck);
+
+  // Dark Crested Mane
+  const maneGeo = new THREE.BoxGeometry(0.16, 1.25, 0.35);
+  maneGeo.computeVertexNormals();
+  const mane = new THREE.Mesh(maneGeo, darkMat);
+  mane.name = "Horse_Mane";
+  mane.position.set(0, 2.45, 0.68);
+  mane.rotation.x = -0.55;
+  group.add(mane);
+
+  // Noble Equine Head & Muzzle
+  const headGeo = new THREE.BoxGeometry(0.48, 0.55, 0.95);
+  headGeo.computeVertexNormals();
+  const head = new THREE.Mesh(headGeo, coatMat);
+  head.name = "Horse_Head";
+  head.position.set(0, 2.8, 1.35);
+  head.rotation.x = 0.25;
+  head.castShadow = true;
+  group.add(head);
+
+  // Muzzle Tip
+  const muzzleGeo = new THREE.BoxGeometry(0.42, 0.38, 0.4);
+  muzzleGeo.computeVertexNormals();
+  const muzzle = new THREE.Mesh(muzzleGeo, darkMat);
+  muzzle.name = "Horse_Muzzle";
+  muzzle.position.set(0, 2.65, 1.78);
+  muzzle.rotation.x = 0.25;
+  group.add(muzzle);
+
+  // Pointed Ears
+  for (const [side, sx] of [["L", -0.16], ["R", 0.16]] as const) {
+    const earGeo = new THREE.ConeGeometry(0.08, 0.3, 4);
+    const ear = new THREE.Mesh(earGeo, coatMat);
+    ear.name = `Horse_Ear_${side}`;
+    ear.position.set(sx, 3.18, 1.15);
+    ear.rotation.x = -0.2;
+    group.add(ear);
+  }
+
+  // Eyes
+  for (const [side, sx] of [["L", -0.26], ["R", 0.26]] as const) {
+    const eyeGeo = new THREE.SphereGeometry(0.05, 6, 5);
+    const eye = new THREE.Mesh(eyeGeo, eyeMat);
+    eye.name = `Horse_Eye_${side}`;
+    eye.position.set(sx, 2.85, 1.25);
+    group.add(eye);
+  }
+
+  // 4 Long Galloping Legs with Hooves
+  const legPositions = [
+    ["FL", -0.35, 0.65],
+    ["FR", 0.35, 0.65],
+    ["BL", -0.35, -0.65],
+    ["BR", 0.35, -0.65],
+  ] as const;
+
+  for (const [tag, sx, sz] of legPositions) {
+    const legGeo = new THREE.CylinderGeometry(0.12, 0.09, 1.45, 6);
+    legGeo.computeVertexNormals();
+    const leg = new THREE.Mesh(legGeo, coatMat);
+    leg.name = `Horse_Leg_${tag}`;
+    leg.position.set(sx, 0.8, sz);
+    leg.castShadow = true;
+    group.add(leg);
+
+    const hoofGeo = new THREE.CylinderGeometry(0.1, 0.12, 0.18, 6);
+    const hoof = new THREE.Mesh(hoofGeo, hoofMat);
+    hoof.name = `Horse_Hoof_${tag}`;
+    hoof.position.set(sx, 0.09, sz);
+    group.add(hoof);
+  }
+
+  // Flowing Bushy Tail
+  const tailGeo = new THREE.ConeGeometry(0.18, 1.2, 6);
+  tailGeo.rotateX(0.4);
+  tailGeo.computeVertexNormals();
+  const tail = new THREE.Mesh(tailGeo, darkMat);
+  tail.name = "Horse_Tail";
+  tail.position.set(0, 1.6, -1.35);
+  tail.castShadow = true;
+  group.add(tail);
+
+  return group;
+}
+
 export function createCompoundSpaceScene(prompt: string): THREE.Group {
   const scene = new THREE.Group();
   scene.name = "Compound_Space_Scene";
@@ -1784,6 +2208,22 @@ export function createCompoundSpaceScene(prompt: string): THREE.Group {
     subject = createProceduralSheep();
     helmetOffset.set(0, 1.05, 0.75);
     helmetRadius = 0.5;
+  } else if (p.includes("dinosaur") || p.includes("trex") || p.includes("dino")) {
+    subject = createProceduralDinosaur();
+    helmetOffset.set(0, 2.9, 1.4);
+    helmetRadius = 0.85;
+  } else if (p.includes("horse") || p.includes("stallion") || p.includes("pony") || p.includes("steed")) {
+    subject = createProceduralHorse();
+    helmetOffset.set(0, 2.8, 1.4);
+    helmetRadius = 0.75;
+  } else if (p.includes("bird") || p.includes("falcon") || p.includes("eagle") || p.includes("hawk") || p.includes("sparrow")) {
+    subject = createProceduralBird();
+    helmetOffset.set(0, 1.25, 0.42);
+    helmetRadius = 0.42;
+  } else if (p.includes("fish") || p.includes("shark") || p.includes("koi") || p.includes("goldfish")) {
+    subject = createProceduralFish();
+    helmetOffset.set(0, 0.65, 0.85);
+    helmetRadius = 0.45;
   } else {
     // Default subject: Cat in Space
     subject = createProceduralCat();
@@ -3151,6 +3591,26 @@ export function generateProceduralModelFromPrompt(prompt: string): THREE.Object3
   // 18e. Characters: Astronaut, Cosmonaut, Spaceman
   if (p.includes("astronaut") || p.includes("cosmonaut") || p.includes("spaceman") || p.includes("spacewalk")) {
     return createProceduralAstronaut();
+  }
+
+  // 18f. Animals: Bird, Falcon, Eagle, Hawk
+  if (p.includes("bird") || p.includes("falcon") || p.includes("eagle") || p.includes("hawk") || p.includes("sparrow") || p.includes("pigeon") || p.includes("parrot") || p.includes("crow")) {
+    return createProceduralBird();
+  }
+
+  // 18g. Animals: Fish, Koi, Goldfish, Shark
+  if (p.includes("fish") || p.includes("koi") || p.includes("goldfish") || p.includes("shark") || p.includes("salmon") || p.includes("trout")) {
+    return createProceduralFish();
+  }
+
+  // 18h. Animals: Dinosaur, T-Rex, Raptor
+  if (p.includes("dinosaur") || p.includes("trex") || p.includes("t-rex") || p.includes("dino") || p.includes("raptor") || p.includes("jurassic")) {
+    return createProceduralDinosaur();
+  }
+
+  // 18i. Animals: Horse, Stallion, Pony
+  if (p.includes("horse") || p.includes("stallion") || p.includes("pony") || p.includes("steed") || p.includes("mare") || p.includes("mustang")) {
+    return createProceduralHorse();
   }
 
   // 19. Space: Rocket, Starship, Spaceship

@@ -153,8 +153,20 @@ const SHORTCUTS: ShortcutItem[] = [
   },
   {
     keys: ["F12"],
-    title: "Take Photo / Render",
-    description: "Capture high-resolution snapshot with calibrated studio lighting or transparent PNG cutout",
+    title: "Render Image",
+    description: "Execute physically-based photorealistic beauty render without viewport overlays",
+    category: "View & Navigation",
+  },
+  {
+    keys: ["F11"],
+    title: "Render Result Window",
+    description: "Show or hide the Blender Render Result viewer window",
+    category: "View & Navigation",
+  },
+  {
+    keys: ["F3"],
+    title: "Save Render Image",
+    description: "Download rendered image from Render Result window",
     category: "View & Navigation",
   },
 

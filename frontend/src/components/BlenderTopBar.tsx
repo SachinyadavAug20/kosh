@@ -37,6 +37,7 @@ import {
   RotateCcw,
   Trash2,
   Camera,
+  Image as ImageIcon,
 } from "lucide-react";
 
 export type InteractionMode = "object" | "edit" | "sculpt" | "paint" | "weight";
@@ -64,6 +65,9 @@ export interface BlenderTopBarProps {
   onOpenKeyModal?: () => void;
   isPhotoStudioOpen?: boolean;
   onTogglePhotoStudio?: () => void;
+  onRenderImage?: () => void;
+  onToggleRenderResult?: () => void;
+  hasRenderResult?: boolean;
   onExport?: (format: "glb" | "stl" | "obj" | "blend") => void;
   selectedCount?: number;
   onClearCanvas?: () => void;
@@ -144,6 +148,9 @@ export function BlenderTopBar({
   onOpenShowcase,
   isPhotoStudioOpen = false,
   onTogglePhotoStudio,
+  onRenderImage,
+  onToggleRenderResult,
+  hasRenderResult = false,
   headlampEnabled = true,
   onToggleHeadlamp,
   lightingPreset = "cad_studio",
@@ -985,7 +992,35 @@ export function BlenderTopBar({
             }`}
           >
             <Camera className="w-3.5 h-3.5" />
-            <span className="hidden xl:inline">Photo Studio</span>
+            <span className="hidden xl:inline">Studio</span>
+          </button>
+        )}
+
+        {/* Render Image Trigger (F12) */}
+        {onRenderImage && (
+          <button
+            type="button"
+            onClick={onRenderImage}
+            title="Blender Render Image [F12]"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-mono font-bold transition-all border bg-gradient-to-r from-[#ea580c] to-[#f59e0b] hover:from-[#c2410c] hover:to-[#d97706] text-white border-transparent shadow-sm"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">Render</span>
+            <span className="text-[9px] opacity-80 font-mono">F12</span>
+          </button>
+        )}
+
+        {/* View Render Result (F11) */}
+        {onToggleRenderResult && hasRenderResult && (
+          <button
+            type="button"
+            onClick={onToggleRenderResult}
+            title="Show / Hide Render Result [F11]"
+            className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-mono font-medium transition-colors border bg-[#202024] border-[#27272a] text-[#38bdf8] hover:border-[#38bdf8]"
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            <span className="hidden xl:inline">Result</span>
+            <span className="text-[9px] opacity-70">F11</span>
           </button>
         )}
 

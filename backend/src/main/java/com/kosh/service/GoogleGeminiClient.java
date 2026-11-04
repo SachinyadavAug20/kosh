@@ -1367,7 +1367,7 @@ public class GoogleGeminiClient {
 
         // 10a. Compound Space Scene (e.g., Cat in Space, Dog on Moon, Elephant in Orbit)
         boolean isSpaceContext = lowerPrompt.contains("space") || lowerPrompt.contains("cosmos") || lowerPrompt.contains("galaxy") || lowerPrompt.contains("moon") || lowerPrompt.contains("asteroid") || lowerPrompt.contains("orbit") || lowerPrompt.contains("lunar");
-        boolean hasCompoundSubject = lowerPrompt.contains("cat") || lowerPrompt.contains("kitten") || lowerPrompt.contains("dog") || lowerPrompt.contains("puppy") || lowerPrompt.contains("elephant") || lowerPrompt.contains("astronaut") || lowerPrompt.contains("car");
+        boolean hasCompoundSubject = lowerPrompt.contains("cat") || lowerPrompt.contains("kitten") || lowerPrompt.contains("dog") || lowerPrompt.contains("puppy") || lowerPrompt.contains("elephant") || lowerPrompt.contains("astronaut") || lowerPrompt.contains("car") || lowerPrompt.contains("dinosaur") || lowerPrompt.contains("horse") || lowerPrompt.contains("bird") || lowerPrompt.contains("fish");
         if (isSpaceContext && (hasCompoundSubject || lowerPrompt.contains("in space") || lowerPrompt.contains("on the moon") || lowerPrompt.contains("space scene"))) {
             return """
                 import bpy, sys, math, os, json

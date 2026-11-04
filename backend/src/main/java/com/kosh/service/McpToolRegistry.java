@@ -619,10 +619,14 @@ public class McpToolRegistry {
             format = "png";
             if (arguments != null && arguments.containsKey("assetName") && arguments.get("assetName") != null) {
                 String name = arguments.get("assetName").toString();
-                Path assetPath = blenderExecutionService.getStoragePath().resolve(name);
+                java.nio.file.Path assetPath = blenderExecutionService.getStoragePath().resolve(name);
                 byte[] glbBytes = null;
                 if (java.nio.file.Files.exists(assetPath)) {
-                    glbBytes = java.nio.file.Files.readAllBytes(assetPath);
+                    try {
+                        glbBytes = java.nio.file.Files.readAllBytes(assetPath);
+                    } catch (Exception ex) {
+                        log.warn("Failed to read asset for rendering: {}", ex.getMessage());
+                    }
                 }
                 BlenderExecutionService.BlenderRunResult renderRes = blenderExecutionService.renderGlbScene(glbBytes, arguments);
                 return ToolExecutionDto.Result.builder()
