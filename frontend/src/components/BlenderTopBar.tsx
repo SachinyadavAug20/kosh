@@ -38,6 +38,7 @@ import {
   Trash2,
   Camera,
   Image as ImageIcon,
+  ShieldCheck,
 } from "lucide-react";
 
 export type InteractionMode = "object" | "edit" | "sculpt" | "paint" | "weight";
@@ -62,6 +63,7 @@ export interface BlenderTopBarProps {
   onOpenPasteBpy: () => void;
   onOpenShare: () => void;
   onOpenShowcase: () => void;
+  onOpenTrustModal?: () => void;
   onOpenKeyModal?: () => void;
   isPhotoStudioOpen?: boolean;
   onTogglePhotoStudio?: () => void;
@@ -146,6 +148,7 @@ export function BlenderTopBar({
   onOpenPasteBpy,
   onOpenShare,
   onOpenShowcase,
+  onOpenTrustModal,
   isPhotoStudioOpen = false,
   onTogglePhotoStudio,
   onRenderImage,
@@ -1063,6 +1066,19 @@ export function BlenderTopBar({
         >
           <Share2 className="w-3.5 h-3.5" />
         </button>
+
+        {/* M8ven MCP Trust Index Modal Trigger */}
+        {onOpenTrustModal && (
+          <button
+            type="button"
+            onClick={onOpenTrustModal}
+            title="M8ven MCP Trust Index: 74/100 · 96 Code Quality"
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-sky-500/40 bg-sky-950/30 text-sky-400 hover:bg-sky-900/40 text-[10px] font-mono transition-colors"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
+            <span className="hidden xl:inline font-semibold">Trust: 74</span>
+          </button>
+        )}
 
         {/* Generation Mode Pill */}
         <button

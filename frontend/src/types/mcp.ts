@@ -24,9 +24,21 @@ export interface McpToolProperty {
   enum?: string[];
 }
 
+export interface McpToolAnnotations {
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+}
+
 export interface McpToolDefinition {
   name: string;
   description: string;
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+  annotations?: McpToolAnnotations;
   inputSchema: {
     type: "object";
     properties: Record<string, McpToolProperty>;

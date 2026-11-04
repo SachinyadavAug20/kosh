@@ -14,6 +14,13 @@
 import { NarrativeActor, CharacterType, ActorAction } from "../narrative/NarrativeSceneSchema";
 import { CameraShotStyle } from "../narrative/DirectorCameraRig";
 
+export interface McpToolAnnotations {
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  idempotentHint: boolean;
+  openWorldHint: boolean;
+}
+
 export interface McpToolDefinition {
   name: string;
   description: string;
@@ -21,6 +28,7 @@ export interface McpToolDefinition {
   destructiveHint: boolean;
   idempotentHint: boolean;
   openWorldHint: boolean;
+  annotations: McpToolAnnotations;
   inputSchema: {
     type: "object";
     properties: Record<string, any>;
@@ -37,6 +45,12 @@ export const DIRECTOR_MCP_TOOLS: McpToolDefinition[] = [
     destructiveHint: false,
     idempotentHint: false,
     openWorldHint: false,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -88,6 +102,12 @@ export const DIRECTOR_MCP_TOOLS: McpToolDefinition[] = [
     destructiveHint: false,
     idempotentHint: true,
     openWorldHint: false,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -128,6 +148,12 @@ export const DIRECTOR_MCP_TOOLS: McpToolDefinition[] = [
     destructiveHint: false,
     idempotentHint: true,
     openWorldHint: false,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -160,6 +186,12 @@ export const DIRECTOR_MCP_TOOLS: McpToolDefinition[] = [
     destructiveHint: false,
     idempotentHint: true,
     openWorldHint: false,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -200,6 +232,12 @@ export const DIRECTOR_MCP_TOOLS: McpToolDefinition[] = [
     destructiveHint: false,
     idempotentHint: true,
     openWorldHint: false,
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -220,6 +258,12 @@ export const DIRECTOR_MCP_TOOLS: McpToolDefinition[] = [
     destructiveHint: false,
     idempotentHint: true,
     openWorldHint: false,
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: "object",
       properties: {

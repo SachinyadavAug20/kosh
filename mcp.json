@@ -1,0 +1,41 @@
+{
+  "$schema": "https://modelcontextprotocol.io/schema/server.json",
+  "name": "kosh",
+  "version": "1.0.0",
+  "description": "Minimalist Developer-First Creative Model Context Protocol (MCP) Workstation. Real-Time Parametric 3D CAD, Digital Sculpting, Procedural Animation, and Headless Blender 5.2 LTS.",
+  "homepage": "https://github.com/SachinyadavAug20/kosh",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SachinyadavAug20/kosh.git"
+  },
+  "license": "Apache-2.0",
+  "author": "Sachin Yadav",
+  "transport": {
+    "type": "sse",
+    "url": "http://127.0.0.1:8080/mcp/sse",
+    "messageUrl": "http://127.0.0.1:8080/mcp/message"
+  },
+  "capabilities": {
+    "tools": {
+      "listChanged": false
+    },
+    "resources": {
+      "subscribe": false,
+      "listChanged": false
+    },
+    "prompts": {
+      "listChanged": false
+    }
+  },
+  "toolsCount": 23,
+  "environment": {
+    "BLENDER_PATH": {
+      "description": "Path to local Blender binary (defaults to system PATH or /snap/bin/blender)",
+      "required": false
+    },
+    "GEMINI_API_KEY": {
+      "description": "Google Gemini API key for natural language generative 3D modeling",
+      "required": false
+    }
+  }
+}

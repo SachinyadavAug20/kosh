@@ -12,11 +12,11 @@
 <p align="center">
   <a href="https://www.blender.org/"><img src="https://img.shields.io/badge/Blender-5.2%20LTS-E87D0D?style=flat-square&logo=blender&logoColor=white" alt="Blender 5.2" /></a>
   <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/Protocol-MCP%20JSON--RPC%202.0-blue?style=flat-square" alt="MCP Protocol" /></a>
-  <a href="https://m8ven.ai/mcp/sachinyadavaug20/kosh?s=readme"><img src="https://m8ven.ai/badge/mcp/sachinyadavaug20/kosh" alt="M8ven Trust Score" /></a>
+  <a href="https://m8ven.ai/mcp/sachinyadavaug20/kosh?s=readme"><img src="https://m8ven.ai/badge/mcp/sachinyadavaug20/kosh" alt="M8ven Score" /></a>
   <a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-15.5-black?style=flat-square&logo=next.js" alt="Next.js" /></a>
   <a href="https://spring.io/projects/spring-boot"><img src="https://img.shields.io/badge/Spring%20Boot-3.3-6DB33F?style=flat-square&logo=springboot&logoColor=white" alt="Spring Boot" /></a>
   <a href="https://openjdk.org/"><img src="https://img.shields.io/badge/Java-21%20LTS-ED8B00?style=flat-square&logo=openjdk&logoColor=white" alt="Java 21" /></a>
-  <img src="https://img.shields.io/badge/License-Apache%202.0-gray?style=flat-square" alt="License" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-gray?style=flat-square" alt="License" /></a>
 </p>
 
 <p align="center">
@@ -52,7 +52,7 @@ Built with a titanium-slate CAD workstation aesthetic, Kosh couples a **Spring B
  ┌─────────────────────────────────────────────────────────────┐
  │            Spring Boot 3.3 MCP Server (:8080)               │
  │  ├─ McpController (/mcp)        ├─ ShareController (/api)   │
- │  ├─ McpToolRegistry (22 Tools)  ├─ AssetController          │
+ │  ├─ McpToolRegistry (23 Tools)  ├─ AssetController          │
  │  └─ GoogleGeminiClient (BYOK)   └─ BlenderExecutionService  │
  └──────────────────────────────┬──────────────────────────────┘
                                 │ Subprocess Execution
@@ -78,9 +78,9 @@ Built with a titanium-slate CAD workstation aesthetic, Kosh couples a **Spring B
 
 ---
 
-## 22 Native Creative MCP Tools
+## 23 Native Creative MCP Tools
 
-Kosh exposes 22 native creative tools over JSON-RPC 2.0 at `POST /mcp`:
+Kosh exposes 23 native creative tools over JSON-RPC 2.0 at `POST /mcp`:
 
 | # | Tool Name | Domain | Description |
 |---|---|---|---|
@@ -106,6 +106,7 @@ Kosh exposes 22 native creative tools over JSON-RPC 2.0 at `POST /mcp`:
 | 20 | `kosh_cad_export_step` | CAD Standards | Generates precision engineered CAD models and exports cross-platform geometries. |
 | 21 | `cad_render_frame` | Raytrace Render | Physically-based beauty render pass in Blender without viewport UI/gizmo artifacts. |
 | 22 | `blender_render_frame` | Studio Render | Frame capture with configurable resolution, transparent background, and studio lighting. |
+| 23 | `mcp_check_tool` | Trust Index | Vets any MCP server across 120,000+ indexed servers via M8ven Trust Index. |
 
 ---
 
@@ -245,9 +246,13 @@ curl -s -X POST http://localhost:8080/mcp \
 
 ---
 
-## Author & Verification
-
+## Author & Security Verification
+ 
 - **Project:** KOSH (Minimalist Creative MCP Hub)
 - **Author:** Sachin SureshChandra Yadav ([@SachinyadavAug20](https://github.com/SachinyadavAug20))
 - **Event:** BharatCode Build League 2026
-- **License:** Apache 2.0
+- **License:** Apache 2.0 ([LICENSE](LICENSE))
+- **Privacy Policy:** [PRIVACY.md](PRIVACY.md)
+- **M8ven Trust Index Verification:**
+  [![M8ven Score](https://m8ven.ai/badge/mcp/sachinyadavaug20/kosh)](https://m8ven.ai/mcp/sachinyadavaug20/kosh?s=readme)
+- **Recursive MCP Vetting:** Built-in `mcp_check_tool` against 120,000+ indexed Model Context Protocol servers

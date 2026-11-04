@@ -39,6 +39,7 @@ import {
 } from "./PhotoStudioPanel";
 import { VideoExportModal } from "./narrative/VideoExportModal";
 import { BlenderRenderModal, RenderStats } from "./BlenderRenderModal";
+import { McpTrustModal } from "./McpTrustModal";
 import { ModelPromptBar } from "./ModelPromptBar";
 import { ApiKeyModal } from "./ApiKeyModal";
 import { PostProcessingPipeline } from "../lib/rendering/PostProcessingPipeline";
@@ -858,6 +859,7 @@ export function Viewport3D({
   const [renderedImageUrl, setRenderedImageUrl] = useState<string | null>(null);
   const [renderStats, setRenderStats] = useState<RenderStats | null>(null);
   const [isRenderingFrame, setIsRenderingFrame] = useState<boolean>(false);
+  const [isTrustModalOpen, setIsTrustModalOpen] = useState<boolean>(false);
 
   // Auto-register Blender daemon rendered snapshot when generated
   useEffect(() => {
@@ -4764,6 +4766,7 @@ export function Viewport3D({
         onOpenPasteBpy={onOpenPasteBpy || (() => {})}
         onOpenShare={onOpenShare || (() => {})}
         onOpenShowcase={onOpenShowcase || (() => {})}
+        onOpenTrustModal={() => setIsTrustModalOpen(true)}
         onOpenKeyModal={() => setIsKeyModalOpen(true)}
         isPhotoStudioOpen={isPhotoStudioOpen}
         onTogglePhotoStudio={() => setIsPhotoStudioOpen((prev) => !prev)}
@@ -4949,6 +4952,13 @@ export function Viewport3D({
                         renderStats={renderStats}
                         onReRender={handleTakeStudioSnapshot}
                         isRendering={isRenderingFrame}
+                      />
+
+                      {/* M8ven MCP Trust Index Inspection Modal */}
+                      <McpTrustModal
+                        isOpen={isTrustModalOpen}
+                        onClose={() => setIsTrustModalOpen(false)}
+                        toolCount={tools?.length || 23}
                       />
 
                       {/* Friendly Live Numeric Dragging Badge (Attached to Mouse) */}

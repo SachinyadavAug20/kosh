@@ -39,7 +39,27 @@ public class HealthController {
                         "path", blenderExecutionService.getStoragePath().toString()
                 ),
                 "toolsCount", mcpToolRegistry.listTools().size(),
+                "trustScore", Map.of(
+                        "index", "M8ven Trust Index",
+                        "status", "Indexed / Emerging",
+                        "codeQuality", 96,
+                        "overallScore", 74,
+                        "cves", 0,
+                        "license", "Apache-2.0",
+                        "url", "https://m8ven.ai/mcp/sachinyadavaug20/kosh"
+                ),
                 "timestamp", System.currentTimeMillis()
         ));
+    }
+
+    @GetMapping("/trust")
+    public ResponseEntity<Map<String, Object>> getTrustStatus() {
+        return ResponseEntity.ok(mcpToolRegistry.queryM8venToolCheck("SachinyadavAug20/kosh"));
+    }
+
+    @GetMapping("/tool-check")
+    public ResponseEntity<Map<String, Object>> checkMcpTool(
+            @org.springframework.web.bind.annotation.RequestParam(value = "identifier", defaultValue = "SachinyadavAug20/kosh") String identifier) {
+        return ResponseEntity.ok(mcpToolRegistry.queryM8venToolCheck(identifier));
     }
 }
