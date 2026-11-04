@@ -6,8 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "postinstall": "cp node_modules/manifold-3d/manifold.wasm public/manifold.wasm"
+    "lint": "next lint"
   },
   "dependencies": {
     "idb-keyval": "^6.3.0",
