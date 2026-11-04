@@ -41,9 +41,9 @@ public class HealthController {
                 "toolsCount", mcpToolRegistry.listTools().size(),
                 "trustScore", Map.of(
                         "index", "M8ven Trust Index",
-                        "status", "Indexed / Emerging",
-                        "codeQuality", 96,
-                        "overallScore", 74,
+                        "status", "Publisher Verified / Clean Code",
+                        "codeQuality", 92,
+                        "overallScore", 89,
                         "cves", 0,
                         "license", "Apache-2.0",
                         "url", "https://m8ven.ai/mcp/sachinyadavaug20-kosh-17wrcp"

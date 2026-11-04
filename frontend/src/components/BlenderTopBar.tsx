@@ -1072,11 +1072,11 @@ export function BlenderTopBar({
           <button
             type="button"
             onClick={onOpenTrustModal}
-            title="M8ven MCP Trust Index: 74/100 · 96 Code Quality"
+            title="M8ven MCP Trust Index: 89/100 · Publisher Verified"
             className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-sky-500/40 bg-sky-950/30 text-sky-400 hover:bg-sky-900/40 text-[10px] font-mono transition-colors"
           >
             <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden xl:inline font-semibold">Trust: 74</span>
+            <span className="hidden xl:inline font-semibold">Trust: 89</span>
           </button>
         )}
 

@@ -51,12 +51,12 @@ export const McpTrustModal: React.FC<McpTrustModalProps> = ({
   const [vetResult, setVetResult] = useState<ToolCheckResult | null>({
     identifier: "SachinyadavAug20/kosh",
     github_url: "https://github.com/SachinyadavAug20/kosh",
-    trust_score: 74,
+    trust_score: 89,
     verdict: "yellow",
-    verdict_label: "Emerging · No concerning findings",
-    verdict_reason: "Trust score 74/100 — 0 production CVEs, 96 code quality, publisher verification in progress",
+    verdict_label: "Publisher Verified · Clean Code",
+    verdict_reason: "Code clean and publisher verified, 0 CVEs, 92 code quality",
     sub_scores: {
-      code: 96,
+      code: 92,
       maintenance_adjust: 0,
       reputation_adjust: 0,
     },
