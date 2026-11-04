@@ -17,6 +17,10 @@ import { CameraShotStyle } from "../narrative/DirectorCameraRig";
 export interface McpToolDefinition {
   name: string;
   description: string;
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  idempotentHint: boolean;
+  openWorldHint: boolean;
   inputSchema: {
     type: "object";
     properties: Record<string, any>;
@@ -29,6 +33,10 @@ export const DIRECTOR_MCP_TOOLS: McpToolDefinition[] = [
   {
     name: "create_actor",
     description: "Spawns a new rigged 3D character actor in the low-poly narrative scene.",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
     inputSchema: {
       type: "object",
       properties: {
@@ -76,6 +84,10 @@ export const DIRECTOR_MCP_TOOLS: McpToolDefinition[] = [
   {
     name: "set_actor_path",
     description: "Configures Catmull-Rom spline navigation waypoints and gait kinematics for an actor.",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
     inputSchema: {
       type: "object",
       properties: {
@@ -112,6 +124,10 @@ export const DIRECTOR_MCP_TOOLS: McpToolDefinition[] = [
   {
     name: "set_camera_cinematic",
     description: "Directs camera kinematics, focal length, tracking target, and shot style.",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
     inputSchema: {
       type: "object",
       properties: {
@@ -140,6 +156,10 @@ export const DIRECTOR_MCP_TOOLS: McpToolDefinition[] = [
   {
     name: "trigger_deterministic_render",
     description: "Executes an offline, frame-accurate video render using WebCodecs and muxers.",
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
     inputSchema: {
       type: "object",
       properties: {
@@ -176,6 +196,10 @@ export const DIRECTOR_MCP_TOOLS: McpToolDefinition[] = [
   {
     name: "evaluate_fcurve",
     description: "Samples a Bézier animation curve channel value at an arbitrary frame timestamp.",
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
     inputSchema: {
       type: "object",
       properties: {
@@ -192,6 +216,10 @@ export const DIRECTOR_MCP_TOOLS: McpToolDefinition[] = [
   {
     name: "sync_audio_narration",
     description: "Bakes speech audio formant frequencies into jaw drop and mouth wide viseme keyframes.",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
     inputSchema: {
       type: "object",
       properties: {

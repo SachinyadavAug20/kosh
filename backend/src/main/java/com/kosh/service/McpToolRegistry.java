@@ -81,10 +81,22 @@ public class McpToolRegistry {
         this.mcpSceneStateService = mcpSceneStateService;
     }
 
+    private void attachHints(Map<String, Object> tool, boolean readOnly, boolean destructive, boolean idempotent, boolean openWorld) {
+        tool.put("readOnlyHint", readOnly);
+        tool.put("destructiveHint", destructive);
+        tool.put("idempotentHint", idempotent);
+        tool.put("openWorldHint", openWorld);
+    }
+
     private Map<String, Object> createToolSchema(String name, String description, Map<String, Object> extraProperties) {
+        return createToolSchema(name, description, extraProperties, false, false);
+    }
+
+    private Map<String, Object> createToolSchema(String name, String description, Map<String, Object> extraProperties, boolean readOnly, boolean idempotent) {
         Map<String, Object> tool = new LinkedHashMap<>();
         tool.put("name", name);
         tool.put("description", description);
+        attachHints(tool, readOnly, false, idempotent, false);
 
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("prompt", Map.of(
@@ -127,6 +139,7 @@ public class McpToolRegistry {
         Map<String, Object> primTool = new LinkedHashMap<>();
         primTool.put("name", "cad_create_primitive");
         primTool.put("description", "Instantiates a precision parametric 3D CAD primitive (cube, cylinder, cone, sphere, torus) with dimensional constraints and PBR material.");
+        attachHints(primTool, false, false, false, false);
         primTool.put("inputSchema", Map.of(
                 "type", "object",
                 "properties", Map.of(
@@ -144,6 +157,7 @@ public class McpToolRegistry {
         Map<String, Object> boolTool = new LinkedHashMap<>();
         boolTool.put("name", "cad_boolean_operation");
         boolTool.put("description", "Applies Constructive Solid Geometry (CSG) boolean operations (DIFFERENCE, UNION, INTERSECT) between two named meshes with exact manifold solver.");
+        attachHints(boolTool, false, false, false, false);
         boolTool.put("inputSchema", Map.of(
                 "type", "object",
                 "properties", Map.of(
@@ -161,6 +175,7 @@ public class McpToolRegistry {
         Map<String, Object> modTool = new LinkedHashMap<>();
         modTool.put("name", "cad_apply_modifier");
         modTool.put("description", "Applies parametric CAD modifier operations (BEVEL, SUBSURF, MIRROR, SOLIDIFY) to a named mesh with exact numerical parameters.");
+        attachHints(modTool, false, false, false, false);
         modTool.put("inputSchema", Map.of(
                 "type", "object",
                 "properties", Map.of(
@@ -177,6 +192,7 @@ public class McpToolRegistry {
         Map<String, Object> inspectTool = new LinkedHashMap<>();
         inspectTool.put("name", "cad_inspect_scene");
         inspectTool.put("description", "Inspects active 3D scene topology: returns mesh count, vertex count, face count, bounding boxes, dimensions, and manifold/watertight status without running exports.");
+        attachHints(inspectTool, true, false, true, false);
         inspectTool.put("inputSchema", Map.of(
                 "type", "object",
                 "properties", Map.of(
@@ -191,6 +207,7 @@ public class McpToolRegistry {
         Map<String, Object> synthTool = new LinkedHashMap<>();
         synthTool.put("name", "cad_synthesize_composite");
         synthTool.put("description", "Synthesizes a complete multi-part 3D CAD composite assembly from natural language with specified aesthetic style and target export format.");
+        attachHints(synthTool, false, false, false, false);
         synthTool.put("inputSchema", Map.of(
                 "type", "object",
                 "properties", Map.of(
@@ -206,6 +223,7 @@ public class McpToolRegistry {
         Map<String, Object> compoundTool = new LinkedHashMap<>();
         compoundTool.put("name", "cad_compose_compound_scene");
         compoundTool.put("description", "Composes a rich compound 3D scene (e.g. low-poly subject like cat, dog, elephant, astronaut situated in space on a lunar asteroid with planetary rings and glowing cosmic crystals).");
+        attachHints(compoundTool, false, false, false, false);
         compoundTool.put("inputSchema", Map.of(
                 "type", "object",
                 "properties", Map.of(
@@ -221,6 +239,7 @@ public class McpToolRegistry {
         Map<String, Object> renderTool = new LinkedHashMap<>();
         renderTool.put("name", "cad_render_frame");
         renderTool.put("description", "Executes an actual physically-based raytraced render of the 3D model or scene using Blender's EEVEE or Cycles engine with studio lighting and camera framing, producing a photorealistic 2D rendered image.");
+        attachHints(renderTool, true, false, true, false);
         renderTool.put("inputSchema", Map.of(
                 "type", "object",
                 "properties", Map.of(
@@ -236,10 +255,19 @@ public class McpToolRegistry {
         ));
         tools.add(renderTool);
 
+        // 5d. blender_render_frame (Studio Render Capture)
+        Map<String, Object> blenderRenderTool = new LinkedHashMap<>();
+        blenderRenderTool.put("name", "blender_render_frame");
+        blenderRenderTool.put("description", "High-resolution raytraced render capture of active 3D models with transparent background, studio lighting rigs, and lens framing.");
+        attachHints(blenderRenderTool, true, false, true, false);
+        blenderRenderTool.put("inputSchema", renderTool.get("inputSchema"));
+        tools.add(blenderRenderTool);
+
         // 6. cad_assemble_kit (instant pre-baked kitbashing assembly, zero LLM latency)
         Map<String, Object> kitTool = new LinkedHashMap<>();
         kitTool.put("name", "cad_assemble_kit");
         kitTool.put("description", "Instantly assembles a pre-baked parametric kitbashing template (industrial flange, quadcopter frame, sci-fi panel, structural truss, low-poly tree). Deterministic script generation in <10ms with no LLM round-trip.");
+        attachHints(kitTool, false, false, true, false);
         kitTool.put("inputSchema", Map.of(
                 "type", "object",
                 "properties", Map.of(
@@ -274,6 +302,7 @@ public class McpToolRegistry {
         Map<String, Object> batchCsgTool = new LinkedHashMap<>();
         batchCsgTool.put("name", "cad_batch_csg");
         batchCsgTool.put("description", "Executes a base primitive plus a sequential array of CSG boolean operations (DIFFERENCE, UNION, INTERSECT) in one single transaction round-trip, avoiding multi-call network latency.");
+        attachHints(batchCsgTool, false, false, false, false);
         batchCsgTool.put("inputSchema", Map.of(
                 "type", "object",
                 "properties", Map.of(
@@ -307,6 +336,7 @@ public class McpToolRegistry {
         Map<String, Object> filletTool = new LinkedHashMap<>();
         filletTool.put("name", "cad_apply_fillet_chamfer");
         filletTool.put("description", "Applies edge rounding (fillet) or metric beveling to an existing named mesh via a parametric BEVEL modifier, without rewriting the entire mesh. Alias: cad_quick_fillet_chamfer.");
+        attachHints(filletTool, false, false, false, false);
         filletTool.put("inputSchema", Map.of(
                 "type", "object",
                 "properties", Map.of(
@@ -509,7 +539,9 @@ public class McpToolRegistry {
                 "Analyzes 3D mesh manifold topology: calculates volume, bounding box, vertex count, and watertight status.",
                 Map.of(
                         "target_mesh", Map.of("type", "string", "description", "Name of mesh to inspect")
-                )
+                ),
+                true,
+                true
         ));
 
         tools.add(createToolSchema(
@@ -529,7 +561,9 @@ public class McpToolRegistry {
                 "Exports active CAD model or selected mesh to watertight .GLB, .OBJ, or .STL with clean normals.",
                 Map.of(
                         "export_format", Map.of("type", "string", "enum", List.of("glb", "stl", "obj"))
-                )
+                ),
+                true,
+                true
         ));
 
         return tools;
