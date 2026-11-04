@@ -16,12 +16,16 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @SpringBootTest
 class McpProtocolTest {
 
     @Autowired
     private McpController mcpController;
+
+    @Autowired
+    private com.kosh.service.BlenderExecutionService blenderExecutionService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -281,6 +285,7 @@ class McpProtocolTest {
     @Test
     @DisplayName("cad_create_primitive should generate a 3D model with progress token tracking")
     void testCreatePrimitiveToolWithProgressToken() {
+        assumeTrue(blenderExecutionService.isBlenderAvailable(), "Blender runtime is not available; skipping live render test");
         McpRpcRequest req = McpRpcRequest.builder()
                 .jsonrpc("2.0")
                 .id("call-prim-1")
@@ -444,6 +449,7 @@ class McpProtocolTest {
     @Test
     @DisplayName("cad_assemble_kit should spawn a pre-baked flange kit without LLM round-trip")
     void testAssembleKitTool() {
+        assumeTrue(blenderExecutionService.isBlenderAvailable(), "Blender runtime is not available; skipping live render test");
         McpRpcRequest req = McpRpcRequest.builder()
                 .jsonrpc("2.0")
                 .id("kit-1")
@@ -478,6 +484,7 @@ class McpProtocolTest {
     @Test
     @DisplayName("cad_batch_csg should run base plus boolean pipeline in one round-trip")
     void testBatchCsgTool() {
+        assumeTrue(blenderExecutionService.isBlenderAvailable(), "Blender runtime is not available; skipping live render test");
         McpRpcRequest req = McpRpcRequest.builder()
                 .jsonrpc("2.0")
                 .id("batch-csg-1")
@@ -525,6 +532,7 @@ class McpProtocolTest {
     @Test
     @DisplayName("cad_quick_fillet_chamfer alias should apply parametric bevel modifier")
     void testFilletChamferToolAlias() {
+        assumeTrue(blenderExecutionService.isBlenderAvailable(), "Blender runtime is not available; skipping live render test");
         McpRpcRequest req = McpRpcRequest.builder()
                 .jsonrpc("2.0")
                 .id("fillet-1")
