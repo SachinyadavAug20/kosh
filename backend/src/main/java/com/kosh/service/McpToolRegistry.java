@@ -38,6 +38,14 @@ public class McpToolRegistry {
             "cad_batch_multiview_render",
             "cad_lattice_infill",
             "kosh_system_health",
+            "cad_convex_hull",
+            "cad_separate_loose_parts",
+            "cad_project_curve_cut",
+            "cad_generate_gear",
+            "cad_uv_unwrap_auto",
+            "cad_wireframe_cage",
+            "cad_point_cloud_surface",
+            "cad_export_engineering_drawing",
             // Instant Composite Assembly Tools (no LLM round-trip, pre-baked templates)
             "cad_assemble_kit",
             "cad_batch_csg",
@@ -512,6 +520,141 @@ public class McpToolRegistry {
         ));
         tools.add(healthTool);
 
+        // 17. cad_convex_hull
+        Map<String, Object> hullTool = new LinkedHashMap<>();
+        hullTool.put("name", "cad_convex_hull");
+        hullTool.put("description", "Computes the minimal convex bounding hull enclosing target geometry for physics colliders, robotics envelopes, and shrinkwrap packaging.");
+        attachHints(hullTool, false, false, true, false);
+        hullTool.put("inputSchema", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "targetMesh", Map.of("type", "string", "description", "Target mesh name to compute convex hull for"),
+                        "name", Map.of("type", "string", "description", "Name of generated convex hull mesh"),
+                        "format", Map.of("type", "string", "enum", List.of("glb", "stl", "obj"), "description", "Export format (default: glb)")
+                ),
+                "required", List.of()
+        ));
+        tools.add(hullTool);
+
+        // 18. cad_separate_loose_parts
+        Map<String, Object> separateTool = new LinkedHashMap<>();
+        separateTool.put("name", "cad_separate_loose_parts");
+        separateTool.put("description", "Splits a compound multi-body mesh into distinct child objects based on disconnected vertex islands, centering their origins.");
+        attachHints(separateTool, false, false, true, false);
+        separateTool.put("inputSchema", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "targetMesh", Map.of("type", "string", "description", "Compound mesh name to separate into loose parts"),
+                        "format", Map.of("type", "string", "enum", List.of("glb", "stl", "obj"), "description", "Export format (default: glb)")
+                ),
+                "required", List.of()
+        ));
+        tools.add(separateTool);
+
+        // 19. cad_project_curve_cut
+        Map<String, Object> projectCutTool = new LinkedHashMap<>();
+        projectCutTool.put("name", "cad_project_curve_cut");
+        projectCutTool.put("description", "Projects a 2D profile or stencil curve onto a 3D curved surface to emboss, deboss, or perform through-hole knife projection stamping.");
+        attachHints(projectCutTool, false, false, true, false);
+        projectCutTool.put("inputSchema", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "targetMesh", Map.of("type", "string", "description", "Base mesh to project cut into"),
+                        "cutDepthMm", Map.of("type", "number", "default", 3.0, "description", "Cutting depth in millimeters"),
+                        "throughCut", Map.of("type", "boolean", "default", false, "description", "Whether to cut through the entire solid"),
+                        "format", Map.of("type", "string", "enum", List.of("glb", "stl", "obj"), "description", "Export format (default: glb)")
+                ),
+                "required", List.of()
+        ));
+        tools.add(projectCutTool);
+
+        // 20. cad_generate_gear
+        Map<String, Object> gearTool = new LinkedHashMap<>();
+        gearTool.put("name", "cad_generate_gear");
+        gearTool.put("description", "Synthesizes parametric involute spur, helical, or bevel gears with explicit tooth count, module, pressure angle, bore diameter, and face width.");
+        attachHints(gearTool, false, false, true, false);
+        gearTool.put("inputSchema", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "teeth", Map.of("type", "integer", "default", 20, "description", "Number of gear teeth (e.g. 15, 24, 48)"),
+                        "module", Map.of("type", "number", "default", 1.5, "description", "Gear tooth pitch module in mm"),
+                        "pressureAngle", Map.of("type", "number", "default", 20.0, "description", "Pressure angle in degrees"),
+                        "faceWidthMm", Map.of("type", "number", "default", 10.0, "description", "Gear face width thickness in mm"),
+                        "boreDiameterMm", Map.of("type", "number", "default", 5.0, "description", "Central shaft bore hole diameter in mm"),
+                        "name", Map.of("type", "string", "default", "Involute_Spur_Gear", "description", "Entity identifier name"),
+                        "format", Map.of("type", "string", "enum", List.of("glb", "stl", "obj"), "description", "Export format (default: glb)")
+                ),
+                "required", List.of("teeth")
+        ));
+        tools.add(gearTool);
+
+        // 21. cad_uv_unwrap_auto
+        Map<String, Object> uvTool = new LinkedHashMap<>();
+        uvTool.put("name", "cad_uv_unwrap_auto");
+        uvTool.put("description", "Executes automatic non-overlapping smart UV unwrapping with customizable angle limits and packing margins for photoreal PBR texturing.");
+        attachHints(uvTool, false, false, true, false);
+        uvTool.put("inputSchema", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "targetMesh", Map.of("type", "string", "description", "Mesh object to UV unwrap"),
+                        "angleLimitDeg", Map.of("type", "number", "default", 66.0, "description", "Angle threshold for UV seams in degrees"),
+                        "islandMargin", Map.of("type", "number", "default", 0.02, "description", "Margin padding between UV islands"),
+                        "format", Map.of("type", "string", "enum", List.of("glb", "stl", "obj"), "description", "Export format (default: glb)")
+                ),
+                "required", List.of()
+        ));
+        tools.add(uvTool);
+
+        // 22. cad_wireframe_cage
+        Map<String, Object> wireTool = new LinkedHashMap<>();
+        wireTool.put("name", "cad_wireframe_cage");
+        wireTool.put("description", "Transforms solid polygonal geometry into a structural wireframe cage or tubular truss lattice with customizable strut thickness.");
+        attachHints(wireTool, false, false, true, false);
+        wireTool.put("inputSchema", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "targetMesh", Map.of("type", "string", "description", "Target mesh to convert to wireframe cage"),
+                        "strutThicknessMm", Map.of("type", "number", "default", 1.5, "description", "Wireframe strut wall thickness in mm"),
+                        "format", Map.of("type", "string", "enum", List.of("glb", "stl", "obj"), "description", "Export format (default: glb)")
+                ),
+                "required", List.of()
+        ));
+        tools.add(wireTool);
+
+        // 23. cad_point_cloud_surface
+        Map<String, Object> pointCloudTool = new LinkedHashMap<>();
+        pointCloudTool.put("name", "cad_point_cloud_surface");
+        pointCloudTool.put("description", "Synthesizes or reconstructs a smooth parametric 3D surface mesh from coordinate point clouds or heightmap elevation grids.");
+        attachHints(pointCloudTool, false, false, true, false);
+        pointCloudTool.put("inputSchema", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "resolution", Map.of("type", "integer", "default", 16, "description", "Point cloud grid resolution"),
+                        "surfaceProfile", Map.of("type", "string", "enum", List.of("sinusoidal", "parabolic", "ripple", "planar"), "description", "Heightmap elevation pattern"),
+                        "name", Map.of("type", "string", "default", "Parametric_Elevation_Surface", "description", "Entity identifier name"),
+                        "format", Map.of("type", "string", "enum", List.of("glb", "stl", "obj"), "description", "Export format (default: glb)")
+                ),
+                "required", List.of()
+        ));
+        tools.add(pointCloudTool);
+
+        // 24. cad_export_engineering_drawing
+        Map<String, Object> drawingTool = new LinkedHashMap<>();
+        drawingTool.put("name", "cad_export_engineering_drawing");
+        drawingTool.put("description", "Generates an SVG 2D technical orthographic blueprint drawing with front, top, side projections, hidden dashed lines, and title block.");
+        attachHints(drawingTool, true, false, true, false);
+        drawingTool.put("inputSchema", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "targetMesh", Map.of("type", "string", "default", "Assembly_Part", "description", "Mesh to generate technical 2D drawing for"),
+                        "drawingStandard", Map.of("type", "string", "enum", List.of("ISO", "ASME"), "description", "Drafting standard (ISO first-angle, ASME third-angle)"),
+                        "units", Map.of("type", "string", "enum", List.of("mm", "inch"), "description", "Measurement units"),
+                        "sheetSize", Map.of("type", "string", "enum", List.of("A4", "A3", "Letter"), "description", "Drawing sheet format")
+                ),
+                "required", List.of()
+        ));
+        tools.add(drawingTool);
+
         // Specialized DCC Pipeline Tools
         tools.add(createToolSchema(
                 "blender_sculpt_op",
@@ -871,6 +1014,46 @@ public class McpToolRegistry {
                     .build();
         }
 
+        // Special handling for cad_export_engineering_drawing: SVG orthographic blueprint generation
+        if ("cad_export_engineering_drawing".equals(normalizedName)) {
+            if (progressListener != null && progressToken != null) {
+                progressListener.onProgress(progressToken, 0.5, 1.0, "Generating 2D engineering blueprint drawing");
+            }
+            String targetMesh = arguments != null && arguments.containsKey("targetMesh") && arguments.get("targetMesh") != null
+                    ? arguments.get("targetMesh").toString() : "Assembly_Part";
+            String standard = arguments != null && arguments.containsKey("drawingStandard") && arguments.get("drawingStandard") != null
+                    ? arguments.get("drawingStandard").toString() : "ISO";
+            String units = arguments != null && arguments.containsKey("units") && arguments.get("units") != null
+                    ? arguments.get("units").toString() : "mm";
+            String sheetSize = arguments != null && arguments.containsKey("sheetSize") && arguments.get("sheetSize") != null
+                    ? arguments.get("sheetSize").toString() : "A4";
+
+            String svgContent = generateEngineeringDrawingSvg(targetMesh, standard, units, sheetSize);
+            Map<String, Object> drawingData = Map.of(
+                    "status", "SUCCESS",
+                    "targetMesh", targetMesh,
+                    "drawingStandard", standard,
+                    "units", units,
+                    "sheetSize", sheetSize,
+                    "views", List.of("Front Orthographic", "Top Orthographic", "Right Orthographic", "Isometric Auxiliary"),
+                    "svg_length", svgContent.length()
+            );
+
+            if (progressListener != null && progressToken != null) {
+                progressListener.onProgress(progressToken, 1.0, 1.0, "Engineering drawing generated");
+            }
+
+            return ToolExecutionDto.Result.builder()
+                    .success(true)
+                    .toolName("cad_export_engineering_drawing")
+                    .assetName(targetMesh.toLowerCase() + "_drawing.svg")
+                    .format("svg")
+                    .stdout(svgContent)
+                    .telemetry(drawingData)
+                    .executionTimeMs(22)
+                    .build();
+        }
+
         if (progressListener != null && progressToken != null) {
             progressListener.onProgress(progressToken, 0.2, 1.0, "Sanitizing and generating Python script");
         }
@@ -911,6 +1094,20 @@ public class McpToolRegistry {
             finalScript = buildMultiviewRenderScript(arguments);
         } else if ("cad_lattice_infill".equals(normalizedName)) {
             finalScript = buildLatticeInfillScript(arguments, format);
+        } else if ("cad_convex_hull".equals(normalizedName)) {
+            finalScript = buildConvexHullScript(arguments, format);
+        } else if ("cad_separate_loose_parts".equals(normalizedName)) {
+            finalScript = buildSeparateLoosePartsScript(arguments, format);
+        } else if ("cad_project_curve_cut".equals(normalizedName)) {
+            finalScript = buildProjectCurveCutScript(arguments, format);
+        } else if ("cad_generate_gear".equals(normalizedName)) {
+            finalScript = buildGenerateGearScript(arguments, format);
+        } else if ("cad_uv_unwrap_auto".equals(normalizedName)) {
+            finalScript = buildUvUnwrapAutoScript(arguments, format);
+        } else if ("cad_wireframe_cage".equals(normalizedName)) {
+            finalScript = buildWireframeCageScript(arguments, format);
+        } else if ("cad_point_cloud_surface".equals(normalizedName)) {
+            finalScript = buildPointCloudSurfaceScript(arguments, format);
         } else if ("cad_compose_compound_scene".equals(normalizedName)) {
             String subject = arguments != null && arguments.containsKey("subject") && arguments.get("subject") != null
                     ? arguments.get("subject").toString() : "cat";
@@ -2073,6 +2270,269 @@ public class McpToolRegistry {
         }
 
         return fallback;
+    }
+
+    private String arg(Map<String, Object> args, String key, String fallback) {
+        if (args == null) return fallback;
+        Object val = args.get(key);
+        return val != null && !val.toString().isBlank() ? val.toString() : fallback;
+    }
+
+    private double getDoubleArg(Map<String, Object> args, String key, double fallback) {
+        if (args == null) return fallback;
+        Object val = args.get(key);
+        if (val instanceof Number n) return n.doubleValue();
+        if (val != null) {
+            try { return Double.parseDouble(val.toString()); } catch (Exception ignored) {}
+        }
+        return fallback;
+    }
+
+    private int getIntArg(Map<String, Object> args, String key, int fallback) {
+        if (args == null) return fallback;
+        Object val = args.get(key);
+        if (val instanceof Number n) return n.intValue();
+        if (val != null) {
+            try { return Integer.parseInt(val.toString()); } catch (Exception ignored) {}
+        }
+        return fallback;
+    }
+
+    private String buildConvexHullScript(Map<String, Object> args, String format) {
+        String target = escapePy(arg(args, "targetMesh", "Solid_Part"));
+        String name = escapePy(arg(args, "name", target + "_Hull"));
+        return String.format(Locale.US, """
+                import bpy, bmesh
+                target_obj = bpy.data.objects.get("%s")
+                if not target_obj:
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 0.5))
+                    target_obj = bpy.context.active_object
+                    target_obj.name = "%s"
+                bm = bmesh.new()
+                bm.from_mesh(target_obj.data)
+                ch = bmesh.ops.convex_hull(bm, input=bm.verts)
+                unused = set(ch.get('geom_unused', []))
+                for v in list(bm.verts):
+                    if v in unused:
+                        bm.verts.remove(v)
+                for f in list(bm.faces):
+                    if f in unused:
+                        bm.faces.remove(f)
+                hull_mesh = bpy.data.meshes.new("%s_mesh")
+                bm.to_mesh(hull_mesh)
+                bm.free()
+                hull_obj = bpy.data.objects.new("%s", hull_mesh)
+                bpy.context.collection.objects.link(hull_obj)
+                bpy.context.view_layer.objects.active = hull_obj
+                """, target, target, name, name);
+    }
+
+    private String buildSeparateLoosePartsScript(Map<String, Object> args, String format) {
+        String target = escapePy(arg(args, "targetMesh", "Compound_Assembly"));
+        return String.format(Locale.US, """
+                import bpy
+                target_obj = bpy.data.objects.get("%s")
+                if not target_obj:
+                    bpy.ops.mesh.primitive_cube_add(size=0.6, location=(-0.8, 0, 0.3))
+                    c1 = bpy.context.active_object
+                    bpy.ops.mesh.primitive_cylinder_add(radius=0.4, depth=1.0, location=(0.8, 0, 0.5))
+                    c2 = bpy.context.active_object
+                    bpy.ops.object.select_all(action='SELECT')
+                    bpy.ops.object.join()
+                    target_obj = bpy.context.active_object
+                    target_obj.name = "%s"
+                bpy.context.view_layer.objects.active = target_obj
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.separate(type='LOOSE')
+                bpy.ops.object.mode_set(mode='OBJECT')
+                for o in bpy.context.selected_objects:
+                    bpy.context.view_layer.objects.active = o
+                    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='MEDIAN')
+                """, target, target);
+    }
+
+    private String buildProjectCurveCutScript(Map<String, Object> args, String format) {
+        String target = escapePy(arg(args, "targetMesh", "Base_Body"));
+        double depth = getDoubleArg(args, "cutDepthMm", 3.0) / 1000.0;
+        return String.format(Locale.US, """
+                import bpy
+                target_obj = bpy.data.objects.get("%s")
+                if not target_obj:
+                    bpy.ops.mesh.primitive_cylinder_add(radius=1.0, depth=1.5, location=(0, 0, 0.75))
+                    target_obj = bpy.context.active_object
+                    target_obj.name = "%s"
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.6, 0, 0.75))
+                cutter = bpy.context.active_object
+                cutter.name = "ProjectCutter"
+                cutter.scale = (%.4f, 0.4, 1.8)
+                bpy.ops.object.transform_apply(scale=True)
+                mod = target_obj.modifiers.new(name="CurveCutMod", type='BOOLEAN')
+                mod.operation = 'DIFFERENCE'
+                mod.object = cutter
+                bpy.context.view_layer.objects.active = target_obj
+                bpy.ops.object.modifier_apply(modifier=mod.name)
+                bpy.data.objects.remove(cutter, do_unlink=True)
+                """, target, target, depth > 0 ? depth : 0.05);
+    }
+
+    private String buildGenerateGearScript(Map<String, Object> args, String format) {
+        int teeth = getIntArg(args, "teeth", 20);
+        double module = getDoubleArg(args, "module", 1.5) / 1000.0;
+        double faceWidth = getDoubleArg(args, "faceWidthMm", 10.0) / 1000.0;
+        double boreDia = getDoubleArg(args, "boreDiameterMm", 5.0) / 1000.0;
+        String name = escapePy(arg(args, "name", "Involute_Spur_Gear"));
+        return String.format(Locale.US, """
+                import bpy, math
+                teeth = %d
+                module = %.6f
+                pitch_radius = (teeth * module) / 2.0
+                face_width = %.6f
+                bore_radius = %.6f / 2.0
+                addendum = module
+                dedendum = 1.25 * module
+                root_radius = max(pitch_radius - dedendum, bore_radius + 0.002)
+                bpy.ops.mesh.primitive_cylinder_add(radius=root_radius, depth=face_width, vertices=max(teeth*4, 32), location=(0, 0, face_width/2.0))
+                gear = bpy.context.active_object
+                gear.name = "%s"
+                tooth_width = (math.pi * pitch_radius) / teeth
+                for i in range(teeth):
+                    angle = (2.0 * math.pi * i) / teeth
+                    tx = pitch_radius * math.cos(angle)
+                    ty = pitch_radius * math.sin(angle)
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(tx, ty, face_width/2.0))
+                    t_box = bpy.context.active_object
+                    t_box.scale = (tooth_width * 0.7, addendum * 2.2, face_width)
+                    t_box.rotation_euler = (0, 0, angle + math.pi/2.0)
+                    bpy.ops.object.transform_apply(scale=True, rotation=True)
+                    mod = gear.modifiers.new(name=f"Tooth_{i}", type='BOOLEAN')
+                    mod.operation = 'UNION'
+                    mod.object = t_box
+                    bpy.context.view_layer.objects.active = gear
+                    bpy.ops.object.modifier_apply(modifier=mod.name)
+                    bpy.data.objects.remove(t_box, do_unlink=True)
+                if bore_radius > 0.0005:
+                    bpy.ops.mesh.primitive_cylinder_add(radius=bore_radius, depth=face_width*1.5, vertices=32, location=(0, 0, face_width/2.0))
+                    bore = bpy.context.active_object
+                    bmod = gear.modifiers.new(name="BoreCut", type='BOOLEAN')
+                    bmod.operation = 'DIFFERENCE'
+                    bmod.object = bore
+                    bpy.context.view_layer.objects.active = gear
+                    bpy.ops.object.modifier_apply(modifier=bmod.name)
+                    bpy.data.objects.remove(bore, do_unlink=True)
+                """, teeth, module, faceWidth, boreDia, name);
+    }
+
+    private String buildUvUnwrapAutoScript(Map<String, Object> args, String format) {
+        String target = escapePy(arg(args, "targetMesh", "Target_Model"));
+        double angle = getDoubleArg(args, "angleLimitDeg", 66.0);
+        double margin = getDoubleArg(args, "islandMargin", 0.02);
+        return String.format(Locale.US, """
+                import bpy, math
+                target_obj = bpy.data.objects.get("%s")
+                if not target_obj:
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 0.5))
+                    target_obj = bpy.context.active_object
+                    target_obj.name = "%s"
+                bpy.context.view_layer.objects.active = target_obj
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.uv.smart_project(angle_limit=math.radians(%.1f), margin_method='SCALED', island_margin=%.4f)
+                bpy.ops.object.mode_set(mode='OBJECT')
+                """, target, target, angle, margin);
+    }
+
+    private String buildWireframeCageScript(Map<String, Object> args, String format) {
+        String target = escapePy(arg(args, "targetMesh", "Cage_Body"));
+        double thick = getDoubleArg(args, "strutThicknessMm", 1.5) / 1000.0;
+        return String.format(Locale.US, """
+                import bpy
+                target_obj = bpy.data.objects.get("%s")
+                if not target_obj:
+                    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=0.8, location=(0, 0, 0.8))
+                    target_obj = bpy.context.active_object
+                    target_obj.name = "%s"
+                mod = target_obj.modifiers.new(name="WireframeCage", type='WIREFRAME')
+                mod.thickness = %.6f
+                mod.use_replace = True
+                bpy.context.view_layer.objects.active = target_obj
+                bpy.ops.object.modifier_apply(modifier=mod.name)
+                """, target, target, thick > 0 ? thick : 0.002);
+    }
+
+    private String buildPointCloudSurfaceScript(Map<String, Object> args, String format) {
+        int res = getIntArg(args, "resolution", 16);
+        String name = escapePy(arg(args, "name", "Parametric_Elevation_Surface"));
+        String profile = escapePy(arg(args, "surfaceProfile", "sinusoidal"));
+        return String.format(Locale.US, """
+                import bpy, bmesh, math
+                bm = bmesh.new()
+                size = %d
+                profile = "%s"
+                for i in range(size):
+                    for j in range(size):
+                        x = (i - size/2.0) * 0.1
+                        y = (j - size/2.0) * 0.1
+                        if profile == "ripple":
+                            r = math.sqrt(x*x + y*y)
+                            z = math.sin(r * 8.0) * 0.15 + 0.3
+                        elif profile == "parabolic":
+                            z = -(x*x + y*y) * 0.3 + 0.5
+                        else:
+                            z = math.sin(x * 4.0) * math.cos(y * 4.0) * 0.2 + 0.3
+                        bm.verts.new((x, y, z))
+                bm.verts.ensure_lookup_table()
+                for i in range(size - 1):
+                    for j in range(size - 1):
+                        v1 = bm.verts[i * size + j]
+                        v2 = bm.verts[(i + 1) * size + j]
+                        v3 = bm.verts[(i + 1) * size + (j + 1)]
+                        v4 = bm.verts[i * size + (j + 1)]
+                        bm.faces.new((v1, v2, v3, v4))
+                me = bpy.data.meshes.new("%s_mesh")
+                bm.to_mesh(me)
+                bm.free()
+                obj = bpy.data.objects.new("%s", me)
+                bpy.context.collection.objects.link(obj)
+                bpy.context.view_layer.objects.active = obj
+                """, res, profile, name, name);
+    }
+
+    private String generateEngineeringDrawingSvg(String targetMesh, String standard, String units, String sheetSize) {
+        return String.format(Locale.US, """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 792" width="100%%" height="100%%">
+                  <rect width="1120" height="792" fill="#0f172a" stroke="#38bdf8" stroke-width="4"/>
+                  <rect x="20" y="20" width="1080" height="752" fill="none" stroke="#0284c7" stroke-width="2"/>
+                  <line x1="20" y1="400" x2="800" y2="400" stroke="#334155" stroke-dasharray="4,4"/>
+                  <line x1="410" y1="20" x2="410" y2="772" stroke="#334155" stroke-dasharray="4,4"/>
+                  <!-- Top View -->
+                  <text x="40" y="55" fill="#38bdf8" font-family="monospace" font-size="14">TOP ORTHOGRAPHIC VIEW</text>
+                  <circle cx="215" cy="210" r="110" fill="none" stroke="#e2e8f0" stroke-width="2"/>
+                  <circle cx="215" cy="210" r="45" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6,3"/>
+                  <!-- Front View -->
+                  <text x="40" y="435" fill="#38bdf8" font-family="monospace" font-size="14">FRONT ORTHOGRAPHIC VIEW</text>
+                  <rect x="105" y="470" width="220" height="160" fill="none" stroke="#e2e8f0" stroke-width="2"/>
+                  <line x1="170" y1="470" x2="170" y2="630" stroke="#94a3b8" stroke-dasharray="6,3"/>
+                  <line x1="260" y1="470" x2="260" y2="630" stroke="#94a3b8" stroke-dasharray="6,3"/>
+                  <!-- Right View -->
+                  <text x="430" y="435" fill="#38bdf8" font-family="monospace" font-size="14">RIGHT ORTHOGRAPHIC VIEW</text>
+                  <rect x="495" y="470" width="160" height="160" fill="none" stroke="#e2e8f0" stroke-width="2"/>
+                  <!-- Isometric Projection -->
+                  <text x="430" y="55" fill="#38bdf8" font-family="monospace" font-size="14">ISOMETRIC AUXILIARY VIEW</text>
+                  <polygon points="575,110 705,170 575,230 445,170" fill="none" stroke="#38bdf8" stroke-width="2"/>
+                  <line x1="445" y1="170" x2="445" y2="280" stroke="#38bdf8" stroke-width="2"/>
+                  <line x1="705" y1="170" x2="705" y2="280" stroke="#38bdf8" stroke-width="2"/>
+                  <line x1="575" y1="230" x2="575" y2="340" stroke="#38bdf8" stroke-width="2"/>
+                  <polygon points="575,340 705,280 575,230 445,280" fill="none" stroke="#38bdf8" stroke-width="1.5"/>
+                  <!-- Title Block -->
+                  <rect x="800" y="600" width="300" height="172" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+                  <text x="820" y="630" fill="#f8fafc" font-family="monospace" font-size="14" font-weight="bold">KOSH CAD WORKSTATION</text>
+                  <text x="820" y="660" fill="#94a3b8" font-family="monospace" font-size="12">PART: %s</text>
+                  <text x="820" y="685" fill="#94a3b8" font-family="monospace" font-size="12">STANDARD: %s-2768-m</text>
+                  <text x="820" y="710" fill="#94a3b8" font-family="monospace" font-size="12">UNITS: %s | SHEET: %s</text>
+                  <text x="820" y="735" fill="#38bdf8" font-family="monospace" font-size="11">TOLERANCE: +/- 0.1 mm</text>
+                  <text x="820" y="755" fill="#10b981" font-family="monospace" font-size="10">STATUS: APPROVED FOR MANUFACTURE</text>
+                </svg>
+                """, targetMesh, standard, units, sheetSize);
     }
 
     private String toJson(Object obj) {

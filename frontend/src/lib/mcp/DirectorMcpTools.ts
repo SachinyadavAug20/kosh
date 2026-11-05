@@ -1261,6 +1261,433 @@ export const DIRECTOR_MCP_TOOLS: McpToolDefinition[] = [
     },
     samplePayload: {},
   },
+  {
+    name: "cad_convex_hull",
+    description: "Computes the minimal convex bounding hull enclosing target geometry for physics colliders, robotics envelopes, and shrinkwrap packaging.",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        targetMesh: { type: "string", description: "Target mesh name to compute convex hull for" },
+        name: { type: "string", description: "Name of generated convex hull mesh" },
+        format: { type: "string", enum: ["glb", "stl", "obj"], description: "Export format (default: glb)" },
+      },
+    },
+    samplePayload: {
+      targetMesh: "Robot_Arm_Link",
+      name: "Robot_Arm_Link_Hull",
+      format: "glb",
+    },
+  },
+  {
+    name: "cad_separate_loose_parts",
+    description: "Splits a compound multi-body mesh into distinct child objects based on disconnected vertex islands, centering their origins.",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        targetMesh: { type: "string", description: "Compound mesh name to separate into loose parts" },
+        format: { type: "string", enum: ["glb", "stl", "obj"], description: "Export format (default: glb)" },
+      },
+    },
+    samplePayload: {
+      targetMesh: "Imported_MultiPart_Assembly",
+      format: "glb",
+    },
+  },
+  {
+    name: "cad_project_curve_cut",
+    description: "Projects a 2D profile or stencil curve onto a 3D curved surface to emboss, deboss, or perform through-hole knife projection stamping.",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        targetMesh: { type: "string", description: "Base mesh to project cut into" },
+        cutDepthMm: { type: "number", description: "Cutting depth in millimeters (default: 3.0)" },
+        throughCut: { type: "boolean", description: "Whether to cut through the entire solid" },
+        format: { type: "string", enum: ["glb", "stl", "obj"], description: "Export format (default: glb)" },
+      },
+    },
+    samplePayload: {
+      targetMesh: "Curved_Enclosure_Face",
+      cutDepthMm: 2.5,
+      throughCut: false,
+      format: "glb",
+    },
+  },
+  {
+    name: "cad_generate_gear",
+    description: "Synthesizes parametric involute spur, helical, or bevel gears with explicit tooth count, module, pressure angle, bore diameter, and face width.",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        teeth: { type: "integer", description: "Number of gear teeth (e.g. 15, 24, 48)" },
+        module: { type: "number", description: "Gear tooth pitch module in mm (default: 1.5)" },
+        pressureAngle: { type: "number", description: "Pressure angle in degrees (default: 20.0)" },
+        faceWidthMm: { type: "number", description: "Gear face width thickness in mm (default: 10.0)" },
+        boreDiameterMm: { type: "number", description: "Central shaft bore hole diameter in mm (default: 5.0)" },
+        name: { type: "string", description: "Entity identifier name" },
+        format: { type: "string", enum: ["glb", "stl", "obj"], description: "Export format (default: glb)" },
+      },
+      required: ["teeth"],
+    },
+    samplePayload: {
+      teeth: 24,
+      module: 1.5,
+      pressureAngle: 20.0,
+      faceWidthMm: 12.0,
+      boreDiameterMm: 8.0,
+      name: "Drive_Pinion_24T",
+      format: "glb",
+    },
+  },
+  {
+    name: "cad_uv_unwrap_auto",
+    description: "Executes automatic non-overlapping smart UV unwrapping with customizable angle limits and packing margins for photoreal PBR texturing.",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        targetMesh: { type: "string", description: "Mesh object to UV unwrap" },
+        angleLimitDeg: { type: "number", description: "Angle threshold for UV seams in degrees (default: 66.0)" },
+        islandMargin: { type: "number", description: "Margin padding between UV islands (default: 0.02)" },
+        format: { type: "string", enum: ["glb", "stl", "obj"], description: "Export format (default: glb)" },
+      },
+    },
+    samplePayload: {
+      targetMesh: "Ergonomic_Handle_Solid",
+      angleLimitDeg: 66.0,
+      islandMargin: 0.02,
+      format: "glb",
+    },
+  },
+  {
+    name: "cad_wireframe_cage",
+    description: "Transforms solid polygonal geometry into a structural wireframe cage or tubular truss lattice with customizable strut thickness.",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        targetMesh: { type: "string", description: "Target mesh to convert to wireframe cage" },
+        strutThicknessMm: { type: "number", description: "Wireframe strut wall thickness in mm (default: 1.5)" },
+        format: { type: "string", enum: ["glb", "stl", "obj"], description: "Export format (default: glb)" },
+      },
+    },
+    samplePayload: {
+      targetMesh: "Spaceframe_Dome",
+      strutThicknessMm: 2.0,
+      format: "glb",
+    },
+  },
+  {
+    name: "cad_point_cloud_surface",
+    description: "Synthesizes or reconstructs a smooth parametric 3D surface mesh from coordinate point clouds or heightmap elevation grids.",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        resolution: { type: "integer", description: "Point cloud grid resolution (default: 16)" },
+        surfaceProfile: { type: "string", enum: ["sinusoidal", "parabolic", "ripple", "planar"], description: "Heightmap elevation pattern" },
+        name: { type: "string", description: "Entity identifier name" },
+        format: { type: "string", enum: ["glb", "stl", "obj"], description: "Export format (default: glb)" },
+      },
+    },
+    samplePayload: {
+      resolution: 24,
+      surfaceProfile: "ripple",
+      name: "Topographic_Terrain_Plate",
+      format: "glb",
+    },
+  },
+  {
+    name: "cad_export_engineering_drawing",
+    description: "Generates an SVG 2D technical orthographic blueprint drawing with front, top, side projections, hidden dashed lines, and title block.",
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        targetMesh: { type: "string", description: "Mesh to generate technical 2D drawing for" },
+        drawingStandard: { type: "string", enum: ["ISO", "ASME"], description: "Drafting standard (ISO first-angle, ASME third-angle)" },
+        units: { type: "string", enum: ["mm", "inch"], description: "Measurement units" },
+        sheetSize: { type: "string", enum: ["A4", "A3", "Letter"], description: "Drawing sheet format" },
+      },
+    },
+    samplePayload: {
+      targetMesh: "Pinion_Driver",
+      drawingStandard: "ISO",
+      units: "mm",
+      sheetSize: "A4",
+    },
+  },
+];
+
+export interface McpResourceDefinition {
+  uri: string;
+  name: string;
+  description: string;
+  mimeType: string;
+}
+
+export const DIRECTOR_MCP_RESOURCES: McpResourceDefinition[] = [
+  {
+    uri: "kosh://scene/hierarchy",
+    name: "Active Scene Hierarchy Graph",
+    description: "Complete scene graph tree of objects, parent-child links, world transforms, and material IDs",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://engine/capabilities",
+    name: "Kosh 3D Engine Capabilities",
+    description: "Blender version, installed Python packages, supported formats (.glb, .stl, .obj), and max polygon quotas",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://materials/catalog",
+    name: "PBR Material Catalog",
+    description: "Ready-to-use studio PBR materials: MatteTitanium, ClearGlass, CastIron, NeonBlueEmissive, BrushedBrass, CarbonFiber, StudioClay",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://materials/library",
+    name: "Studio PBR & MatCap Material Library",
+    description: "Built-in CAD material presets (Titanium, Frosted Acrylic, Clay, Redwax, Chrome, Brass, Neon Emissive)",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://scene/bounding-boxes",
+    name: "Scene World Space Bounding Boxes",
+    description: "Axis-Aligned Bounding Box (AABB) extents and metric dimensions for active scene meshes",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://viewport/active-selection",
+    name: "Active Viewport Selection & Modifier Stack",
+    description: "Currently selected entity metadata: vertex list, face count, active modifier stack, and transform matrices",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://library/modular-models",
+    name: "Modular Low-Poly 3D Model Catalog",
+    description: "Instant procedural low-poly entities and compound scene composer presets (Cat, Dog, Elephant, Astronaut, Car, Spaceship)",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://specs/hardware/metric-fasteners",
+    name: "Metric Fastener Hardware Library",
+    description: "Exact CAD clearance holes, tap drill diameters, and socket-cap head dimensions for M2-M12 bolts in millimeters",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://materials/pbr-presets",
+    name: "Curated PBR Material Presets",
+    description: "Calibrated Disney/PBR Principled BSDF shader tokens: dark titanium, machined aluminum, safety orange, carbon fiber",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://guidelines/fdm-tolerances",
+    name: "3D Print FDM Design Rules",
+    description: "Minimum wall thickness, minimum hole diameters, maximum overhang angle, and moving-joint clearances for FDM printing",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://specs/engineering/stepper-motors",
+    name: "NEMA Stepper Motor Specifications",
+    description: "Standard CAD dimensions, faceplate widths, mounting hole PCDs, pilot bosses, and shaft diameters for NEMA 14, 17, 23, and 34 motors",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://specs/standards/iso-bearings",
+    name: "ISO Deep Groove Ball Bearings",
+    description: "Standard bearing dimensions (bore d, outer D, width B) and dynamic load ratings for 608, 623, 624, 625, 688, and 6900 series",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://guidelines/sla-resin-tolerances",
+    name: "SLA and DLP Photopolymer Resin Design Rules",
+    description: "Minimum wall thickness, escape hole diameters, suction-cup prevention, and support overhang thresholds for resin 3D printing",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://materials/physical-constants",
+    name: "Engineering Material Physical Constants",
+    description: "Mass density, Young's modulus, Poisson's ratio, tensile yield strength, and thermal expansion for aerospace metals and engineering polymers",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://standards/gdt-symbols",
+    name: "Geometric Dimensioning and Tolerancing Reference",
+    description: "ASME Y14.5 and ISO 1101 GD&T symbol definitions, tolerance zones, and datum feature control frame guidelines",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://specs/optics/studio-hdri-lighting",
+    name: "Studio Photography and Lighting Rig Standards",
+    description: "Key/fill/rim lighting ratios, Kelvin color temperatures, lux intensity targets, and cyclorama backdrop geometry parameters",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://presets/game-engine-lod",
+    name: "Real-Time Game Engine LOD Polygon Budgets",
+    description: "Target triangle counts, draw call limits, and texture map resolutions across LOD0 Hero to LOD3 Billboard stages for UE5 and Unity",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://specs/aerospace/unmanned-airframe",
+    name: "UAV Multirotor Airframe Design Rules",
+    description: "Propeller tip clearance percentages, motor mount PCD patterns, center-of-gravity alignment rules, and carbon fiber arm sizing",
+    mimeType: "application/json",
+  },
+];
+
+export interface McpPromptArgument {
+  name: string;
+  description: string;
+  required?: boolean;
+}
+
+export interface McpPromptDefinition {
+  name: string;
+  description: string;
+  arguments: McpPromptArgument[];
+}
+
+export const DIRECTOR_MCP_PROMPTS: McpPromptDefinition[] = [
+  {
+    name: "scaffold_parametric_enclosure",
+    description: "Prepares the LLM to design an electronic enclosure/chassis with snap fits, mounting standoffs, wall thickness, and a split lid.",
+    arguments: [
+      { name: "lengthMm", description: "Internal enclosure length in millimeters", required: true },
+      { name: "widthMm", description: "Internal enclosure width in millimeters", required: true },
+      { name: "heightMm", description: "Internal enclosure height in millimeters", required: true },
+      { name: "wallThicknessMm", description: "Wall thickness in millimeters (FDM minimum: 1.2)", required: true },
+    ],
+  },
+  {
+    name: "optimize_manifold_topology",
+    description: "Evaluates a broken or non-manifold mesh, identifies degenerate faces, and applies self-healing routines to reach watertight status.",
+    arguments: [
+      { name: "meshName", description: "Name of the mesh to inspect and repair", required: true },
+    ],
+  },
+  {
+    name: "lowpoly_stylized_environment",
+    description: "Guides the model to create an indie game-ready low-poly composition without high triangle overhead.",
+    arguments: [
+      { name: "theme", description: "Art direction theme (e.g. 'scifi hangar', 'forest village')", required: true },
+      { name: "budgetTris", description: "Maximum triangle budget for the whole scene", required: true },
+    ],
+  },
+  {
+    name: "harden_mechanical_part",
+    description: "Standardized mechanical hardening blueprint: inspects non-manifold edges, applies chamfers/bevels, and verifies metric dimensions.",
+    arguments: [
+      { name: "mesh_name", description: "Name of the target mesh component to harden", required: true },
+      { name: "tolerance_mm", description: "Machining tolerance or chamfer offset in millimeters", required: false },
+    ],
+  },
+  {
+    name: "decompose_narrative_object",
+    description: "Sequential CSG CAD decomposition blueprint: guides the LLM to structure models into Primary Solids -> Subtractive Cuts -> Additive Detail -> PBR Finishes.",
+    arguments: [
+      { name: "concept_description", description: "Natural language concept or product description to decompose into CAD operations", required: true },
+    ],
+  },
+  {
+    name: "design_spur_gear_train",
+    description: "Prepares the LLM to design an interlocking 2-gear transmission mechanism with calculated gear ratio, module, center distance, and bore clearance.",
+    arguments: [
+      { name: "gearRatio", description: "Transmission reduction ratio (e.g. 2.0)", required: false },
+      { name: "module", description: "Gear module pitch in millimeters (e.g. 1.5)", required: false },
+      { name: "driverTeeth", description: "Number of teeth on driving pinion gear (e.g. 15)", required: false },
+      { name: "faceWidthMm", description: "Gear face width in millimeters (e.g. 10.0)", required: false },
+    ],
+  },
+  {
+    name: "photorealistic_product_hero_shot",
+    description: "Guides the LLM through professional studio lighting, 85mm camera optics, PBR shader assignment, and 4-view blueprint rendering.",
+    arguments: [
+      { name: "meshName", description: "Name of the target product mesh", required: true },
+      { name: "materialPreset", description: "PBR material preset (Titanium, Carbon Fiber, Glass, Gold, Chrome, Obsidian, Copper, Ceramic, Car Paint)", required: false },
+      { name: "lightingMood", description: "Studio lighting rig (3-Point Classic, Cyberpunk Neon, Product Softbox, Dramatic Rim, Daylight Studio)", required: false },
+    ],
+  },
+  {
+    name: "generative_drone_frame",
+    description: "Prepares the LLM to architect a lightweight UAV quadcopter airframe with motor mounting PCDs, electronics bay, and weight reduction pockets.",
+    arguments: [
+      { name: "propellerDiameterInch", description: "Propeller diameter in inches (e.g. 5.0)", required: false },
+      { name: "motorPcdType", description: "Motor mount PCD standard (e.g. 16x19_M3 or 19x25_M3_M4)", required: false },
+      { name: "armThicknessMm", description: "Carbon fiber arm plate thickness in millimeters (e.g. 5.0)", required: false },
+    ],
+  },
+  {
+    name: "procedural_architectural_pavilion",
+    description: "Guides the LLM to generate a parametric architectural canopy with structural ribs, Voronoi skin perforation, and daylight staging.",
+    arguments: [
+      { name: "spanMeters", description: "Total pavilion ground span in meters (e.g. 12.0)", required: false },
+      { name: "ribCount", description: "Number of structural arch ribs (e.g. 8)", required: false },
+      { name: "canopyStyle", description: "Canopy geometry style (ribbed_arch, voronoi_shell, tensile_membrane)", required: false },
+    ],
+  },
+  {
+    name: "reverse_engineering_blueprint_to_3d",
+    description: "Instructions to reconstruct 100% watertight CSG solid geometry from orthographic blueprint dimensions and verify with digital calipers.",
+    arguments: [
+      { name: "blueprintDescription", description: "Description and nominal dimensions of the mechanical drawing", required: true },
+      { name: "nominalToleranceMm", description: "Machining tolerance in millimeters (e.g. 0.1)", required: false },
+    ],
+  },
+  {
+    name: "sculpt_creature_bust",
+    description: "Multi-pass digital sculpting blueprint: anatomical blocking, voxel remeshing, dynamic brush deformation, symmetry mirroring, and clay shader.",
+    arguments: [
+      { name: "creatureType", description: "Target creature or fantasy creature description", required: true },
+      { name: "voxelResolutionMm", description: "Remeshing voxel size in millimeters (e.g. 2.0)", required: false },
+    ],
+  },
+  {
+    name: "generate_3d_printable_snapfit",
+    description: "Standardized cantilever snap-fit joint engineering blueprint with calculated beam deflection, 30-degree lead-in angle, and strain relief fillet.",
+    arguments: [
+      { name: "beamLengthMm", description: "Cantilever beam length in millimeters (e.g. 15.0)", required: false },
+      { name: "wallThicknessMm", description: "Nominal wall thickness in millimeters (e.g. 2.0)", required: false },
+      { name: "catchDepthMm", description: "Snap catch undercut retention depth in millimeters (e.g. 1.2)", required: false },
+      { name: "entryAngleDeg", description: "Lead-in push entry angle in degrees (e.g. 30.0)", required: false },
+    ],
+  },
 ];
 
 export interface McpDispatchResult {

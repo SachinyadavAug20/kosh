@@ -154,6 +154,54 @@ public class McpResourceRegistry {
                 "Minimum wall thickness, minimum hole diameters, maximum overhang angle, and moving-joint clearances for FDM printing",
                 toJson(buildFdmTolerancesSpec())
         );
+        registerStatic(
+                "kosh://specs/engineering/stepper-motors",
+                "NEMA Stepper Motor Specifications",
+                "Standard CAD dimensions, faceplate widths, mounting hole PCDs, pilot bosses, and shaft diameters for NEMA 14, 17, 23, and 34 motors",
+                toJson(buildStepperMotorsSpec())
+        );
+        registerStatic(
+                "kosh://specs/standards/iso-bearings",
+                "ISO Deep Groove Ball Bearings",
+                "Standard bearing dimensions (bore d, outer D, width B) and dynamic load ratings for 608, 623, 624, 625, 688, and 6900 series",
+                toJson(buildIsoBearingsSpec())
+        );
+        registerStatic(
+                "kosh://guidelines/sla-resin-tolerances",
+                "SLA and DLP Photopolymer Resin Design Rules",
+                "Minimum wall thickness, escape hole diameters, suction-cup prevention, and support overhang thresholds for resin 3D printing",
+                toJson(buildSlaResinTolerancesSpec())
+        );
+        registerStatic(
+                "kosh://materials/physical-constants",
+                "Engineering Material Physical Constants",
+                "Mass density, Young's modulus, Poisson's ratio, tensile yield strength, and thermal expansion for aerospace metals and engineering polymers",
+                toJson(buildPhysicalConstantsSpec())
+        );
+        registerStatic(
+                "kosh://standards/gdt-symbols",
+                "Geometric Dimensioning and Tolerancing Reference",
+                "ASME Y14.5 and ISO 1101 GD&T symbol definitions, tolerance zones, and datum feature control frame guidelines",
+                toJson(buildGdtSymbolsSpec())
+        );
+        registerStatic(
+                "kosh://specs/optics/studio-hdri-lighting",
+                "Studio Photography and Lighting Rig Standards",
+                "Key/fill/rim lighting ratios, Kelvin color temperatures, lux intensity targets, and cyclorama backdrop geometry parameters",
+                toJson(buildStudioLightingSpec())
+        );
+        registerStatic(
+                "kosh://presets/game-engine-lod",
+                "Real-Time Game Engine LOD Polygon Budgets",
+                "Target triangle counts, draw call limits, and texture map resolutions across LOD0 Hero to LOD3 Billboard stages for UE5 and Unity",
+                toJson(buildGameEngineLodSpec())
+        );
+        registerStatic(
+                "kosh://specs/aerospace/unmanned-airframe",
+                "UAV Multirotor Airframe Design Rules",
+                "Propeller tip clearance percentages, motor mount PCD patterns, center-of-gravity alignment rules, and carbon fiber arm sizing",
+                toJson(buildUnmannedAirframeSpec())
+        );
 
         log.info("McpResourceRegistry initialized: {} resources ({} static, {} dynamic)",
                 descriptors.size(), staticContentCache.size(), dynamicReaders.size());
@@ -265,6 +313,114 @@ public class McpResourceRegistry {
                 "holes", "Holes under 2mm must be drilled after printing; orient holes vertically when possible",
                 "overhangs", "Angles beyond 45 degrees from vertical require support material",
                 "joints", "Use 0.4mm clearance for snap-fit and press-fit moving joints"
+        ));
+        return spec;
+    }
+
+    private Map<String, Object> buildStepperMotorsSpec() {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("units", "millimeters");
+        spec.put("standard", "NEMA ICS 16-2001 Stepper Standards");
+        spec.put("sizes", Map.of(
+                "NEMA14", Map.of("faceWidthMm", 35.2, "pilotDiaMm", 22.0, "pilotDepthMm", 2.0, "holeSpacingMm", 26.0, "boltThread", "M3", "shaftDiaMm", 5.0),
+                "NEMA17", Map.of("faceWidthMm", 42.3, "pilotDiaMm", 22.0, "pilotDepthMm", 2.0, "holeSpacingMm", 31.0, "boltThread", "M3", "shaftDiaMm", 5.0),
+                "NEMA23", Map.of("faceWidthMm", 57.2, "pilotDiaMm", 38.1, "pilotDepthMm", 1.6, "holeSpacingMm", 47.1, "boltThread", "M5", "shaftDiaMm", 6.35),
+                "NEMA34", Map.of("faceWidthMm", 86.4, "pilotDiaMm", 73.0, "pilotDepthMm", 1.6, "holeSpacingMm", 69.6, "boltThread", "M6", "shaftDiaMm", 12.7)
+        ));
+        return spec;
+    }
+
+    private Map<String, Object> buildIsoBearingsSpec() {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("units", "millimeters");
+        spec.put("standard", "ISO 15 / DIN 625 Deep Groove Radial Ball Bearings");
+        spec.put("bearings", Map.of(
+                "608", Map.of("boreDiaMm", 8.0, "outerDiaMm", 22.0, "widthMm", 7.0, "dynamicLoadCr_kN", 3.3, "application", "Skateboard, 3D printer spool, roller"),
+                "623", Map.of("boreDiaMm", 3.0, "outerDiaMm", 10.0, "widthMm", 4.0, "dynamicLoadCr_kN", 0.63, "application", "Miniature idler, RC micro-drives"),
+                "624", Map.of("boreDiaMm", 4.0, "outerDiaMm", 13.0, "widthMm", 5.0, "dynamicLoadCr_kN", 1.3, "application", "V-slot guide wheels"),
+                "625", Map.of("boreDiaMm", 5.0, "outerDiaMm", 16.0, "widthMm", 5.0, "dynamicLoadCr_kN", 1.75, "application", "OpenBuilds V-wheels, linear rails"),
+                "688", Map.of("boreDiaMm", 8.0, "outerDiaMm", 16.0, "widthMm", 5.0, "dynamicLoadCr_kN", 1.6, "application", "Thin-section leadscrew support"),
+                "6900", Map.of("boreDiaMm", 10.0, "outerDiaMm", 22.0, "widthMm", 6.0, "dynamicLoadCr_kN", 2.7, "application", "Robotics pivot joints")
+        ));
+        return spec;
+    }
+
+    private Map<String, Object> buildSlaResinTolerancesSpec() {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("units", "millimeters");
+        spec.put("technology", "Stereolithography (SLA) and Digital Light Processing (DLP)");
+        spec.put("minWallThicknessSupportedMm", 0.4);
+        spec.put("minWallThicknessUnsupportedMm", 0.8);
+        spec.put("minDrainHoleDiaMm", 3.0);
+        spec.put("minHollowClearanceMm", 2.0);
+        spec.put("maxOverhangWithoutSupportDeg", 35.0);
+        spec.put("movingPartClearanceMm", 0.5);
+        spec.put("rules", Map.of(
+                "drainHoles", "Provide at least two 3.0mm drain holes opposite each other to prevent hydrostatic suction cup peel failures",
+                "orientation", "Angle large flat surfaces at 30-45 degrees to build plate to minimize cross-sectional peel force",
+                "hollowing", "Hollow thick solid sections to save resin and prevent exothermic shrinkage curling"
+        ));
+        return spec;
+    }
+
+    private Map<String, Object> buildPhysicalConstantsSpec() {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("materials", Map.of(
+                "Aluminum_6061_T6", Map.of("densityKgM3", 2700, "youngsModulusGPa", 68.9, "yieldStrengthMPa", 276, "poissonsRatio", 0.33),
+                "Titanium_Grade5_Ti6Al4V", Map.of("densityKgM3", 4430, "youngsModulusGPa", 113.8, "yieldStrengthMPa", 880, "poissonsRatio", 0.34),
+                "Stainless_Steel_304", Map.of("densityKgM3", 8000, "youngsModulusGPa", 193.0, "yieldStrengthMPa", 215, "poissonsRatio", 0.29),
+                "Brass_C360", Map.of("densityKgM3", 8500, "youngsModulusGPa", 100.0, "yieldStrengthMPa", 310, "poissonsRatio", 0.31),
+                "PLA_Polymer", Map.of("densityKgM3", 1240, "youngsModulusGPa", 3.5, "yieldStrengthMPa", 50, "poissonsRatio", 0.36),
+                "PETG_Polymer", Map.of("densityKgM3", 1270, "youngsModulusGPa", 2.1, "yieldStrengthMPa", 50, "poissonsRatio", 0.38),
+                "Carbon_Fiber_Composite", Map.of("densityKgM3", 1550, "youngsModulusGPa", 135.0, "yieldStrengthMPa", 600, "poissonsRatio", 0.28)
+        ));
+        return spec;
+    }
+
+    private Map<String, Object> buildGdtSymbolsSpec() {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("standard", "ASME Y14.5-2018 / ISO 1101");
+        spec.put("categories", Map.of(
+                "form", Map.of("flatness", "Surface elements must lie between two parallel planes", "cylindricity", "Tolerance zone bounded by two coaxial cylinders"),
+                "orientation", Map.of("perpendicularity", "Surface or axis exactly 90 degrees to datum", "parallelism", "Surface equidistant to datum plane"),
+                "location", Map.of("position", "Theoretical exact location of hole/boss centerline", "concentricity", "Congruence of center points to datum axis"),
+                "runout", Map.of("circularRunout", "FIM dial gauge variation during 360-degree rotation", "totalRunout", "Full surface variation along datum axis")
+        ));
+        return spec;
+    }
+
+    private Map<String, Object> buildStudioLightingSpec() {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("kelvinTemperatures", Map.of("daylightD56", 5600, "tungstenStudio", 3200, "overcastSky", 6500, "candlelight", 1900));
+        spec.put("ratios", Map.of(
+                "highKeyCommercial", "Key to Fill 2:1 (soft, clean, shadowless e-commerce photography)",
+                "standardHeroShot", "Key to Fill 4:1 with Rim 2:1 (defined volumetric shape and edge contour)",
+                "dramaticLowKey", "Key to Fill 8:1 with Rim 3:1 (deep cinematic contrast, silhouette edge)"
+        ));
+        spec.put("cycloramaDefaults", Map.of("floorRadiusM", 0.5, "bevelSegments", 16, "diffuseRoughness", 0.95));
+        return spec;
+    }
+
+    private Map<String, Object> buildGameEngineLodSpec() {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("engines", List.of("Unreal Engine 5 (Nanite/LOD)", "Unity URP/HDRP", "Godot 4.x"));
+        spec.put("stages", Map.of(
+                "LOD0_Hero", Map.of("targetTris", "50,000 - 100,000", "distanceScreenPercentage", "50%+", "textureRes", "4096x4096"),
+                "LOD1_Mid", Map.of("targetTris", "15,000 - 30,000", "distanceScreenPercentage", "25% - 50%", "textureRes", "2048x2048"),
+                "LOD2_Far", Map.of("targetTris", "3,000 - 8,000", "distanceScreenPercentage", "10% - 25%", "textureRes", "1024x1024"),
+                "LOD3_Impostor", Map.of("targetTris", "< 500", "distanceScreenPercentage", "< 10%", "textureRes", "512x512")
+        ));
+        return spec;
+    }
+
+    private Map<String, Object> buildUnmannedAirframeSpec() {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("units", "millimeters");
+        spec.put("rules", Map.of(
+                "propellerTipClearance", "Minimum 10% of propeller diameter between blade tips and fuselage/neighboring props",
+                "motorMountPCD", Map.of("16x19_M3", "Standard 2207-2306 FPV motors", "19x25_M3_M4", "Standard 2806-3110 long range motors"),
+                "cgAlignment", "Center of gravity must coincide with center of thrust within 2.0mm horizontal error",
+                "carbonPlateThicknessMm", Map.of("topPlate", 2.0, "bottomPlate", 2.5, "arms", 5.0)
         ));
         return spec;
     }

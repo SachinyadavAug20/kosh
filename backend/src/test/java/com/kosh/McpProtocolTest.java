@@ -104,6 +104,14 @@ class McpProtocolTest {
         assertTrue(toolNames.contains("cad_batch_multiview_render"));
         assertTrue(toolNames.contains("cad_lattice_infill"));
         assertTrue(toolNames.contains("kosh_system_health"));
+        assertTrue(toolNames.contains("cad_convex_hull"));
+        assertTrue(toolNames.contains("cad_separate_loose_parts"));
+        assertTrue(toolNames.contains("cad_project_curve_cut"));
+        assertTrue(toolNames.contains("cad_generate_gear"));
+        assertTrue(toolNames.contains("cad_uv_unwrap_auto"));
+        assertTrue(toolNames.contains("cad_wireframe_cage"));
+        assertTrue(toolNames.contains("cad_point_cloud_surface"));
+        assertTrue(toolNames.contains("cad_export_engineering_drawing"));
     }
 
     @Test
@@ -134,7 +142,15 @@ class McpProtocolTest {
         assertTrue(uris.contains("kosh://materials/pbr-presets"));
         assertTrue(uris.contains("kosh://guidelines/fdm-tolerances"));
         assertTrue(uris.contains("kosh://library/modular-models"));
-        assertEquals(10, resources.size());
+        assertTrue(uris.contains("kosh://specs/engineering/stepper-motors"));
+        assertTrue(uris.contains("kosh://specs/standards/iso-bearings"));
+        assertTrue(uris.contains("kosh://guidelines/sla-resin-tolerances"));
+        assertTrue(uris.contains("kosh://materials/physical-constants"));
+        assertTrue(uris.contains("kosh://standards/gdt-symbols"));
+        assertTrue(uris.contains("kosh://specs/optics/studio-hdri-lighting"));
+        assertTrue(uris.contains("kosh://presets/game-engine-lod"));
+        assertTrue(uris.contains("kosh://specs/aerospace/unmanned-airframe"));
+        assertEquals(18, resources.size());
     }
 
     @Test
@@ -213,7 +229,14 @@ class McpProtocolTest {
         assertTrue(promptNames.contains("scaffold_parametric_enclosure"));
         assertTrue(promptNames.contains("optimize_manifold_topology"));
         assertTrue(promptNames.contains("lowpoly_stylized_environment"));
-        assertEquals(5, prompts.size());
+        assertTrue(promptNames.contains("design_spur_gear_train"));
+        assertTrue(promptNames.contains("photorealistic_product_hero_shot"));
+        assertTrue(promptNames.contains("generative_drone_frame"));
+        assertTrue(promptNames.contains("procedural_architectural_pavilion"));
+        assertTrue(promptNames.contains("reverse_engineering_blueprint_to_3d"));
+        assertTrue(promptNames.contains("sculpt_creature_bust"));
+        assertTrue(promptNames.contains("generate_3d_printable_snapfit"));
+        assertEquals(12, prompts.size());
     }
 
     @Test
@@ -621,6 +644,114 @@ class McpProtocolTest {
         Map<String, Object> result = (Map<String, Object>) body.getResult();
         assertNotNull(result);
         assertEquals(false, result.get("isError"));
+    }
+
+    @Test
+    @DisplayName("MCP resources/read should return valid JSON for stepper motors and physical constants")
+    void testReadNewEngineeringResources() throws Exception {
+        // Read kosh://specs/engineering/stepper-motors
+        McpRpcRequest reqStepper = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("read-stepper")
+                .method("resources/read")
+                .params(Map.of("uri", "kosh://specs/engineering/stepper-motors"))
+                .build();
+
+        ResponseEntity<McpRpcResponse> respStepper = mcpController.handleRpcRequest(null, reqStepper, null, null, null, null, null);
+        assertNotNull(respStepper.getBody());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resStepper = (Map<String, Object>) respStepper.getBody().getResult();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> contentsStepper = (List<Map<String, Object>>) resStepper.get("contents");
+        assertFalse(contentsStepper.isEmpty());
+        String textStepper = contentsStepper.get(0).get("text").toString();
+        Map<?, ?> stepperMap = objectMapper.readValue(textStepper, Map.class);
+        assertTrue(stepperMap.containsKey("sizes"));
+
+        // Read kosh://materials/physical-constants
+        McpRpcRequest reqConstants = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("read-constants")
+                .method("resources/read")
+                .params(Map.of("uri", "kosh://materials/physical-constants"))
+                .build();
+
+        ResponseEntity<McpRpcResponse> respConstants = mcpController.handleRpcRequest(null, reqConstants, null, null, null, null, null);
+        assertNotNull(respConstants.getBody());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resConstants = (Map<String, Object>) respConstants.getBody().getResult();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> contentsConstants = (List<Map<String, Object>>) resConstants.get("contents");
+        assertFalse(contentsConstants.isEmpty());
+        String textConstants = contentsConstants.get(0).get("text").toString();
+        Map<?, ?> constantsMap = objectMapper.readValue(textConstants, Map.class);
+        assertTrue(constantsMap.containsKey("materials"));
+    }
+
+    @Test
+    @DisplayName("MCP prompts/get should generate spur gear train and hero shot blueprints")
+    void testGetNewEngineeringPrompts() {
+        // Test design_spur_gear_train
+        McpRpcRequest reqGear = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("prompt-gear-1")
+                .method("prompts/get")
+                .params(Map.of("name", "design_spur_gear_train", "arguments", Map.of("gearRatio", "3.0", "module", "2.0")))
+                .build();
+
+        ResponseEntity<McpRpcResponse> respGear = mcpController.handleRpcRequest(null, reqGear, null, null, null, null, null);
+        assertNotNull(respGear.getBody());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resultGear = (Map<String, Object>) respGear.getBody().getResult();
+        assertNotNull(resultGear);
+        assertTrue(resultGear.containsKey("messages"));
+
+        // Test photorealistic_product_hero_shot
+        McpRpcRequest reqHero = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("prompt-hero-1")
+                .method("prompts/get")
+                .params(Map.of("name", "photorealistic_product_hero_shot", "arguments", Map.of("meshName", "Camera_Body")))
+                .build();
+
+        ResponseEntity<McpRpcResponse> respHero = mcpController.handleRpcRequest(null, reqHero, null, null, null, null, null);
+        assertNotNull(respHero.getBody());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resultHero = (Map<String, Object>) respHero.getBody().getResult();
+        assertNotNull(resultHero);
+        assertTrue(resultHero.containsKey("messages"));
+    }
+
+    @Test
+    @DisplayName("MCP tools/call cad_export_engineering_drawing should generate SVG lineart blueprint")
+    void testExportEngineeringDrawingTool() {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("drawing-call-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "cad_export_engineering_drawing",
+                        "arguments", Map.of("targetMesh", "Test_Pinion", "drawingStandard", "ISO")
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertNotNull(result);
+        assertEquals(false, result.get("isError"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
+        assertNotNull(content);
+        assertFalse(content.isEmpty());
+        String text = content.get(0).get("text").toString();
+        assertTrue(text.contains("<svg"));
+        assertTrue(text.contains("KOSH CAD WORKSTATION"));
     }
 
 }

@@ -289,9 +289,8 @@ public class McpController {
                         arguments.put("prompt", enhanceCadPrompt(rawPrompt));
                     }
 
-                    // Procedural CAD tools (cad_create_primitive, cad_boolean_operation, cad_apply_modifier, cad_inspect_scene,
-                    // cad_assemble_kit, cad_batch_csg, cad_apply_fillet_chamfer) compile deterministic bpy geometry directly
-                    // and do not strictly require an AI token.
+                    // Procedural CAD tools compile deterministic bpy geometry directly
+                    // and do not strictly require an external AI token.
                     boolean isProceduralTool = List.of(
                             "cad_create_primitive",
                             "cad_boolean_operation",
@@ -300,7 +299,23 @@ public class McpController {
                             "cad_assemble_kit",
                             "cad_batch_csg",
                             "cad_apply_fillet_chamfer",
-                            "cad_quick_fillet_chamfer"
+                            "cad_quick_fillet_chamfer",
+                            "cad_measure_dimensions",
+                            "cad_hollow_shell",
+                            "cad_generate_threads",
+                            "cad_apply_pbr_preset",
+                            "cad_studio_lighting_preset",
+                            "cad_batch_multiview_render",
+                            "cad_lattice_infill",
+                            "kosh_system_health",
+                            "cad_convex_hull",
+                            "cad_separate_loose_parts",
+                            "cad_project_curve_cut",
+                            "cad_generate_gear",
+                            "cad_uv_unwrap_auto",
+                            "cad_wireframe_cage",
+                            "cad_point_cloud_surface",
+                            "cad_export_engineering_drawing"
                     ).contains(toolName.toLowerCase());
 
                     boolean hasRawScript = arguments.containsKey("script") && arguments.get("script") != null && !arguments.get("script").toString().isBlank();
@@ -326,29 +341,16 @@ public class McpController {
                         );
                     }
 
-                    // Return structured JSON text for inspection tool
-                    if ("cad_inspect_scene".equalsIgnoreCase(toolName)) {
-                        Map<String, Object> respData = new LinkedHashMap<>();
-                        respData.put("content", List.of(
-                                Map.of(
-                                        "type", "text",
-                                        "text", result.getStdout() != null ? result.getStdout() : "{}"
-                                )
-                        ));
-                        respData.put("isError", false);
-                        respData.put("execution", result);
-                        if (progressToken != null) {
-                            respData.put("_meta", Map.of("progressToken", progressToken, "progress", 1.0, "status", "completed"));
-                        }
-                        return McpRpcResponse.success(id, respData);
-                    }
+                    // Return stdout in content text if populated (e.g. JSON reports, SVGs, diagnostics)
+                    String contentText = (result.getStdout() != null && !result.getStdout().isBlank())
+                            ? result.getStdout()
+                            : "Successfully generated 3D model: " + result.getAssetName() + " (" + result.getSizeBytes() + " bytes)";
 
-                    // Standard MCP tool result response structure
                     Map<String, Object> respData = new LinkedHashMap<>();
                     respData.put("content", List.of(
                             Map.of(
                                     "type", "text",
-                                    "text", "Successfully generated 3D model: " + result.getAssetName() + " (" + result.getSizeBytes() + " bytes)"
+                                    "text", contentText
                             )
                     ));
                     respData.put("isError", false);

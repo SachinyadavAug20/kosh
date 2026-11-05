@@ -231,36 +231,31 @@ Client / Agent       McpController     McpToolRegistry   BlenderDaemon   Storage
 ::id mcp-ecosystem
 ::align left
 
-# 6. Model Context Protocol (MCP) Tool Suite
+# 6. Model Context Protocol (MCP) Workstation Ecosystem
 
-Kosh declares 46 native CAD and DCC tools grouped into specialized domains:
+Kosh exposes 54 native tools, 18 resources, and 12 prompts over JSON-RPC:
 
-### 1. Composable 3D CAD & Digital Caliper
+### 1. Composable 3D CAD, Digital Calipers & Kinematics
 * `cad_create_primitive`: Parametric solids (cube, cylinder, cone, sphere).
 * `cad_boolean_operation`: Manifold CSG booleans (DIFF, UNION, INTERSECT).
-* `cad_apply_modifier`: Parametric modifier operations (BEVEL, SOLIDIFY).
 * `cad_measure_dimensions`: Digital caliper (volume, bounding box, area).
-* `cad_hollow_shell`: Parametric hollow shelling with resin drain holes.
-* `cad_generate_threads`: ISO metric threads, bolts, and nuts.
-* `cad_lattice_infill`: Procedural structural infill (gyroid, honeycomb).
-* `cad_inspect_scene`: Topology audit (mesh, vertex, face count, manifold).
+* `cad_generate_gear`: Parametric spur, helical, bevel gears with module.
+* `cad_generate_threads`: Standardized ISO metric threads, bolts, and nuts.
+* `cad_convex_hull`: Minimal convex bounding hull for physics colliders.
+* `cad_separate_loose_parts`: Splits multi-body meshes into distinct parts.
+* `cad_export_engineering_drawing`: Generates SVG 2D blueprint drawings.
 
-### 2. Instant Kitbashing & Assembly (Zero LLM Latency)
-* `cad_assemble_kit`: Pre-baked templates (flange, quadcopter, truss, tree).
-* `cad_batch_csg`: Chained boolean pipeline in a single round-trip.
-* `cad_synthesize_composite`: Natural language assembly with CAD styles.
-* `cad_compose_compound_scene`: Multi-subject compositions and cosmos scenes.
+### 2. Enterprise In-Memory Resources (18 Direct Schemas)
+* Standards: `kosh://specs/standards/iso-bearings` (608, 624, 625, 6900).
+* Hardware: `kosh://specs/hardware/metric-fasteners` (M2-M12 clearances).
+* Motors: `kosh://specs/engineering/stepper-motors` (NEMA 14, 17, 23, 34).
+* Physics: `kosh://materials/physical-constants` (Density, Young's Modulus).
 
-### 3. Photorealistic Rendering & Studio Lighting
-* `cad_render_frame`: Physically-based raytraced render via EEVEE/Cycles.
-* `blender_render_frame`: High-resolution render with alpha transparency.
-* `cad_studio_lighting_preset`: Turnkey 3-point, neon, and softbox rigs.
-* `cad_apply_pbr_preset`: Optical PBR presets (Titanium, Gold, Obsidian).
-* `cad_batch_multiview_render`: 4-view orthographic blueprint frames.
-
-### 4. Verification & System Telemetry
-* `mcp_check_tool`: Vets MCP servers across 120,000+ servers via M8ven.
-* `kosh_system_health`: Live diagnostics, Blender 5.2 LTS daemon status.
+### 3. Precision Engineering Prompts (12 Standardized Blueprints)
+* `design_spur_gear_train`: 2-gear interlocking transmission protocol.
+* `photorealistic_product_hero_shot`: 85mm studio lighting & framing pipeline.
+* `generative_drone_frame`: UAV multirotor airframe and motor PCD synthesis.
+* `generate_3d_printable_snapfit`: Cantilever beam snap-fit joint engineering.
 
 ---
 
