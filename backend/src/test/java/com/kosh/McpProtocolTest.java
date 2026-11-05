@@ -96,6 +96,14 @@ class McpProtocolTest {
         assertTrue(toolNames.contains("cad_apply_fillet_chamfer"));
         assertTrue(toolNames.contains("cad_compose_compound_scene"));
         assertTrue(toolNames.contains("cad_render_frame"));
+        assertTrue(toolNames.contains("cad_measure_dimensions"));
+        assertTrue(toolNames.contains("cad_hollow_shell"));
+        assertTrue(toolNames.contains("cad_generate_threads"));
+        assertTrue(toolNames.contains("cad_apply_pbr_preset"));
+        assertTrue(toolNames.contains("cad_studio_lighting_preset"));
+        assertTrue(toolNames.contains("cad_batch_multiview_render"));
+        assertTrue(toolNames.contains("cad_lattice_infill"));
+        assertTrue(toolNames.contains("kosh_system_health"));
     }
 
     @Test
@@ -563,6 +571,56 @@ class McpProtocolTest {
         assertNotNull(execution);
         assertTrue(execution.isSuccess(), "fillet/chamfer failed: " + execution.getStderr());
         assertNotNull(execution.getAssetName());
+    }
+
+    @Test
+    @DisplayName("MCP tools/call cad_measure_dimensions should return digital caliper telemetry")
+    void testMeasureDimensionsTool() {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("measure-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "cad_measure_dimensions",
+                        "arguments", Map.of("unit", "mm")
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertNotNull(result);
+        assertEquals(false, result.get("isError"));
+    }
+
+    @Test
+    @DisplayName("MCP tools/call kosh_system_health should return live diagnostic status")
+    void testSystemHealthTool() {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("health-diag-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "kosh_system_health",
+                        "arguments", Map.of()
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertNotNull(result);
+        assertEquals(false, result.get("isError"));
     }
 
 }

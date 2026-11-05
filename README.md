@@ -78,35 +78,58 @@ Built with a titanium-slate CAD workstation aesthetic, Kosh couples a **Spring B
 
 ---
 
-## 23 Native Creative MCP Tools
+## Expanded Creative MCP Tools Suite
 
-Kosh exposes 23 native creative tools over JSON-RPC 2.0 at `POST /mcp`:
+Kosh exposes a comprehensive suite of 46 native creative CAD and DCC tools over JSON-RPC 2.0 (`POST /mcp` and `GET /mcp/sse`):
 
-| # | Tool Name | Domain | Description |
-|---|---|---|---|
-| 1 | `blender_mesh` | Core Mesh | Generative parametric 3D mesh modeling via Python `bpy`. |
-| 2 | `cad_model` | Precision CAD | CSG boolean unions, precision chamfers, fillets, center bores, and bolt circles. |
-| 3 | `blender_sculpt_op` | Sculpting | Digital sculpting displacements (clay, crease, inflate, grab, smooth, flatten, pinch) & dynamic remeshing. |
-| 4 | `blender_geometry_nodes` | Procedural | Node trees for array scattering, voronoi displacement, and mathematical surface lattices. |
-| 5 | `blender_shader_graph` | Materials | Node-based procedural shading: Car Paint, Brushed Metal, Iridescent Glass, Hologram, and Matcaps. |
-| 6 | `blender_animate_pipeline`| Kinematics | Multi-element mechanical sequences, exploded views, orbital fly-bys, and morphing. |
-| 7 | `blender_bmesh_ops` | Topology | Non-destructive mesh edits: Extrude, Inset, Bevel, Bisect, Bridge, and Subdivide. |
-| 8 | `blender_physics_sim` | Simulation | Rigid body drops, active collider simulations, restitution, and gravity physics. |
-| 9 | `blender_uv_paint` | UV & Textures | Smart projection unwrap, checkerboard distortion inspection, and procedural face painting. |
-| 10 | `blender_camera_stage` | Staging | Studio lighting rigs (3-Point, Rim, High-Key, Low-Key) and cinematic lens framing. |
-| 11 | `blender_modifiers` | Modifiers | Procedural stacks: Subdivision Surface, Mirror, Boolean, Solidify, Wireframe, Curve Deform. |
-| 12 | `blender_quick_sculpt` | Direct Sculpt | Instant organic surface detailing and vertex deformation. |
-| 13 | `blender_simulations` | Dynamics | Cloth drape, soft-body bounce, smoke flows, and particle spray kinematics. |
-| 14 | `blender_scene_pipeline`| Multi-Domain | Complete end-to-end multi-asset 3D composition with lighting, materials, and motion. |
-| 15 | `blender_rigging` | Armatures | Bone armatures, inverse kinematics (IK), vertex weight painting, and joint constraints. |
-| 16 | `blender_studio_stage` | Environment | Stage composition, backdrop cycs, ground contact shadows, and HDRI lighting. |
-| 17 | `kosh_svg_to_3d` | 2D to 3D | Extrudes 2D vector SVG path coordinates into beveled 3D solids with custom bevel depth. |
-| 18 | `kosh_audio_reactive` | Audio Motion | 16-band frequency equalizer bars driven by simulated procedural audio waveforms. |
-| 19 | `kosh_ascii_to_voxel` | Voxel Engine | Synthesizes multi-layered 3D voxel grid sculptures from raw ASCII art templates. |
-| 20 | `kosh_cad_export_step` | CAD Standards | Generates precision engineered CAD models and exports cross-platform geometries. |
-| 21 | `cad_render_frame` | Raytrace Render | Physically-based beauty render pass in Blender without viewport UI/gizmo artifacts. |
-| 22 | `blender_render_frame` | Studio Render | Frame capture with configurable resolution, transparent background, and studio lighting. |
-| 23 | `mcp_check_tool` | Trust Index | Vets any MCP server across 120,000+ indexed servers via M8ven Trust Index. |
+### Precision 3D CAD & Engineering
+| # | Tool Name | Domain | Description | Hints (RO, Destr, Idemp, OpenW) |
+|---|---|---|---|---|
+| 1 | `cad_create_primitive` | CAD Primitives | Precision parametric CAD solids (cube, cylinder, cone, sphere, torus) with constraints. | `false, false, false, false` |
+| 2 | `cad_boolean_operation` | CSG Booleans | Exact manifold boolean operations (DIFFERENCE, UNION, INTERSECT). | `false, false, false, false` |
+| 3 | `cad_apply_modifier` | CAD Modifiers | Numerical CAD modifiers (BEVEL, SUBSURF, MIRROR, SOLIDIFY). | `false, false, false, false` |
+| 4 | `cad_inspect_scene` | Topology Audit | Vertex/face count, bounding box, dimensions, and watertight manifold status. | `true, false, true, false` |
+| 5 | `cad_measure_dimensions`| Caliper Tool | Digital caliper measuring volume, bounding box, surface area, and 3D print readiness. | `true, false, true, false` |
+| 6 | `cad_hollow_shell` | 3D Printing | Parametric hollow shelling with uniform wall thickness and resin drain holes. | `false, false, false, false` |
+| 7 | `cad_generate_threads` | Fasteners | Precision ISO metric screw threads, bolts, and nuts with standardized pitch. | `false, false, false, false` |
+| 8 | `cad_lattice_infill` | Lightweight | Procedural structural lattice infills (gyroid, honeycomb, wireframe). | `false, false, false, false` |
+| 9 | `cad_apply_fillet_chamfer`| Edge Bevel | Metric edge rounding (fillet) or chamfer beveling via angle-limited modifier. | `false, false, false, false` |
+
+### Instant Assembly & Kitbashing (Zero LLM Latency)
+| # | Tool Name | Domain | Description | Hints (RO, Destr, Idemp, OpenW) |
+|---|---|---|---|---|
+| 10 | `cad_assemble_kit` | Assembly | Pre-baked parametric templates (flange, quadcopter, panel, truss, tree) in <10ms. | `false, false, true, false` |
+| 11 | `cad_batch_csg` | Batch Pipeline | Sequential CSG booleans executed in one single transaction round-trip. | `false, false, false, false` |
+| 12 | `cad_synthesize_composite`| Generative CAD | Multi-part composite CAD assembly from natural language with aesthetic styles. | `false, false, false, false` |
+| 13 | `cad_compose_compound_scene`| Environments | Multi-subject compositions situated in rich cosmic/orbital environments. | `false, false, false, false` |
+| 14 | `scene_assembler` | Staging | Multi-asset modular architecture and compound scene assembly. | `false, false, false, false` |
+
+### Photorealistic Rendering & Studio Lighting
+| # | Tool Name | Domain | Description | Hints (RO, Destr, Idemp, OpenW) |
+|---|---|---|---|---|
+| 15 | `cad_render_frame` | Beauty Render | Physically-based raytraced render via Blender EEVEE or Cycles engine. | `true, false, true, false` |
+| 16 | `blender_render_frame` | Studio Render | Frame capture with transparent background, studio lighting, and framing. | `true, false, true, false` |
+| 17 | `cad_studio_lighting_preset`| Lighting Rigs | 3-Point Classic, Cyberpunk Neon, Product Softbox, and Dramatic Rim rigs. | `false, false, false, false` |
+| 18 | `cad_apply_pbr_preset`| PBR Presets | Calibrated optical materials (Titanium, Carbon Fiber, Glass, Gold, Obsidian). | `false, false, false, false` |
+| 19 | `cad_batch_multiview_render`| Blueprints | 4-view orthographic and isometric blueprint engineering frames. | `true, false, true, false` |
+| 20 | `lighting_studio` | Custom Rig | Custom photographic lighting rigs, cyclorama infinity backdrops. | `false, false, false, false` |
+| 21 | `material_shader` | Shader Graph | Procedural Principled BSDF node trees with micro-displacement. | `false, false, false, false` |
+| 22 | `camera_compositor` | Director Rig | Cinematic camera rigs: 360-degree turntable orbits, dolly tracks, macro lenses. | `false, false, false, false` |
+
+### Digital Sculpting, Animation & Multi-Domain
+| # | Tool Name | Domain | Description | Hints (RO, Destr, Idemp, OpenW) |
+|---|---|---|---|---|
+| 23 | `blender_sculpt_op` | Sculpting | Digital sculpting brushes (clay, crease, inflate, grab) & dynamic remeshing. | `false, false, false, false` |
+| 24 | `blender_mesh_ops` | BMesh Ops | Manifold CSG booleans, chamfer bevels, solidification, and decimation. | `false, false, false, false` |
+| 25 | `blender_uv_paint` | Texturing | Smart UV Project unwrapping, normal map baking, and vertex colors. | `false, false, false, false` |
+| 26 | `blender_animate_pipeline`| Kinematics | Baked keyframed rigid body falls, cloth drapery, wave deforms, turntables. | `false, false, false, false` |
+| 27 | `geometry_nodes` | Algorithmic | Procedural Geometry Node networks, point scattering, and lattices. | `false, false, false, false` |
+| 28 | `kosh_svg_to_3d` | 2D to 3D | Extrudes 2D vector SVG path coordinates into beveled 3D solids. | `false, false, false, false` |
+| 29 | `kosh_audio_reactive` | Audio Motion | 16-band frequency equalizer bars and concentric spectrum rings. | `false, false, false, false` |
+| 30 | `kosh_ascii_to_voxel` | Voxel Engine | Synthesizes multi-layered 3D voxel grid sculptures from ASCII templates. | `false, false, false, false` |
+| 31 | `kosh_cad_export_step` | Engineering | Precision engineered CAD models (spur gears, flange bearings, mounts). | `false, false, false, false` |
+| 32 | `mcp_check_tool` | Trust Index | Vets any MCP server across 120,000+ indexed servers via M8ven Trust Index. | `true, false, true, true` |
+| 33 | `kosh_system_health` | Telemetry | Live operational diagnostics, Blender 5.2 LTS status, and daemon telemetry. | `true, false, true, true` |
 
 ---
 

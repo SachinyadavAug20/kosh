@@ -1108,7 +1108,7 @@ export function McpConsoleEditor({
   ]);
 
   const tools = [
-    ...DIRECTOR_MCP_TOOLS.map((t) => ({ id: t.name, label: `${t.name} (Director)`, sample: t.samplePayload })),
+    ...DIRECTOR_MCP_TOOLS.map((t) => ({ id: t.name, label: t.name, sample: t.samplePayload })),
     {
       id: "blender_eval",
       label: "blender_eval (Python)",

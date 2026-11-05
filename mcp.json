@@ -17,17 +17,18 @@
   },
   "capabilities": {
     "tools": {
-      "listChanged": false
+      "listChanged": true
     },
     "resources": {
-      "subscribe": false,
-      "listChanged": false
+      "subscribe": true,
+      "listChanged": true
     },
     "prompts": {
-      "listChanged": false
-    }
+      "listChanged": true
+    },
+    "logging": {}
   },
-  "toolsCount": 23,
+  "toolsCount": 46,
   "environment": {
     "BLENDER_PATH": {
       "description": "Path to local Blender binary (defaults to system PATH or /snap/bin/blender)",

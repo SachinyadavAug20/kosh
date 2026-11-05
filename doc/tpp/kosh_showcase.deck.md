@@ -233,29 +233,34 @@ Client / Agent       McpController     McpToolRegistry   BlenderDaemon   Storage
 
 # 6. Model Context Protocol (MCP) Tool Suite
 
-Kosh declares 23 primary CAD and DCC tools grouped into specialized domains:
+Kosh declares 46 native CAD and DCC tools grouped into specialized domains:
 
-### 1. Composable 3D CAD Tools
-* `cad_create_primitive`: Precision parametric primitives
-  (cube, cylinder, cone, sphere, torus).
+### 1. Composable 3D CAD & Digital Caliper
+* `cad_create_primitive`: Parametric solids (cube, cylinder, cone, sphere).
 * `cad_boolean_operation`: Manifold CSG booleans (DIFF, UNION, INTERSECT).
-* `cad_apply_modifier`: Parametric modifier operations
-  (BEVEL, SUBSURF, MIRROR, SOLIDIFY).
-* `cad_inspect_scene`: Topology inspection (mesh, vertex, face count).
+* `cad_apply_modifier`: Parametric modifier operations (BEVEL, SOLIDIFY).
+* `cad_measure_dimensions`: Digital caliper (volume, bounding box, area).
+* `cad_hollow_shell`: Parametric hollow shelling with resin drain holes.
+* `cad_generate_threads`: ISO metric threads, bolts, and nuts.
+* `cad_lattice_infill`: Procedural structural infill (gyroid, honeycomb).
+* `cad_inspect_scene`: Topology audit (mesh, vertex, face count, manifold).
 
-### 2. Instant Kitbashing (Zero LLM Latency)
+### 2. Instant Kitbashing & Assembly (Zero LLM Latency)
 * `cad_assemble_kit`: Pre-baked templates (flange, quadcopter, truss, tree).
 * `cad_batch_csg`: Chained boolean pipeline in a single round-trip.
-* `cad_apply_fillet_chamfer`: Metric edge beveling without mesh rewrite.
-
-### 3. Procedural Synthesis & Photoreal Rendering
 * `cad_synthesize_composite`: Natural language assembly with CAD styles.
 * `cad_compose_compound_scene`: Multi-subject compositions and cosmos scenes.
+
+### 3. Photorealistic Rendering & Studio Lighting
 * `cad_render_frame`: Physically-based raytraced render via EEVEE/Cycles.
 * `blender_render_frame`: High-resolution render with alpha transparency.
+* `cad_studio_lighting_preset`: Turnkey 3-point, neon, and softbox rigs.
+* `cad_apply_pbr_preset`: Optical PBR presets (Titanium, Gold, Obsidian).
+* `cad_batch_multiview_render`: 4-view orthographic blueprint frames.
 
-### 4. Verification & Security
+### 4. Verification & System Telemetry
 * `mcp_check_tool`: Vets MCP servers across 120,000+ servers via M8ven.
+* `kosh_system_health`: Live diagnostics, Blender 5.2 LTS daemon status.
 
 ---
 
