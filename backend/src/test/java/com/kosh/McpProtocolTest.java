@@ -112,6 +112,7 @@ class McpProtocolTest {
         assertTrue(toolNames.contains("cad_wireframe_cage"));
         assertTrue(toolNames.contains("cad_point_cloud_surface"));
         assertTrue(toolNames.contains("cad_export_engineering_drawing"));
+        assertTrue(toolNames.contains("cad_assemble_puzzle_pieces"));
     }
 
     @Test
@@ -150,7 +151,9 @@ class McpProtocolTest {
         assertTrue(uris.contains("kosh://specs/optics/studio-hdri-lighting"));
         assertTrue(uris.contains("kosh://presets/game-engine-lod"));
         assertTrue(uris.contains("kosh://specs/aerospace/unmanned-airframe"));
-        assertEquals(18, resources.size());
+        assertTrue(uris.contains("kosh://library/puzzle-pieces"));
+        assertTrue(uris.contains("kosh://library/saved-models"));
+        assertEquals(20, resources.size());
     }
 
     @Test
@@ -236,7 +239,8 @@ class McpProtocolTest {
         assertTrue(promptNames.contains("reverse_engineering_blueprint_to_3d"));
         assertTrue(promptNames.contains("sculpt_creature_bust"));
         assertTrue(promptNames.contains("generate_3d_printable_snapfit"));
-        assertEquals(12, prompts.size());
+        assertTrue(promptNames.contains("assemble_modular_puzzle_recipe"));
+        assertEquals(13, prompts.size());
     }
 
     @Test
@@ -754,4 +758,132 @@ class McpProtocolTest {
         assertTrue(text.contains("KOSH CAD WORKSTATION"));
     }
 
+    @Test
+    @DisplayName("MCP resources/read should return puzzle pieces catalog and saved models")
+    void testReadPuzzlePiecesAndSavedModelsResources() throws Exception {
+        // Read kosh://library/puzzle-pieces
+        McpRpcRequest reqPuzzle = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("read-puzzle")
+                .method("resources/read")
+                .params(Map.of("uri", "kosh://library/puzzle-pieces"))
+                .build();
+
+        ResponseEntity<McpRpcResponse> respPuzzle = mcpController.handleRpcRequest(null, reqPuzzle, null, null, null, null, null);
+        assertNotNull(respPuzzle.getBody());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resPuzzle = (Map<String, Object>) respPuzzle.getBody().getResult();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> contentsPuzzle = (List<Map<String, Object>>) resPuzzle.get("contents");
+        assertFalse(contentsPuzzle.isEmpty());
+        String textPuzzle = contentsPuzzle.get(0).get("text").toString();
+        Map<?, ?> puzzleMap = objectMapper.readValue(textPuzzle, Map.class);
+        assertTrue(puzzleMap.containsKey("components"));
+        assertTrue(puzzleMap.containsKey("compositeRecipes"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> components = (Map<String, Object>) puzzleMap.get("components");
+        assertTrue(components.containsKey("dovetail_male_plate"));
+        assertTrue(components.containsKey("nema17_motor_mount"));
+        assertTrue(components.containsKey("bearing_block_608"));
+        assertTrue(components.containsKey("corner_gusset_90"));
+        assertTrue(components.containsKey("t_slot_rail_2020"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> recipes = (Map<String, Object>) puzzleMap.get("compositeRecipes");
+        assertTrue(recipes.containsKey("interlocking_dovetail_plate"));
+        assertTrue(recipes.containsKey("robotic_articulated_arm"));
+        assertTrue(recipes.containsKey("modular_cube_chassis"));
+
+        // Read kosh://library/saved-models
+        McpRpcRequest reqModels = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("read-models")
+                .method("resources/read")
+                .params(Map.of("uri", "kosh://library/saved-models"))
+                .build();
+
+        ResponseEntity<McpRpcResponse> respModels = mcpController.handleRpcRequest(null, reqModels, null, null, null, null, null);
+        assertNotNull(respModels.getBody());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resModels = (Map<String, Object>) respModels.getBody().getResult();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> contentsModels = (List<Map<String, Object>>) resModels.get("contents");
+        assertFalse(contentsModels.isEmpty());
+        String textModels = contentsModels.get(0).get("text").toString();
+        Map<?, ?> modelsMap = objectMapper.readValue(textModels, Map.class);
+        assertTrue(modelsMap.containsKey("models"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> models = (Map<String, Object>) modelsMap.get("models");
+        assertTrue(models.containsKey("drone_quadcopter_pro"));
+        assertTrue(models.containsKey("planetary_gearbox_stage"));
+        assertTrue(models.containsKey("biomedical_microscope_body"));
+        assertTrue(models.containsKey("modular_electronics_housing"));
+        assertTrue(models.containsKey("cosmic_astronaut_scene"));
+    }
+
+    @Test
+    @DisplayName("MCP prompts/get should generate assemble_modular_puzzle_recipe instructions")
+    void testAssembleModularPuzzleRecipePrompt() {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("prompt-puzzle-1")
+                .method("prompts/get")
+                .params(Map.of("name", "assemble_modular_puzzle_recipe", "arguments", Map.of(
+                        "recipeName", "robotic_articulated_arm",
+                        "clearanceMm", "0.2"
+                )))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertNotNull(result);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> messages = (List<Map<String, Object>>) result.get("messages");
+        assertNotNull(messages);
+        assertFalse(messages.isEmpty());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> content = (Map<String, Object>) messages.get(0).get("content");
+        String text = content.get("text").toString();
+        assertTrue(text.contains("kosh://library/puzzle-pieces"));
+        assertTrue(text.contains("cad_assemble_puzzle_pieces"));
+        assertTrue(text.contains("robotic_articulated_arm"));
+    }
+
+    @Test
+    @DisplayName("MCP tools/call cad_assemble_puzzle_pieces should execute procedural assembly")
+    void testAssemblePuzzlePiecesTool() {
+        assumeTrue(blenderExecutionService.isBlenderAvailable(), "Blender runtime is not available; skipping live test");
+
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("puzzle-call-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "cad_assemble_puzzle_pieces",
+                        "arguments", Map.of("recipe", "interlocking_dovetail_plate", "toleranceMm", 0.2, "scale", 1.0)
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertNotNull(result);
+        assertEquals(false, result.get("isError"));
+    }
+
 }
+

@@ -126,6 +126,15 @@ public class McpPromptRegistry {
                         arg("entryAngleDeg", "Lead-in push entry angle in degrees (e.g. 30.0)", false)
                 )
         );
+        register(
+                "assemble_modular_puzzle_recipe",
+                "Guides the AI agent or LLM client to query the 'kosh://library/puzzle-pieces' catalog, select interlocking puzzle piece components, and stitch them together via 'cad_assemble_puzzle_pieces' to answer complex modular CAD queries.",
+                List.of(
+                        arg("recipeName", "Target composite puzzle recipe name (interlocking_dovetail_plate, robotic_articulated_arm, modular_cube_chassis, geodesic_hex_truss, bearing_transmission_carrier)", true),
+                        arg("clearanceMm", "Mating slide-fit joint clearance in millimeters (default: 0.2 for FDM printing)", false),
+                        arg("scaleMultiplier", "Uniform scaling factor applied across all assembled components (default: 1.0)", false)
+                )
+        );
 
         log.info("McpPromptRegistry initialized with {} prompt blueprints", promptsList.size());
     }
@@ -483,6 +492,39 @@ public class McpPromptRegistry {
                                 beamLen, wall, catchDepth, entryAngle,
                                 beamLen, wall,
                                 catchDepth, entryAngle
+                        )
+                );
+            }
+
+            case "assemble_modular_puzzle_recipe" -> {
+                String recipe = arg(args, "recipeName", "interlocking_dovetail_plate");
+                String clearance = arg(args, "clearanceMm", "0.2");
+                String scale = arg(args, "scaleMultiplier", "1.0");
+
+                yield textPrompt(
+                        "Modular puzzle piece assembly instructions for recipe '" + recipe + "'",
+                        String.format("""
+                                You are an expert Modular CAD Assembly and Kinematics Agent.
+                                Target Recipe: %s (Clearance: %smm, Scale: %sx).
+
+                                Assembly Protocol:
+                                1. Inspect the Modular Puzzle Pieces catalog by querying resource 'kosh://library/puzzle-pieces'.
+                                   - Note the exact socket mate normals, component envelope dimensions, and tolerance rules.
+                                2. If the user's natural language request matches a turnkey compound assembly, invoke 'cad_assemble_puzzle_pieces':
+                                   - recipe: '%s'
+                                   - toleranceMm: %s
+                                   - scale: %s
+                                   - format: 'glb'
+                                3. Inspect the resulting composite geometry via 'cad_inspect_scene':
+                                   - Verify that all mating puzzle pieces form a single manifold solid with isWatertight=true.
+                                   - Verify that slide clearances match the %smm tolerance for FDM 3D printing.
+                                4. If custom puzzle pieces are requested that exceed pre-solved recipes:
+                                   - Synthesize individual components with 'cad_create_primitive' and 'cad_boolean_operation'.
+                                   - Align socket normals using transform offsets and join with 'cad_batch_csg' (operation='UNION').
+                                """,
+                                recipe, clearance, scale,
+                                recipe, clearance, scale,
+                                clearance
                         )
                 );
             }

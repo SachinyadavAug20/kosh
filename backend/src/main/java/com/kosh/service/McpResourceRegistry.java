@@ -202,6 +202,18 @@ public class McpResourceRegistry {
                 "Propeller tip clearance percentages, motor mount PCD patterns, center-of-gravity alignment rules, and carbon fiber arm sizing",
                 toJson(buildUnmannedAirframeSpec())
         );
+        registerStatic(
+                "kosh://library/puzzle-pieces",
+                "Modular CAD Puzzle Pieces and Sockets Library",
+                "Interlocking parametric CAD puzzle pieces with mate sockets, dovetails, NEMA brackets, and pre-solved compound assembly recipes",
+                toJson(buildPuzzlePiecesSpec())
+        );
+        registerStatic(
+                "kosh://library/saved-models",
+                "Pre-Engineered Complete Assembly Models Library",
+                "Turnkey multi-part engineering and cinematic assemblies: quadcopter drone, planetary gearbox, compound microscope, electronics chassis, astronaut scene",
+                toJson(buildSavedModelsSpec())
+        );
 
         log.info("McpResourceRegistry initialized: {} resources ({} static, {} dynamic)",
                 descriptors.size(), staticContentCache.size(), dynamicReaders.size());
@@ -422,6 +434,227 @@ public class McpResourceRegistry {
                 "cgAlignment", "Center of gravity must coincide with center of thrust within 2.0mm horizontal error",
                 "carbonPlateThicknessMm", Map.of("topPlate", 2.0, "bottomPlate", 2.5, "arms", 5.0)
         ));
+        return spec;
+    }
+
+    private Map<String, Object> buildPuzzlePiecesSpec() {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("units", "millimeters");
+        spec.put("toleranceNominalMm", 0.2);
+        spec.put("standard", "Kosh Modular Interlocking Standard (KMIS-2026)");
+        spec.put("description", "Library of 12 modular parametric puzzle-piece components with mate socket normals and 5 compound assembly recipes answering natural language queries.");
+
+        Map<String, Object> pieces = new LinkedHashMap<>();
+        pieces.put("dovetail_male_plate", Map.of(
+                "name", "Dovetail Tongue Joint Plate",
+                "envelopeMm", List.of(30.0, 30.0, 6.0),
+                "sockets", List.of(
+                        Map.of("id", "male_tongue_posX", "type", "dovetail_male", "normal", List.of(1, 0, 0), "angleDeg", 15.0, "widthMm", 8.0, "depthMm", 4.0),
+                        Map.of("id", "female_groove_negX", "type", "dovetail_female", "normal", List.of(-1, 0, 0), "angleDeg", 15.0, "widthMm", 8.2, "depthMm", 4.2)
+                ),
+                "features", "0.2mm slide tolerance, chamfered entry lead-in, bottom counterbore"
+        ));
+        pieces.put("dovetail_female_plate", Map.of(
+                "name", "Dovetail Double-Groove Plate",
+                "envelopeMm", List.of(30.0, 30.0, 6.0),
+                "sockets", List.of(
+                        Map.of("id", "female_groove_posX", "type", "dovetail_female", "normal", List.of(1, 0, 0), "angleDeg", 15.0, "widthMm", 8.2, "depthMm", 4.2),
+                        Map.of("id", "female_groove_negX", "type", "dovetail_female", "normal", List.of(-1, 0, 0), "angleDeg", 15.0, "widthMm", 8.2, "depthMm", 4.2)
+                ),
+                "features", "Dual female receivers for bridge interlocking"
+        ));
+        pieces.put("corner_gusset_90", Map.of(
+                "name", "90-Degree Structural Corner Gusset",
+                "envelopeMm", List.of(25.0, 25.0, 20.0),
+                "sockets", List.of(
+                        Map.of("id", "face_posX", "type", "m3_counterbore", "normal", List.of(1, 0, 0), "holeDiaMm", 3.4, "recessDiaMm", 6.0),
+                        Map.of("id", "face_posY", "type", "m3_counterbore", "normal", List.of(0, 1, 0), "holeDiaMm", 3.4, "recessDiaMm", 6.0)
+                ),
+                "features", "Right-angle bracket with internal stiffening rib and dual M3 fastener seats"
+        ));
+        pieces.put("t_slot_rail_2020", Map.of(
+                "name", "2020 Metric Aluminum Extrusion Rail",
+                "envelopeMm", List.of(20.0, 20.0, 100.0),
+                "sockets", List.of(
+                        Map.of("id", "slot_posX", "type", "t_slot_6mm", "normal", List.of(1, 0, 0), "slotWidthMm", 6.2),
+                        Map.of("id", "slot_negX", "type", "t_slot_6mm", "normal", List.of(-1, 0, 0), "slotWidthMm", 6.2),
+                        Map.of("id", "slot_posY", "type", "t_slot_6mm", "normal", List.of(0, 1, 0), "slotWidthMm", 6.2),
+                        Map.of("id", "slot_negY", "type", "t_slot_6mm", "normal", List.of(0, -1, 0), "slotWidthMm", 6.2)
+                ),
+                "features", "Standard 6mm slot track along four faces with 4.2mm central M5 tap core"
+        ));
+        pieces.put("bearing_block_608", Map.of(
+                "name", "608 Pillow Block Bearing Housing",
+                "envelopeMm", List.of(36.0, 36.0, 12.0),
+                "sockets", List.of(
+                        Map.of("id", "center_bore", "type", "bearing_pressfit", "normal", List.of(0, 0, 1), "boreDiaMm", 22.0, "depthMm", 7.0),
+                        Map.of("id", "mount_ear_posX", "type", "m3_through", "normal", List.of(1, 0, 0), "holeDiaMm", 3.4),
+                        Map.of("id", "mount_ear_negX", "type", "m3_through", "normal", List.of(-1, 0, 0), "holeDiaMm", 3.4)
+                ),
+                "features", "Press-fit pocket for 608 ball bearing (8x22x7mm) with retaining circlip rim"
+        ));
+        pieces.put("nema17_motor_mount", Map.of(
+                "name", "NEMA 17 Faceplate Motor Mount",
+                "envelopeMm", List.of(42.3, 42.3, 8.0),
+                "sockets", List.of(
+                        Map.of("id", "pilot_hole", "type", "pilot_boss_clearance", "normal", List.of(0, 0, 1), "boreDiaMm", 22.5),
+                        Map.of("id", "bolt_pattern_pcd", "type", "m3_quad_pattern", "normal", List.of(0, 0, 1), "pcdSquareMm", 31.0, "holeDiaMm", 3.4)
+                ),
+                "features", "Standard NEMA 17 square mount with slot adjusters and heat sink ventilation channels"
+        ));
+        pieces.put("cantilever_strut", Map.of(
+                "name", "Modular Linkage Cantilever Strut",
+                "envelopeMm", List.of(14.0, 14.0, 80.0),
+                "sockets", List.of(
+                        Map.of("id", "pivot_root", "type", "clevis_pin_male", "normal", List.of(0, 0, -1), "pinDiaMm", 5.0, "pinLengthMm", 8.0),
+                        Map.of("id", "pivot_tip", "type", "clevis_fork_female", "normal", List.of(0, 0, 1), "slotWidthMm", 5.4, "holeDiaMm", 5.0)
+                ),
+                "features", "Lightweight I-beam section with clevis pin pivot ends for articulated linkages"
+        ));
+        pieces.put("ball_socket_joint", Map.of(
+                "name", "35-Degree Articulated Ball and Socket Joint",
+                "envelopeMm", List.of(20.0, 20.0, 28.0),
+                "sockets", List.of(
+                        Map.of("id", "ball_stem", "type", "spherical_ball_male", "normal", List.of(0, 0, -1), "ballDiaMm", 16.0),
+                        Map.of("id", "socket_cup", "type", "spherical_cup_female", "normal", List.of(0, 0, 1), "cupDiaMm", 16.4, "retentionReliefSegments", 4)
+                ),
+                "features", "Snap-fit spherical socket providing +/- 35-degree conical articulation with tension slit relief"
+        ));
+        pieces.put("hex_hub_6way", Map.of(
+                "name", "6-Way Isogrid Hexagonal Radial Hub",
+                "envelopeMm", List.of(32.0, 32.0, 15.0),
+                "sockets", List.of(
+                        Map.of("id", "port_0_deg", "type", "strut_socket_female", "radialAngleDeg", 0.0, "pocketDiaMm", 6.2),
+                        Map.of("id", "port_60_deg", "type", "strut_socket_female", "radialAngleDeg", 60.0, "pocketDiaMm", 6.2),
+                        Map.of("id", "port_120_deg", "type", "strut_socket_female", "radialAngleDeg", 120.0, "pocketDiaMm", 6.2),
+                        Map.of("id", "port_180_deg", "type", "strut_socket_female", "radialAngleDeg", 180.0, "pocketDiaMm", 6.2),
+                        Map.of("id", "port_240_deg", "type", "strut_socket_female", "radialAngleDeg", 240.0, "pocketDiaMm", 6.2),
+                        Map.of("id", "port_300_deg", "type", "strut_socket_female", "radialAngleDeg", 300.0, "pocketDiaMm", 6.2)
+                ),
+                "features", "Central hexagonal anchor node radiating 6 structural sockets for geodesic space frame assemblies"
+        ));
+        pieces.put("snap_fit_enclosure_base", Map.of(
+                "name", "Perimeter Snap-Bead Enclosure Base",
+                "envelopeMm", List.of(80.0, 50.0, 20.0),
+                "sockets", List.of(
+                        Map.of("id", "snap_groove_perimeter", "type", "snap_catch_continuous", "normal", List.of(0, 0, 1), "grooveDepthMm", 1.2),
+                        Map.of("id", "pcb_bosses_x4", "type", "m2_5_standoff", "normal", List.of(0, 0, 1), "spacingXyMm", List.of(70.0, 40.0))
+                ),
+                "features", "Watertight rim base with 4 interior PCB standoffs and perimeter retention snap channel"
+        ));
+        pieces.put("snap_fit_enclosure_lid", Map.of(
+                "name", "Cantilever Hook Mating Enclosure Lid",
+                "envelopeMm", List.of(80.0, 50.0, 6.0),
+                "sockets", List.of(
+                        Map.of("id", "snap_lugs_perimeter", "type", "cantilever_hook_male", "normal", List.of(0, 0, -1), "lugOffsetMm", 1.2)
+                ),
+                "features", "Flexible cantilever perimeter hooks matching snap_fit_enclosure_base with 0.25mm engagement"
+        ));
+        pieces.put("servo_horn_linkage", Map.of(
+                "name", "Micro-Servo Spline Horn Linkage Arm",
+                "envelopeMm", List.of(40.0, 12.0, 5.0),
+                "sockets", List.of(
+                        Map.of("id", "spline_hub", "type", "servo_spline_25t", "normal", List.of(0, 0, 1), "splineDiaMm", 5.9),
+                        Map.of("id", "pushrod_eye_tip", "type", "m2_clevis_hole", "normal", List.of(0, 0, 1), "holeDiaMm", 2.1)
+                ),
+                "features", "Standard 25T spline socket interface for servo actuators with M2 pushrod linkage endpoints"
+        ));
+        spec.put("components", pieces);
+
+        Map<String, Object> recipes = new LinkedHashMap<>();
+        recipes.put("interlocking_dovetail_plate", Map.of(
+                "name", "Interlocking Dovetail Modular Plate",
+                "userQueryKeywords", List.of("puzzle floor tile", "modular interlocking plates", "dovetail joint lattice"),
+                "componentsRequired", List.of("dovetail_male_plate", "dovetail_female_plate", "dovetail_male_plate", "dovetail_female_plate"),
+                "assemblyDescription", "4-tile planar interlocking floor lattice joined via 0.2mm tolerance dovetail tongues and grooves",
+                "estimatedEnvelopeMm", List.of(60.0, 60.0, 6.0)
+        ));
+        recipes.put("robotic_articulated_arm", Map.of(
+                "name", "3-Axis Articulated Robotic Arm Mechanism",
+                "userQueryKeywords", List.of("robotic arm", "articulated arm", "servo manipulator", "pick and place robot"),
+                "componentsRequired", List.of("nema17_motor_mount", "cantilever_strut", "bearing_block_608", "cantilever_strut", "servo_horn_linkage"),
+                "assemblyDescription", "Pivoting mechanical arm with motorized NEMA 17 base, 608 bearing joint, twin linkage struts, and pushrod clevis horn",
+                "estimatedEnvelopeMm", List.of(90.0, 60.0, 180.0)
+        ));
+        recipes.put("modular_cube_chassis", Map.of(
+                "name", "Rigid 2020 Extrusion Modular Cube Chassis",
+                "userQueryKeywords", List.of("cube frame", "extrusion chassis", "modular box frame", "3d printer cage"),
+                "componentsRequired", List.of("t_slot_rail_2020", "corner_gusset_90", "t_slot_rail_2020", "corner_gusset_90"),
+                "assemblyDescription", "Rigid structural cube frame assembled from 2020 T-slot extrusion rails and 90-degree corner gussets",
+                "estimatedEnvelopeMm", List.of(100.0, 100.0, 100.0)
+        ));
+        recipes.put("geodesic_hex_truss", Map.of(
+                "name", "Geodesic Isogrid Hexagonal Space Truss",
+                "userQueryKeywords", List.of("hex truss", "space frame", "honeycomb lattice", "aerospace truss structure"),
+                "componentsRequired", List.of("hex_hub_6way", "cantilever_strut", "hex_hub_6way", "cantilever_strut"),
+                "assemblyDescription", "High strength-to-weight structural truss radiating 60-degree interlocking struts from 6-way hex hubs",
+                "estimatedEnvelopeMm", List.of(160.0, 160.0, 40.0)
+        ));
+        recipes.put("bearing_transmission_carrier", Map.of(
+                "name", "Motorized Shaft Transmission Carrier Sub-Assembly",
+                "userQueryKeywords", List.of("transmission plate", "gearbox carrier", "motor bearing mount", "drivetrain support"),
+                "componentsRequired", List.of("nema17_motor_mount", "bearing_block_608", "t_slot_rail_2020", "corner_gusset_90"),
+                "assemblyDescription", "Drivetrain carrier mating a NEMA 17 stepper faceplate to twin 608 pillow block bearing housings via 2020 rails",
+                "estimatedEnvelopeMm", List.of(120.0, 50.0, 60.0)
+        ));
+        spec.put("compositeRecipes", recipes);
+
+        return spec;
+    }
+
+    private Map<String, Object> buildSavedModelsSpec() {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("units", "millimeters");
+        spec.put("description", "Curated catalog of 5 complete pre-engineered CAD assemblies ready for immediate headless spawning, validation, and rendering.");
+
+        Map<String, Object> models = new LinkedHashMap<>();
+        models.put("drone_quadcopter_pro", Map.of(
+                "id", "drone_quadcopter_pro",
+                "name", "Enterprise Pro Quadcopter Airframe",
+                "category", "Aerospace / UAV Robotics",
+                "parts", List.of("central_unibody_chassis", "carbon_fiber_arms_x4", "brushless_motors_x4", "propeller_blades_x4", "avionics_canopy", "landing_skids"),
+                "boundingBoxMm", List.of(350.0, 350.0, 85.0),
+                "defaultMaterial", "Carbon_Fiber_Composite and Anodized_Titanium",
+                "description", "Lightweight X-configuration UAV drone chassis with integrated motor mounts, camera canopy, and propeller clearance."
+        ));
+        models.put("planetary_gearbox_stage", Map.of(
+                "id", "planetary_gearbox_stage",
+                "name", "Epicyclic Planetary Gearbox 4:1 Stage",
+                "category", "Mechanical Powertrain",
+                "parts", List.of("outer_ring_gear_48t", "central_sun_gear_16t", "planet_gears_16t_x3", "planet_carrier_plate", "input_shaft_8mm", "output_drive_hex"),
+                "boundingBoxMm", List.of(80.0, 80.0, 45.0),
+                "defaultMaterial", "Machined_Brass and Hardened_Steel",
+                "description", "Compact epicyclic gear train with 3 planet gears on a carrier plate delivering a 4:1 speed reduction ratio."
+        ));
+        models.put("biomedical_microscope_body", Map.of(
+                "id", "biomedical_microscope_body",
+                "name", "Laboratory Compound Optical Microscope",
+                "category", "Scientific Instrumentation",
+                "parts", List.of("cast_iron_curved_arm", "horseshoe_base", "revolving_nosepiece_quad", "objective_lenses_x4", "coaxial_focus_knobs", "xy_mechanical_stage", "binocular_eyepiece_tubes"),
+                "boundingBoxMm", List.of(180.0, 220.0, 360.0),
+                "defaultMaterial", "Studio_White_Enamel and Chrome",
+                "description", "High-detail laboratory microscope with revolving quad objective turret, mechanical stage, and focus dials."
+        ));
+        models.put("modular_electronics_housing", Map.of(
+                "id", "modular_electronics_housing",
+                "name", "IP54 Modular DIN-Rail Instrument Housing",
+                "category", "Industrial Electronics",
+                "parts", List.of("flanged_enclosure_base", "o_ring_gasket_channel", "transparent_polycarbonate_lid", "pg7_cable_glands_x2", "pcb_standoff_posts_x4", "din_rail_spring_clip"),
+                "boundingBoxMm", List.of(120.0, 80.0, 40.0),
+                "defaultMaterial", "Flame_Retardant_ABS and Polycarbonate",
+                "description", "Industrial sealed instrument enclosure featuring snap-close lid, cable gland knockouts, and standard 35mm DIN-rail mount."
+        ));
+        models.put("cosmic_astronaut_scene", Map.of(
+                "id", "cosmic_astronaut_scene",
+                "name", "Cinematic Apollo Astronaut on Cratered Asteroid",
+                "category", "Cinematic / Character",
+                "parts", List.of("spacesuit_torso", "bubble_visor_gold_reflective", "life_support_backpack", "lunar_cratered_pedestal", "celestial_dust_ring", "orbiting_crystals_x8"),
+                "boundingBoxMm", List.of(250.0, 250.0, 300.0),
+                "defaultMaterial", "Studio_Clay and Gold_Reflective",
+                "description", "Stylized astronaut exploration diorama situated atop an asteroid pedestal with dust rings and orbiting floating minerals."
+        ));
+        spec.put("models", models);
+
         return spec;
     }
 

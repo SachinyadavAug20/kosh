@@ -293,6 +293,43 @@ export const DIRECTOR_MCP_TOOLS: McpToolDefinition[] = [
     },
   },
   {
+    name: "cad_assemble_puzzle_pieces",
+    description: "Assembles modular CAD puzzle pieces into a composite solid matching pre-solved recipes (interlocking dovetail plate, articulated robot arm, modular cube chassis, geodesic hex truss, bearing transmission carrier) with exact socket alignment and 0.2mm FDM tolerances.",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        recipe: {
+          type: "string",
+          enum: [
+            "interlocking_dovetail_plate",
+            "robotic_articulated_arm",
+            "modular_cube_chassis",
+            "geodesic_hex_truss",
+            "bearing_transmission_carrier",
+          ],
+          description: "Assembly recipe joining modular puzzle pieces to satisfy user query",
+        },
+        toleranceMm: { type: "number", description: "Mating joint slide-fit clearance in millimeters (default: 0.2)" },
+        scale: { type: "number", description: "Uniform scaling factor applied to all assembled pieces" },
+        targetPosition: { type: "array", items: { type: "number" }, description: "World placement [x, y, z]" },
+        format: { type: "string", enum: ["glb", "stl", "obj"], description: "Export format" },
+      },
+      required: ["recipe"],
+    },
+    samplePayload: {
+      recipe: "interlocking_dovetail_plate",
+      toleranceMm: 0.2,
+      scale: 1.0,
+      targetPosition: [0, 0, 0],
+      format: "glb",
+    },
+  },
+  {
     name: "cad_batch_csg",
     description: "Executes a base primitive plus a sequential array of CSG boolean operations (DIFFERENCE, UNION, INTERSECT) in one single transaction round-trip.",
     readOnlyHint: false,
@@ -1570,6 +1607,18 @@ export const DIRECTOR_MCP_RESOURCES: McpResourceDefinition[] = [
     description: "Propeller tip clearance percentages, motor mount PCD patterns, center-of-gravity alignment rules, and carbon fiber arm sizing",
     mimeType: "application/json",
   },
+  {
+    uri: "kosh://library/puzzle-pieces",
+    name: "Modular CAD Puzzle Pieces and Sockets Library",
+    description: "Interlocking parametric CAD puzzle pieces with mate sockets, dovetails, NEMA brackets, and pre-solved compound assembly recipes",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://library/saved-models",
+    name: "Pre-Engineered Complete Assembly Models Library",
+    description: "Turnkey multi-part engineering and cinematic assemblies: quadcopter drone, planetary gearbox, compound microscope, electronics chassis, astronaut scene",
+    mimeType: "application/json",
+  },
 ];
 
 export interface McpPromptArgument {
@@ -1686,6 +1735,15 @@ export const DIRECTOR_MCP_PROMPTS: McpPromptDefinition[] = [
       { name: "wallThicknessMm", description: "Nominal wall thickness in millimeters (e.g. 2.0)", required: false },
       { name: "catchDepthMm", description: "Snap catch undercut retention depth in millimeters (e.g. 1.2)", required: false },
       { name: "entryAngleDeg", description: "Lead-in push entry angle in degrees (e.g. 30.0)", required: false },
+    ],
+  },
+  {
+    name: "assemble_modular_puzzle_recipe",
+    description: "Guides the AI agent or LLM client to query the 'kosh://library/puzzle-pieces' catalog, select interlocking puzzle piece components, and stitch them together via 'cad_assemble_puzzle_pieces' to answer complex modular CAD queries.",
+    arguments: [
+      { name: "recipeName", description: "Target composite puzzle recipe name (interlocking_dovetail_plate, robotic_articulated_arm, modular_cube_chassis, geodesic_hex_truss, bearing_transmission_carrier)", required: true },
+      { name: "clearanceMm", description: "Mating slide-fit joint clearance in millimeters (default: 0.2 for FDM printing)", required: false },
+      { name: "scaleMultiplier", description: "Uniform scaling factor applied across all assembled components (default: 1.0)", required: false },
     ],
   },
 ];

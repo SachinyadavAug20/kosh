@@ -52,7 +52,8 @@ Built with a titanium-slate CAD workstation aesthetic, Kosh couples a **Spring B
  ┌─────────────────────────────────────────────────────────────┐
  │            Spring Boot 3.3 MCP Server (:8080)               │
  │  ├─ McpController (/mcp)        ├─ ShareController (/api)   │
- │  ├─ McpToolRegistry (23 Tools)  ├─ AssetController          │
+ │  ├─ McpToolRegistry (55 Tools)  ├─ AssetController          │
+ │  ├─ McpResourceRegistry (20)    ├─ McpPromptRegistry (13)   │
  │  └─ GoogleGeminiClient (BYOK)   └─ BlenderExecutionService  │
  └──────────────────────────────┬──────────────────────────────┘
                                 │ Subprocess Execution
@@ -80,7 +81,7 @@ Built with a titanium-slate CAD workstation aesthetic, Kosh couples a **Spring B
 
 ## Expanded Creative MCP Tools Suite
 
-Kosh exposes a comprehensive suite of 54 native creative CAD and DCC tools over JSON-RPC 2.0 (`POST /mcp` and `GET /mcp/sse`), every single one declaring explicit boolean behavioral hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) for full M8ven Trust Index Grade A compliance:
+Kosh exposes a comprehensive suite of 55 native creative CAD and DCC tools over JSON-RPC 2.0 (`POST /mcp` and `GET /mcp/sse`), every single one declaring explicit boolean behavioral hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) for full M8ven Trust Index Grade A compliance:
 
 ### Precision 3D CAD & Engineering
 | # | Tool Name | Domain | Description | Hints (RO, Destr, Idemp, OpenW) |
@@ -106,42 +107,43 @@ Kosh exposes a comprehensive suite of 54 native creative CAD and DCC tools over 
 | # | Tool Name | Domain | Description | Hints (RO, Destr, Idemp, OpenW) |
 |---|---|---|---|---|
 | 17 | `cad_assemble_kit` | Assembly | Pre-baked parametric templates (flange, quadcopter, panel, truss, tree) in <10ms. | `false, false, true, false` |
-| 18 | `cad_batch_csg` | Batch Pipeline | Sequential CSG booleans executed in one single transaction round-trip. | `false, false, false, false` |
-| 19 | `cad_synthesize_composite`| Generative CAD | Multi-part composite CAD assembly from natural language with aesthetic styles. | `false, false, false, false` |
-| 20 | `cad_compose_compound_scene`| Environments | Multi-subject compositions situated in rich cosmic/orbital environments. | `false, false, false, false` |
-| 21 | `scene_assembler` | Staging | Multi-asset modular architecture and compound scene assembly. | `false, false, false, false` |
+| 18 | `cad_assemble_puzzle_pieces` | Puzzle Assembly | Joins modular puzzle pieces (dovetails, NEMA mounts, 2020 rails) to satisfy user query recipes. | `false, false, true, false` |
+| 19 | `cad_batch_csg` | Batch Pipeline | Sequential CSG booleans executed in one single transaction round-trip. | `false, false, false, false` |
+| 20 | `cad_synthesize_composite`| Generative CAD | Multi-part composite CAD assembly from natural language with aesthetic styles. | `false, false, false, false` |
+| 21 | `cad_compose_compound_scene`| Environments | Multi-subject compositions situated in rich cosmic/orbital environments. | `false, false, false, false` |
+| 22 | `scene_assembler` | Staging | Multi-asset modular architecture and compound scene assembly. | `false, false, false, false` |
 
 ### Photorealistic Rendering & Studio Lighting
 | # | Tool Name | Domain | Description | Hints (RO, Destr, Idemp, OpenW) |
 |---|---|---|---|---|
-| 22 | `cad_render_frame` | Beauty Render | Physically-based raytraced render via Blender EEVEE or Cycles engine. | `true, false, true, false` |
-| 23 | `blender_render_frame` | Studio Render | Frame capture with transparent background, studio lighting, and framing. | `true, false, true, false` |
-| 24 | `cad_studio_lighting_preset`| Lighting Rigs | 3-Point Classic, Cyberpunk Neon, Product Softbox, and Dramatic Rim rigs. | `false, false, false, false` |
-| 25 | `cad_apply_pbr_preset`| PBR Presets | Calibrated optical materials (Titanium, Carbon Fiber, Glass, Gold, Obsidian). | `false, false, false, false` |
-| 26 | `cad_batch_multiview_render`| Blueprints | 4-view orthographic and isometric blueprint engineering frames. | `true, false, true, false` |
-| 27 | `lighting_studio` | Custom Rig | Custom photographic lighting rigs, cyclorama infinity backdrops. | `false, false, false, false` |
-| 28 | `material_shader` | Shader Graph | Procedural Principled BSDF node trees with micro-displacement. | `false, false, false, false` |
-| 29 | `camera_compositor` | Director Rig | Cinematic camera rigs: 360-degree turntable orbits, dolly tracks, macro lenses. | `false, false, false, false` |
+| 23 | `cad_render_frame` | Beauty Render | Physically-based raytraced render via Blender EEVEE or Cycles engine. | `true, false, true, false` |
+| 24 | `blender_render_frame` | Studio Render | Frame capture with transparent background, studio lighting, and framing. | `true, false, true, false` |
+| 25 | `cad_studio_lighting_preset`| Lighting Rigs | 3-Point Classic, Cyberpunk Neon, Product Softbox, and Dramatic Rim rigs. | `false, false, false, false` |
+| 26 | `cad_apply_pbr_preset`| PBR Presets | Calibrated optical materials (Titanium, Carbon Fiber, Glass, Gold, Obsidian). | `false, false, false, false` |
+| 27 | `cad_batch_multiview_render`| Blueprints | 4-view orthographic and isometric blueprint engineering frames. | `true, false, true, false` |
+| 28 | `lighting_studio` | Custom Rig | Custom photographic lighting rigs, cyclorama infinity backdrops. | `false, false, false, false` |
+| 29 | `material_shader` | Shader Graph | Procedural Principled BSDF node trees with micro-displacement. | `false, false, false, false` |
+| 30 | `camera_compositor` | Director Rig | Cinematic camera rigs: 360-degree turntable orbits, dolly tracks, macro lenses. | `false, false, false, false` |
 
 ### Digital Sculpting, Animation & Multi-Domain
 | # | Tool Name | Domain | Description | Hints (RO, Destr, Idemp, OpenW) |
 |---|---|---|---|---|
-| 30 | `cad_uv_unwrap_auto` | UV Mapping | Smart UV Project unwrapping with customizable angle limits and packing margins. | `false, false, true, false` |
-| 31 | `blender_sculpt_op` | Sculpting | Digital sculpting brushes (clay, crease, inflate, grab) & dynamic remeshing. | `false, false, false, false` |
-| 32 | `blender_mesh_ops` | BMesh Ops | Manifold CSG booleans, chamfer bevels, solidification, and decimation. | `false, false, false, false` |
-| 33 | `blender_uv_paint` | Texturing | Smart UV Project unwrapping, normal map baking, and vertex colors. | `false, false, false, false` |
-| 34 | `blender_animate_pipeline`| Kinematics | Baked keyframed rigid body falls, cloth drapery, wave deforms, turntables. | `false, false, false, false` |
-| 35 | `geometry_nodes` | Algorithmic | Procedural Geometry Node networks, point scattering, and lattices. | `false, false, false, false` |
-| 36 | `kosh_svg_to_3d` | 2D to 3D | Extrudes 2D vector SVG path coordinates into beveled 3D solids. | `false, false, false, false` |
-| 37 | `kosh_audio_reactive` | Audio Motion | 16-band frequency equalizer bars and concentric spectrum rings. | `false, false, false, false` |
-| 38 | `kosh_ascii_to_voxel` | Voxel Engine | Synthesizes multi-layered 3D voxel grid sculptures from ASCII templates. | `false, false, false, false` |
-| 39 | `kosh_cad_export_step` | Engineering | Precision engineered CAD models (spur gears, flange bearings, mounts). | `false, false, false, false` |
-| 40 | `mcp_check_tool` | Trust Index | Vets any MCP server across 120,000+ indexed servers via M8ven Trust Index. | `true, false, true, true` |
-| 41 | `kosh_system_health` | Telemetry | Live operational diagnostics, Blender 5.2 LTS status, and daemon telemetry. | `true, false, true, true` |
+| 31 | `cad_uv_unwrap_auto` | UV Mapping | Smart UV Project unwrapping with customizable angle limits and packing margins. | `false, false, true, false` |
+| 32 | `blender_sculpt_op` | Sculpting | Digital sculpting brushes (clay, crease, inflate, grab) & dynamic remeshing. | `false, false, false, false` |
+| 33 | `blender_mesh_ops` | BMesh Ops | Manifold CSG booleans, chamfer bevels, solidification, and decimation. | `false, false, false, false` |
+| 34 | `blender_uv_paint` | Texturing | Smart UV Project unwrapping, normal map baking, and vertex colors. | `false, false, false, false` |
+| 35 | `blender_animate_pipeline`| Kinematics | Baked keyframed rigid body falls, cloth drapery, wave deforms, turntables. | `false, false, false, false` |
+| 36 | `geometry_nodes` | Algorithmic | Procedural Geometry Node networks, point scattering, and lattices. | `false, false, false, false` |
+| 37 | `kosh_svg_to_3d` | 2D to 3D | Extrudes 2D vector SVG path coordinates into beveled 3D solids. | `false, false, false, false` |
+| 38 | `kosh_audio_reactive` | Audio Motion | 16-band frequency equalizer bars and concentric spectrum rings. | `false, false, false, false` |
+| 39 | `kosh_ascii_to_voxel` | Voxel Engine | Synthesizes multi-layered 3D voxel grid sculptures from ASCII templates. | `false, false, false, false` |
+| 40 | `kosh_cad_export_step` | Engineering | Precision engineered CAD models (spur gears, flange bearings, mounts). | `false, false, false, false` |
+| 41 | `mcp_check_tool` | Trust Index | Vets any MCP server across 120,000+ indexed servers via M8ven Trust Index. | `true, false, true, true` |
+| 42 | `kosh_system_health` | Telemetry | Live operational diagnostics, Blender 5.2 LTS status, and daemon telemetry. | `true, false, true, true` |
 
 ---
 
-## Enterprise MCP Resources (18 Direct In-Memory Schemas)
+## Enterprise MCP Resources (20 Direct In-Memory Schemas)
 
 Kosh pre-serializes domain knowledge into JVM memory at startup for sub-2ms `resources/read` resolution, eliminating LLM dimension hallucinations:
 
@@ -165,10 +167,12 @@ Kosh pre-serializes domain knowledge into JVM memory at startup for sub-2ms `res
 | 16 | `kosh://specs/optics/studio-hdri-lighting` | Photography | Photographic lighting ratios (2:1, 4:1, 8:1), Kelvin color temps, cyclorama curvature. |
 | 17 | `kosh://presets/game-engine-lod` | Game Engine | Real-time poly budgets and texture map sizes across LOD0 Hero to LOD3 Billboard. |
 | 18 | `kosh://specs/aerospace/unmanned-airframe` | Aerospace | UAV multirotor airframe design rules, prop tip clearances, motor PCD standards. |
+| 19 | `kosh://library/puzzle-pieces` | Modular Library | 12 CAD puzzle pieces with mate sockets, dovetails, NEMA brackets, and compound recipes. |
+| 20 | `kosh://library/saved-models` | Pre-Engineered | Complete multi-part assemblies: quadcopter drone, planetary gearbox, compound microscope. |
 
 ---
 
-## Precision Engineering MCP Prompts (12 Standardized Blueprints)
+## Precision Engineering MCP Prompts (13 Standardized Blueprints)
 
 Connected LLM clients (Claude Desktop, Cursor, Gemini) can query `prompts/list` and `prompts/get` to pull hardened step-by-step CAD plans with zero syntax hallucinations:
 
@@ -186,6 +190,50 @@ Connected LLM clients (Claude Desktop, Cursor, Gemini) can query `prompts/list` 
 | 10 | `reverse_engineering_blueprint_to_3d` | 2D to 3D CAD | `blueprintDescription`, `nominalToleranceMm` |
 | 11 | `sculpt_creature_bust` | Digital Sculpting | `creatureType`, `voxelResolutionMm` |
 | 12 | `generate_3d_printable_snapfit` | Snap-Fit Engineering | `beamLengthMm`, `wallThicknessMm`, `catchDepthMm`, `entryAngleDeg` |
+| 13 | `assemble_modular_puzzle_recipe` | Modular Assembly | `recipeName`, `clearanceMm`, `scaleMultiplier` |
+
+---
+
+## Modular Puzzle-Piece Assembly Engine & Saved Models Library
+
+Kosh introduces a physical interlocking assembly subsystem where CAD components act like modular puzzle pieces with calibrated socket vectors, enabling AI agents and connected clients to stitch components together to satisfy complex user queries with zero manual CAD modeling.
+
+### 1. Interlocking Puzzle Pieces (`kosh://library/puzzle-pieces`)
+
+The resource exposes 12 parametric CAD puzzle pieces adhering to the Kosh Modular Interlocking Standard (KMIS-2026), each specifying exact envelope dimensions, socket connection points, normal vectors, and 0.2mm nominal slide-fit tolerances:
+
+1. **`dovetail_male_plate`**: 30x30x6mm planar plate with male dovetail tongue on +X and female groove on -X (15-degree wedge angle).
+2. **`dovetail_female_plate`**: 30x30x6mm planar plate with dual female dovetail grooves for bidirectional interlocking.
+3. **`corner_gusset_90`**: 25x25x20mm structural right-angle gusset with dual M3 counterbored holes and internal stiffening rib.
+4. **`t_slot_rail_2020`**: 20x20x100mm metric extrusion rail featuring standard 6mm slot profiles along 4 faces and central M5 tap core.
+5. **`bearing_block_608`**: 36x36x12mm pillow block housing with press-fit pocket for 608 ball bearings (22mm outer diameter, 8mm bore).
+6. **`nema17_motor_mount`**: 42.3x42.3x8mm stepper motor faceplate with 22.5mm pilot boss clearance and 31mm square PCD M3 bolt pattern.
+7. **`cantilever_strut`**: 14x14x80mm lightweight I-beam linkage strut with clevis pin pivot ends.
+8. **`ball_socket_joint`**: 20x20x28mm spherical ball-and-cup joint delivering +/- 35-degree conical articulation.
+9. **`hex_hub_6way`**: 32x32x15mm isogrid anchor node radiating 6 structural sockets at 60-degree increments for space frames.
+10. **`snap_fit_enclosure_base`**: 80x50x20mm perimeter snap-bead enclosure base with 4 internal PCB standoffs.
+11. **`snap_fit_enclosure_lid`**: 80x50x6mm mating lid with flexible cantilever hooks (0.25mm retention engagement).
+12. **`servo_horn_linkage`**: 40x12x5mm actuator arm featuring a standard 25T spline hub and M2 pushrod clevis hole.
+
+### 2. Turnkey Composite Assembly Recipes
+
+When an AI assistant receives natural language user requests, it matches them directly to pre-solved puzzle piece recipes executed deterministically via `cad_assemble_puzzle_pieces`:
+
+- **`interlocking_dovetail_plate`** (*"puzzle floor tile", "modular interlocking plates"*): 4-tile planar lattice joined via 0.2mm slide dovetails with alternating dark titanium and brushed brass finishes.
+- **`robotic_articulated_arm`** (*"robotic arm", "servo manipulator", "pick and place robot"*): Multi-jointed arm mating a NEMA 17 motor mount, 608 bearing pivot, twin linkage struts, and servo clevis horn.
+- **`modular_cube_chassis`** (*"cube frame", "extrusion chassis", "3D printer cage"*): Rigid 3D cubic enclosure assembled from 12 2020 extrusion rails joined by 8 90-degree corner gussets.
+- **`geodesic_hex_truss`** (*"hex truss", "space frame", "honeycomb lattice"*): Isogrid structural node radiating 60-degree interlocking struts into an outer tension perimeter.
+- **`bearing_transmission_carrier`** (*"transmission plate", "gearbox carrier", "motor bearing mount"*): Mechanical powertrain sub-assembly mating a NEMA 17 faceplate to twin 608 pillow blocks across dual 2020 rails with a precision 8mm ground shaft.
+
+### 3. Pre-Engineered Saved Complete Assemblies (`kosh://library/saved-models`)
+
+For instant turn-key prototyping, Kosh pre-bakes complete multi-part CAD assemblies accessible directly through the resource registry:
+
+1. **`drone_quadcopter_pro`**: Enterprise Pro Quadcopter Airframe (350x350x85mm) featuring carbon fiber arms, brushless motor mounts, avionics canopy, and landing skids.
+2. **`planetary_gearbox_stage`**: Epicyclic Planetary 4:1 Gearbox (80x80x45mm) with 48T outer ring gear, 16T central sun gear, 3 planet gears on carrier plate, and 8mm input shaft.
+3. **`biomedical_microscope_body`**: Laboratory Optical Compound Microscope (180x220x360mm) with cast iron arm, revolving quad objective turret, mechanical XY stage, and focus dials.
+4. **`modular_electronics_housing`**: IP54 DIN-Rail Instrument Housing (120x80x40mm) with O-ring gasket groove, transparent polycarbonate lid, PG7 cable gland knockouts, and 35mm DIN-rail spring clip.
+5. **`cosmic_astronaut_scene`**: Cinematic Apollo Astronaut Diorama (250x250x300mm) situated atop a cratered asteroid pedestal with dust rings and orbiting crystals.
 
 ---
 

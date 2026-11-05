@@ -48,6 +48,7 @@ public class McpToolRegistry {
             "cad_export_engineering_drawing",
             // Instant Composite Assembly Tools (no LLM round-trip, pre-baked templates)
             "cad_assemble_kit",
+            "cad_assemble_puzzle_pieces",
             "cad_batch_csg",
             "cad_apply_fillet_chamfer",
             "cad_quick_fillet_chamfer",
@@ -338,6 +339,34 @@ public class McpToolRegistry {
                 "required", List.of("kitCategory")
         ));
         tools.add(kitTool);
+
+        // cad_assemble_puzzle_pieces (instant puzzle-piece modular assembly engine)
+        Map<String, Object> puzzleTool = new LinkedHashMap<>();
+        puzzleTool.put("name", "cad_assemble_puzzle_pieces");
+        puzzleTool.put("description", "Assembles modular CAD puzzle pieces into a composite solid matching pre-solved recipes (interlocking dovetail plate, articulated robot arm, modular cube chassis, geodesic hex truss, bearing transmission carrier) with exact socket alignment and 0.2mm FDM tolerances.");
+        attachHints(puzzleTool, false, false, true, false);
+        puzzleTool.put("inputSchema", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "recipe", Map.of(
+                                "type", "string",
+                                "enum", List.of("interlocking_dovetail_plate", "robotic_articulated_arm", "modular_cube_chassis", "geodesic_hex_truss", "bearing_transmission_carrier"),
+                                "description", "Assembly recipe joining modular puzzle pieces to satisfy user query"
+                        ),
+                        "toleranceMm", Map.of("type", "number", "default", 0.2, "description", "Mating joint slide-fit clearance in millimeters (default: 0.2)"),
+                        "scale", Map.of("type", "number", "default", 1.0, "description", "Uniform scaling factor applied to all assembled pieces"),
+                        "targetPosition", Map.of(
+                                "type", "array",
+                                "items", Map.of("type", "number"),
+                                "minItems", 3,
+                                "maxItems", 3,
+                                "description", "World placement coordinates [x, y, z] in meters"
+                        ),
+                        "format", Map.of("type", "string", "enum", List.of("glb", "stl", "obj"), "description", "Export format (default: glb)")
+                ),
+                "required", List.of("recipe")
+        ));
+        tools.add(puzzleTool);
 
         // 7. cad_batch_csg (chained boolean pipeline in a single round-trip)
         Map<String, Object> batchCsgTool = new LinkedHashMap<>();
@@ -1077,6 +1106,8 @@ public class McpToolRegistry {
             finalScript = buildApplyModifierScript(arguments, format);
         } else if ("cad_assemble_kit".equals(normalizedName)) {
             finalScript = buildAssembleKitScript(arguments, format);
+        } else if ("cad_assemble_puzzle_pieces".equals(normalizedName)) {
+            finalScript = buildAssemblePuzzlePiecesScript(arguments, format);
         } else if ("cad_batch_csg".equals(normalizedName)) {
             finalScript = buildBatchCsgScript(arguments, format);
         } else if ("cad_apply_fillet_chamfer".equals(normalizedName) || "cad_quick_fillet_chamfer".equals(normalizedName)) {
@@ -1622,6 +1653,296 @@ public class McpToolRegistry {
                             cone = bpy.context.active_object
                             cone.name = "Kit_LowPoly_Tree_Foliage_%d" % tier
                             _apply_mat(cone, foliage_mat)
+                        """);
+            }
+            default -> { }
+        }
+
+        return sb.toString();
+    }
+
+    private String buildAssemblePuzzlePiecesScript(Map<String, Object> arguments, String format) {
+        String recipe = arguments != null && arguments.get("recipe") != null
+                ? arguments.get("recipe").toString().trim().toLowerCase()
+                : "interlocking_dovetail_plate";
+        Set<String> validRecipes = Set.of(
+                "interlocking_dovetail_plate",
+                "robotic_articulated_arm",
+                "modular_cube_chassis",
+                "geodesic_hex_truss",
+                "bearing_transmission_carrier"
+        );
+        if (!validRecipes.contains(recipe)) {
+            throw new IllegalArgumentException("Unknown puzzle recipe: " + recipe
+                    + ". Valid recipes: " + String.join(", ", validRecipes));
+        }
+
+        double scale = arguments != null && arguments.get("scale") instanceof Number n ? n.doubleValue() : 1.0;
+        if (scale <= 0) scale = 1.0;
+        double tol = arguments != null && arguments.get("toleranceMm") instanceof Number n ? n.doubleValue() : 0.2;
+        if (tol < 0.05) tol = 0.05;
+
+        List<Double> pos = parseDoubleList(arguments != null ? arguments.get("targetPosition") : null, List.of(0.0, 0.0, 0.0));
+        double px = pos.size() > 0 ? pos.get(0) : 0.0;
+        double py = pos.size() > 1 ? pos.get(1) : 0.0;
+        double pz = pos.size() > 2 ? pos.get(2) : 0.0;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("import bpy, math\n\n");
+        sb.append("for o in list(bpy.data.objects):\n    bpy.data.objects.remove(o, do_unlink=True)\n");
+        sb.append("for m in list(bpy.data.meshes):\n    bpy.data.meshes.remove(m, do_unlink=True)\n\n");
+        sb.append(KIT_HELPER_PY);
+        sb.append(String.format(Locale.US,
+                "s = %.4f\ntol = %.4f * 0.001\npx, py, pz = %.4f, %.4f, %.4f\n\n",
+                scale, tol, px, py, pz));
+
+        switch (recipe) {
+            case "interlocking_dovetail_plate" -> {
+                sb.append("""
+                        # Recipe: interlocking_dovetail_plate (4-tile modular sliding floor lattice)
+                        tile_size = 0.040 * s
+                        tile_th = 0.006 * s
+                        tongue_w = 0.012 * s
+                        tongue_d = 0.005 * s
+
+                        mat_a = _mat("PuzzleMat_PlateA", (0.15, 0.18, 0.24, 1.0), 0.35, 0.90)
+                        mat_b = _mat("PuzzleMat_PlateB", (0.75, 0.60, 0.25, 1.0), 0.28, 0.85)
+
+                        coords = [(-tile_size/2, -tile_size/2, mat_a), (tile_size/2, -tile_size/2, mat_b),
+                                  (-tile_size/2, tile_size/2, mat_b), (tile_size/2, tile_size/2, mat_a)]
+
+                        for idx, (tx, ty, mat) in enumerate(coords):
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px + tx, py + ty, pz + tile_th / 2))
+                            tile = bpy.context.active_object
+                            tile.name = "Puzzle_Tile_%d" % idx
+                            tile.dimensions = (tile_size - tol, tile_size - tol, tile_th)
+                            _apply_mat(tile, mat)
+
+                            # Dovetail male key on positive X edge
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px + tx + (tile_size - tol)/2, py + ty, pz + tile_th / 2))
+                            key = bpy.context.active_object
+                            key.dimensions = (tongue_d, tongue_w, tile_th * 0.85)
+                            _bevel(key, 0.001 * s, 2)
+                            _apply_mat(key, mat)
+
+                            # Center counterbore hole for M3 fastener
+                            bpy.ops.mesh.primitive_cylinder_add(radius=0.0034 * s, depth=tile_th * 3, vertices=24, location=(px + tx, py + ty, pz + tile_th / 2))
+                            _cut(tile, bpy.context.active_object)
+                            _bevel(tile, 0.001 * s, 2)
+                        """);
+            }
+            case "robotic_articulated_arm" -> {
+                sb.append("""
+                        # Recipe: robotic_articulated_arm (NEMA 17 base + 608 pivot + dual linkage struts + servo clevis)
+                        mat_mount = _mat("PuzzleMat_AnodizedAlum", (0.22, 0.25, 0.30, 1.0), 0.30, 0.95)
+                        mat_strut = _mat("PuzzleMat_CarbonArm", (0.10, 0.10, 0.12, 1.0), 0.60, 0.20)
+                        mat_brass = _mat("PuzzleMat_JointBrass", (0.85, 0.65, 0.20, 1.0), 0.25, 0.90)
+
+                        # 1. NEMA 17 Faceplate Motor Mount
+                        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px, py, pz + 0.004 * s))
+                        mount = bpy.context.active_object
+                        mount.name = "Puzzle_Nema17_Mount"
+                        mount.dimensions = (0.0423 * s, 0.0423 * s, 0.008 * s)
+                        _apply_mat(mount, mat_mount)
+
+                        # Center pilot hole (22mm dia)
+                        bpy.ops.mesh.primitive_cylinder_add(radius=0.011 * s, depth=0.02 * s, vertices=32, location=(px, py, pz + 0.004 * s))
+                        _cut(mount, bpy.context.active_object)
+
+                        # 4x M3 bolt clearance holes on 31mm square PCD
+                        pcd_half = 0.0155 * s
+                        for bx, by in ((-pcd_half, -pcd_half), (pcd_half, -pcd_half), (-pcd_half, pcd_half), (pcd_half, pcd_half)):
+                            bpy.ops.mesh.primitive_cylinder_add(radius=0.0017 * s, depth=0.02 * s, vertices=16, location=(px + bx, py + by, pz + 0.004 * s))
+                            _cut(mount, bpy.context.active_object)
+
+                        # 2. 608 Bearing Housing Pivot Block
+                        bpy.ops.mesh.primitive_cylinder_add(radius=0.018 * s, depth=0.012 * s, vertices=32, location=(px, py, pz + 0.014 * s))
+                        bearing = bpy.context.active_object
+                        bearing.name = "Puzzle_608_BearingBlock"
+                        _apply_mat(bearing, mat_brass)
+                        bpy.ops.mesh.primitive_cylinder_add(radius=0.004 * s, depth=0.03 * s, vertices=24, location=(px, py, pz + 0.014 * s))
+                        _cut(bearing, bpy.context.active_object)
+
+                        # 3. Lower Linkage Cantilever Strut (angled at 25 deg)
+                        ang1 = math.radians(25)
+                        len1 = 0.080 * s
+                        arm1_x = px + math.sin(ang1) * (len1 / 2)
+                        arm1_z = pz + 0.014 * s + math.cos(ang1) * (len1 / 2)
+                        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(arm1_x, py, arm1_z))
+                        arm1 = bpy.context.active_object
+                        arm1.name = "Puzzle_CantileverStrut_Lower"
+                        arm1.dimensions = (0.010 * s, 0.012 * s, len1)
+                        arm1.rotation_euler = (0, ang1, 0)
+                        _apply_mat(arm1, mat_strut)
+
+                        # 4. Upper Linkage Cantilever Strut (angled backward at -35 deg)
+                        ang2 = math.radians(-35)
+                        len2 = 0.070 * s
+                        joint_x = px + math.sin(ang1) * len1
+                        joint_z = pz + 0.014 * s + math.cos(ang1) * len1
+                        arm2_x = joint_x + math.sin(ang2) * (len2 / 2)
+                        arm2_z = joint_z + math.cos(ang2) * (len2 / 2)
+                        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(arm2_x, py, arm2_z))
+                        arm2 = bpy.context.active_object
+                        arm2.name = "Puzzle_CantileverStrut_Upper"
+                        arm2.dimensions = (0.008 * s, 0.010 * s, len2)
+                        arm2.rotation_euler = (0, ang2, 0)
+                        _apply_mat(arm2, mat_strut)
+
+                        # 5. Servo Horn Linkage End Effector
+                        tip_x = joint_x + math.sin(ang2) * len2
+                        tip_z = joint_z + math.cos(ang2) * len2
+                        bpy.ops.mesh.primitive_cylinder_add(radius=0.008 * s, depth=0.006 * s, vertices=24, location=(tip_x, py, tip_z))
+                        horn = bpy.context.active_object
+                        horn.name = "Puzzle_ServoHorn_Effector"
+                        _apply_mat(horn, mat_mount)
+                        """);
+            }
+            case "modular_cube_chassis" -> {
+                sb.append("""
+                        # Recipe: modular_cube_chassis (2020 T-slot rails + 8 corner gussets)
+                        mat_rail = _mat("PuzzleMat_Rail2020", (0.35, 0.38, 0.42, 1.0), 0.32, 0.90)
+                        mat_gusset = _mat("PuzzleMat_CornerGusset", (0.12, 0.14, 0.18, 1.0), 0.45, 0.80)
+
+                        L = 0.100 * s
+                        T = 0.020 * s
+                        half = (L - T) / 2.0
+
+                        # 12 Extrusion Rails along cube edges
+                        # 4 Vertical Z rails
+                        for rx, ry in ((-half, -half), (half, -half), (-half, half), (half, half)):
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px + rx, py + ry, pz + L / 2))
+                            r = bpy.context.active_object
+                            r.dimensions = (T, T, L)
+                            _apply_mat(r, mat_rail)
+
+                        # 4 Bottom Horizontal Rails (X and Y)
+                        for ry in (-half, half):
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px, py + ry, pz + T / 2))
+                            r = bpy.context.active_object
+                            r.dimensions = (L - 2 * T, T, T)
+                            _apply_mat(r, mat_rail)
+                        for rx in (-half, half):
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px + rx, py, pz + T / 2))
+                            r = bpy.context.active_object
+                            r.dimensions = (T, L - 2 * T, T)
+                            _apply_mat(r, mat_rail)
+
+                        # 4 Top Horizontal Rails (X and Y)
+                        for ry in (-half, half):
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px, py + ry, pz + L - T / 2))
+                            r = bpy.context.active_object
+                            r.dimensions = (L - 2 * T, T, T)
+                            _apply_mat(r, mat_rail)
+                        for rx in (-half, half):
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px + rx, py, pz + L - T / 2))
+                            r = bpy.context.active_object
+                            r.dimensions = (T, L - 2 * T, T)
+                            _apply_mat(r, mat_rail)
+
+                        # 8 Corner Gusset Brackets
+                        g_sz = 0.015 * s
+                        for gx in (-half, half):
+                            for gy in (-half, half):
+                                for gz in (T, L - T):
+                                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px + gx + (-1 if gx > 0 else 1) * g_sz / 2,
+                                                                                         py + gy + (-1 if gy > 0 else 1) * g_sz / 2,
+                                                                                         pz + gz))
+                                    g = bpy.context.active_object
+                                    g.dimensions = (g_sz, g_sz, g_sz)
+                                    _apply_mat(g, mat_gusset)
+                        """);
+            }
+            case "geodesic_hex_truss" -> {
+                sb.append("""
+                        # Recipe: geodesic_hex_truss (central 6-way hex hub + radiating struts + tension rim)
+                        mat_hub = _mat("PuzzleMat_HexHub", (0.80, 0.40, 0.10, 1.0), 0.35, 0.85)
+                        mat_strut = _mat("PuzzleMat_HexStrut", (0.20, 0.22, 0.26, 1.0), 0.40, 0.90)
+
+                        R_hub = 0.025 * s
+                        H_hub = 0.016 * s
+                        L_strut = 0.080 * s
+
+                        # Central 6-way Hexagonal Hub
+                        bpy.ops.mesh.primitive_cylinder_add(radius=R_hub, depth=H_hub, vertices=6, location=(px, py, pz + H_hub / 2))
+                        hub = bpy.context.active_object
+                        hub.name = "Puzzle_HexHub_Core"
+                        _apply_mat(hub, mat_hub)
+
+                        # Center bore hole
+                        bpy.ops.mesh.primitive_cylinder_add(radius=0.006 * s, depth=H_hub * 3, vertices=24, location=(px, py, pz + H_hub / 2))
+                        _cut(hub, bpy.context.active_object)
+
+                        # 6 Radial Cantilever Struts at 60-degree intervals
+                        for i in range(6):
+                            deg = i * 60
+                            rad = math.radians(deg)
+                            dist = R_hub + L_strut / 2.0
+                            sx = px + math.cos(rad) * dist
+                            sy = py + math.sin(rad) * dist
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(sx, sy, pz + H_hub / 2))
+                            strut = bpy.context.active_object
+                            strut.name = "Puzzle_Strut_%d" % i
+                            strut.dimensions = (L_strut, 0.008 * s, 0.008 * s)
+                            strut.rotation_euler = (0, 0, rad)
+                            _apply_mat(strut, mat_strut)
+
+                        # Outer hexagonal tension rim connecting the strut tips
+                        R_outer = R_hub + L_strut
+                        bpy.ops.mesh.primitive_cylinder_add(radius=R_outer, depth=0.006 * s, vertices=6, location=(px, py, pz + H_hub / 2))
+                        outer_rim = bpy.context.active_object
+                        outer_rim.name = "Puzzle_HexRim_Outer"
+                        _apply_mat(outer_rim, mat_hub)
+                        bpy.ops.mesh.primitive_cylinder_add(radius=R_outer - 0.006 * s, depth=0.02 * s, vertices=6, location=(px, py, pz + H_hub / 2))
+                        _cut(outer_rim, bpy.context.active_object)
+                        """);
+            }
+            case "bearing_transmission_carrier" -> {
+                sb.append("""
+                        # Recipe: bearing_transmission_carrier (NEMA 17 mount + twin 608 bearings + 2020 rails + drive shaft)
+                        mat_motor = _mat("PuzzleMat_MotorPlate", (0.18, 0.20, 0.25, 1.0), 0.30, 0.95)
+                        mat_bearing = _mat("PuzzleMat_PillowBlock", (0.70, 0.55, 0.15, 1.0), 0.25, 0.90)
+                        mat_shaft = _mat("PuzzleMat_PrecisionShaft", (0.90, 0.92, 0.95, 1.0), 0.15, 0.98)
+                        mat_rail = _mat("PuzzleMat_SupportRail", (0.40, 0.42, 0.46, 1.0), 0.35, 0.85)
+
+                        # 1. Base NEMA 17 Stepper Mount Faceplate
+                        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px, py - 0.060 * s, pz + 0.025 * s))
+                        motor_plate = bpy.context.active_object
+                        motor_plate.name = "Puzzle_NEMA17_CarrierPlate"
+                        motor_plate.dimensions = (0.050 * s, 0.010 * s, 0.050 * s)
+                        _apply_mat(motor_plate, mat_motor)
+
+                        # Motor 22mm pilot boss hole
+                        bpy.ops.mesh.primitive_cylinder_add(radius=0.011 * s, depth=0.03 * s, vertices=32, location=(px, py - 0.060 * s, pz + 0.025 * s))
+                        bpy.context.active_object.rotation_euler = (math.radians(90), 0, 0)
+                        _cut(motor_plate, bpy.context.active_object)
+
+                        # 2. Parallel 2020 Aluminum Rails
+                        for rx in (-0.020 * s, 0.020 * s):
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px + rx, py, pz + 0.005 * s))
+                            r = bpy.context.active_object
+                            r.dimensions = (0.012 * s, 0.120 * s, 0.010 * s)
+                            _apply_mat(r, mat_rail)
+
+                        # 3. Twin 608 Pillow Block Bearing Housings
+                        for idx, y_offset in enumerate((-0.015 * s, 0.035 * s)):
+                            bpy.ops.mesh.primitive_cube_add(size=1.0, location=(px, py + y_offset, pz + 0.025 * s))
+                            pb = bpy.context.active_object
+                            pb.name = "Puzzle_608_BearingBlock_%d" % idx
+                            pb.dimensions = (0.036 * s, 0.014 * s, 0.036 * s)
+                            _apply_mat(pb, mat_bearing)
+
+                            # 22mm outer bearing pocket bore
+                            bpy.ops.mesh.primitive_cylinder_add(radius=0.011 * s, depth=0.04 * s, vertices=32, location=(px, py + y_offset, pz + 0.025 * s))
+                            bpy.context.active_object.rotation_euler = (math.radians(90), 0, 0)
+                            _cut(pb, bpy.context.active_object)
+
+                        # 4. Precision 8mm Ground Drive Shaft
+                        bpy.ops.mesh.primitive_cylinder_add(radius=0.004 * s, depth=0.140 * s, vertices=32, location=(px, py - 0.005 * s, pz + 0.025 * s))
+                        shaft = bpy.context.active_object
+                        shaft.name = "Puzzle_PrecisionDriveShaft_8mm"
+                        shaft.rotation_euler = (math.radians(90), 0, 0)
+                        _apply_mat(shaft, mat_shaft)
                         """);
             }
             default -> { }

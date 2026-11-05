@@ -83,7 +83,7 @@ engines, and asset storage tiers.
 |               |                                  |                    |
 |               v                                  |                    |
 |  +--------------------------------------------+  |                    |
-|  |        McpToolRegistry (23+ CAD Tools)     |  |                    |
+|  |        McpToolRegistry (55 CAD Tools)      |  |                    |
 |  +--------------------------------------------+  |                    |
 |         |                     |                  |                    |
 |         v                     v                  |                    |
@@ -233,7 +233,7 @@ Client / Agent       McpController     McpToolRegistry   BlenderDaemon   Storage
 
 # 6. Model Context Protocol (MCP) Workstation Ecosystem
 
-Kosh exposes 54 native tools, 18 resources, and 12 prompts over JSON-RPC:
+Kosh exposes 55 native tools, 20 resources, and 13 prompts over JSON-RPC:
 
 ### 1. Composable 3D CAD, Digital Calipers & Kinematics
 * `cad_create_primitive`: Parametric solids (cube, cylinder, cone, sphere).
@@ -241,17 +241,20 @@ Kosh exposes 54 native tools, 18 resources, and 12 prompts over JSON-RPC:
 * `cad_measure_dimensions`: Digital caliper (volume, bounding box, area).
 * `cad_generate_gear`: Parametric spur, helical, bevel gears with module.
 * `cad_generate_threads`: Standardized ISO metric threads, bolts, and nuts.
+* `cad_assemble_puzzle_pieces`: Joins modular pieces to satisfy recipes.
 * `cad_convex_hull`: Minimal convex bounding hull for physics colliders.
 * `cad_separate_loose_parts`: Splits multi-body meshes into distinct parts.
 * `cad_export_engineering_drawing`: Generates SVG 2D blueprint drawings.
 
-### 2. Enterprise In-Memory Resources (18 Direct Schemas)
+### 2. Enterprise In-Memory Resources (20 Direct Schemas)
+* Modular: `kosh://library/puzzle-pieces` & `kosh://library/saved-models`.
 * Standards: `kosh://specs/standards/iso-bearings` (608, 624, 625, 6900).
 * Hardware: `kosh://specs/hardware/metric-fasteners` (M2-M12 clearances).
 * Motors: `kosh://specs/engineering/stepper-motors` (NEMA 14, 17, 23, 34).
 * Physics: `kosh://materials/physical-constants` (Density, Young's Modulus).
 
-### 3. Precision Engineering Prompts (12 Standardized Blueprints)
+### 3. Precision Engineering Prompts (13 Standardized Blueprints)
+* `assemble_modular_puzzle_recipe`: Puzzle piece assembly protocol.
 * `design_spur_gear_train`: 2-gear interlocking transmission protocol.
 * `photorealistic_product_hero_shot`: 85mm studio lighting & framing pipeline.
 * `generative_drone_frame`: UAV multirotor airframe and motor PCD synthesis.
@@ -259,10 +262,39 @@ Kosh exposes 54 native tools, 18 resources, and 12 prompts over JSON-RPC:
 
 ---
 
+::id puzzle-pieces-saved-models
+::align left
+
+# 7. Modular Puzzle Pieces and Saved Models Subsystem
+
+Interlocking CAD components joinable like puzzle pieces to satisfy queries:
+
+### 1. Interlocking Puzzle Pieces (`kosh://library/puzzle-pieces`)
+* **12 Standardized Pieces**: Dovetail plates, 90-degree corner gussets,
+  2020 T-slot rails, 608 bearing blocks, NEMA 17 mounts, cantilever struts,
+  ball-socket joints, 6-way hex hubs, snap-fit enclosure bases and lids.
+* **Calibrated Sockets**: Exact mate normals, gender, and 0.2mm FDM tolerance.
+
+### 2. Compound Assembly Recipes (`cad_assemble_puzzle_pieces`)
+* `interlocking_dovetail_plate`: 4-tile planar floor lattice with dovetails.
+* `robotic_articulated_arm`: NEMA 17 motor base, 608 bearing, twin linkages.
+* `modular_cube_chassis`: 12 2020 extrusion rails and 8 corner gussets.
+* `geodesic_hex_truss`: 6-way hub radiating 60-degree struts into tension rim.
+* `bearing_transmission_carrier`: NEMA 17 mount + twin 608 blocks + 8mm shaft.
+
+### 3. Pre-Engineered Saved Complete Models (`kosh://library/saved-models`)
+* `drone_quadcopter_pro`: 350mm carbon fiber X-frame airframe assembly.
+* `planetary_gearbox_stage`: 4:1 epicyclic reduction gear transmission.
+* `biomedical_microscope_body`: Quad objective turret and mechanical stage.
+* `modular_electronics_housing`: IP54 DIN-rail enclosure with snap-fit lid.
+* `cosmic_astronaut_scene`: Apollo astronaut diorama on cratered asteroid.
+
+---
+
 ::id blender-daemon
 ::align left
 
-# 7. Headless Blender 5.2 LTS & Warm Daemon Architecture
+# 8. Headless Blender 5.2 LTS & Warm Daemon Architecture
 
 ### Dual-Tier Execution Engine
 
@@ -295,7 +327,7 @@ Kosh exposes 54 native tools, 18 resources, and 12 prompts over JSON-RPC:
 ::id web-dcc
 ::align left
 
-# 8. Web DCC Studio & Three.js Viewport
+# 9. Web DCC Studio & Three.js Viewport
 
 The Next.js 15 front-end provides an interactive Digital Content Creation suite:
 
@@ -328,7 +360,7 @@ The Next.js 15 front-end provides an interactive Digital Content Creation suite:
 ::id security-verification
 ::align left
 
-# 9. Security, Trust, and Verification Architecture
+# 10. Security, Trust, and Verification Architecture
 
 Kosh achieves high trust ratings by enforcing defense-in-depth principles:
 
@@ -354,12 +386,12 @@ Kosh achieves high trust ratings by enforcing defense-in-depth principles:
 ::id summary-roadmap
 ::align left
 
-# 10. Summary and Future Roadmap
+# 11. Summary and Future Roadmap
 
 ### Project Milestones Achieved
 * Full Model Context Protocol (MCP) compliance over SSE and JSON-RPC 2.0.
 * Headless Blender 5.2 LTS warm daemon delivering sub-400ms turnaround.
-* 23 native parametric tools with behavioral annotations and zero CVEs.
+* 55 native parametric tools with behavioral annotations and zero CVEs.
 * Responsive web-based 3D CAD DCC studio built on Next.js 15 and Three.js.
 
 ### Upcoming Milestones

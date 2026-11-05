@@ -297,6 +297,7 @@ public class McpController {
                             "cad_apply_modifier",
                             "cad_inspect_scene",
                             "cad_assemble_kit",
+                            "cad_assemble_puzzle_pieces",
                             "cad_batch_csg",
                             "cad_apply_fillet_chamfer",
                             "cad_quick_fillet_chamfer",
