@@ -116,6 +116,88 @@ class McpProtocolTest {
     }
 
     @Test
+    @DisplayName("MCP tools/list should expose exactly the SUPPORTED_TOOLS set (no drift between registry and protocol)")
+    void testListToolsMatchesSupportedSetExactly() {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("tools-set-1")
+                .method("tools/list")
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> tools = (List<Map<String, Object>>) result.get("tools");
+        assertNotNull(tools);
+
+        List<String> toolNames = tools.stream().map(t -> t.get("name").toString()).toList();
+
+        // tools/list must be unique
+        assertEquals(toolNames.size(), toolNames.stream().distinct().count(), "tools/list contains duplicate tool names");
+
+        // Set equality: every supported tool is listed, and nothing extra is listed
+        for (String supported : com.kosh.service.McpToolRegistry.SUPPORTED_TOOLS) {
+            assertTrue(toolNames.contains(supported),
+                    "SUPPORTED_TOOLS entry missing from tools/list: " + supported);
+        }
+        for (String listed : toolNames) {
+            assertTrue(com.kosh.service.McpToolRegistry.SUPPORTED_TOOLS.contains(listed),
+                    "tools/list entry missing from SUPPORTED_TOOLS: " + listed);
+        }
+        assertEquals(com.kosh.service.McpToolRegistry.SUPPORTED_TOOLS.size(), toolNames.size());
+
+        // Newly added external-agent tooling must be present
+        assertTrue(toolNames.contains("cad_linear_array"));
+        assertTrue(toolNames.contains("cad_radial_array"));
+        assertTrue(toolNames.contains("cad_text_emboss"));
+        assertTrue(toolNames.contains("cad_check_manifold"));
+    }
+
+    @Test
+    @DisplayName("MCP resources/read metric-fasteners should return cached M3 clearance data (3.4mm / 2.5mm)")
+    void testReadMetricFastenerClearanceResource() throws Exception {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("read-fasteners-m3")
+                .method("resources/read")
+                .params(Map.of("uri", "kosh://specs/hardware/metric-fasteners"))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> contents = (List<Map<String, Object>>) result.get("contents");
+        assertFalse(contents.isEmpty());
+
+        Map<?, ?> payload = objectMapper.readValue(contents.get(0).get("text").toString(), Map.class);
+        assertTrue(payload.containsKey("sizes"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> sizes = (Map<String, Object>) payload.get("sizes");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> m3 = (Map<String, Object>) sizes.get("M3");
+        assertNotNull(m3, "M3 fastener sizing must be present");
+        assertEquals(3.4, ((Number) m3.get("clearanceHoleDiaMm")).doubleValue(),
+                "M3 close-fit clearance hole must be 3.4mm");
+        assertEquals(2.5, ((Number) m3.get("tapDrillDiaMm")).doubleValue(),
+                "M3 tap drill must be 2.5mm");
+        assertEquals(5.5, ((Number) m3.get("headDiaMm")).doubleValue(),
+                "M3 socket cap head diameter must be 5.5mm");
+        assertEquals(3.0, ((Number) m3.get("headHeightMm")).doubleValue(),
+                "M3 socket cap head height must be 3.0mm");
+    }
+
+    @Test
     @DisplayName("MCP resources/list should list scene hierarchy, capabilities, and materials")
     void testListResources() {
         McpRpcRequest req = McpRpcRequest.builder()
@@ -153,7 +235,11 @@ class McpProtocolTest {
         assertTrue(uris.contains("kosh://specs/aerospace/unmanned-airframe"));
         assertTrue(uris.contains("kosh://library/puzzle-pieces"));
         assertTrue(uris.contains("kosh://library/saved-models"));
-        assertEquals(20, resources.size());
+        assertTrue(uris.contains("kosh://specs/hardware/heat-set-inserts"));
+        assertTrue(uris.contains("kosh://materials/filaments"));
+        assertTrue(uris.contains("kosh://specs/printers/build-volumes"));
+        assertTrue(uris.contains("kosh://standards/iso-2768-tolerances"));
+        assertEquals(24, resources.size());
     }
 
     @Test
@@ -240,7 +326,10 @@ class McpProtocolTest {
         assertTrue(promptNames.contains("sculpt_creature_bust"));
         assertTrue(promptNames.contains("generate_3d_printable_snapfit"));
         assertTrue(promptNames.contains("assemble_modular_puzzle_recipe"));
-        assertEquals(13, prompts.size());
+        assertTrue(promptNames.contains("optimize_model_for_3d_printing"));
+        assertTrue(promptNames.contains("design_heat_set_insert_mount"));
+        assertTrue(promptNames.contains("plan_linear_motion_stage"));
+        assertEquals(16, prompts.size());
     }
 
     @Test

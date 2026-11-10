@@ -214,6 +214,30 @@ public class McpResourceRegistry {
                 "Turnkey multi-part engineering and cinematic assemblies: quadcopter drone, planetary gearbox, compound microscope, electronics chassis, astronaut scene",
                 toJson(buildSavedModelsSpec())
         );
+        registerStatic(
+                "kosh://specs/hardware/heat-set-inserts",
+                "Heat-Set Threaded Insert Specifications",
+                "Brass heat-set insert sizing for FDM plastics: hole diameter, boss wall thickness, engagement length, and installation temperature by thread size",
+                toJson(buildHeatSetInsertsSpec())
+        );
+        registerStatic(
+                "kosh://materials/filaments",
+                "3D Printing Filament Material Library",
+                "FDM filament properties: nozzle/bed temperatures, shrinkage, strength, layer adhesion, and typical use cases for common engineering filaments",
+                toJson(buildFilamentsSpec())
+        );
+        registerStatic(
+                "kosh://specs/printers/build-volumes",
+                "3D Printer Build Volume Database",
+                "Popular printer build volumes and nozzle limits for fit checking: Prusa, Bambu Lab, Creality, Printrbot, and Voron class machines",
+                toJson(buildPrinterBuildVolumesSpec())
+        );
+        registerStatic(
+                "kosh://standards/iso-2768-tolerances",
+                "ISO 2768 General Tolerances Standard",
+                "Linear and angular tolerance classes (f, m, c, v) for machined and printed parts, plus derived geographic fits for holes and shafts",
+                toJson(buildIso2768TolerancesSpec())
+        );
 
         log.info("McpResourceRegistry initialized: {} resources ({} static, {} dynamic)",
                 descriptors.size(), staticContentCache.size(), dynamicReaders.size());
@@ -665,5 +689,162 @@ public class McpResourceRegistry {
             log.error("Failed to serialize static MCP resource payload: {}", e.getMessage());
             return "{}";
         }
+    }
+
+    /** Brass heat-set insert sizing for FDM printed bosses (mm). */
+    private Map<String, Object> buildHeatSetInsertsSpec() {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("units", "millimeters");
+        spec.put("process", "Soldering-iron heat-set installation into FDM printed bosses");
+        spec.put("installation", Map.of(
+                "ironTemperatureC", 230,
+                "insertOrientation", "Perpendicular to surface, chamfered end first",
+                "coolDownSeconds", 15,
+                "recommendedBossWallMm", "Insert OD / 2 + 1.5 mm minimum")
+        );
+        spec.put("sizes", Map.of(
+                "M2x3", heatSetInsert(3.2, 4.0, 3.0, 4.5),
+                "M3x5", heatSetInsert(4.0, 5.6, 5.0, 6.0),
+                "M3x8", heatSetInsert(4.0, 5.6, 8.0, 6.0),
+                "M4x6", heatSetInsert(5.6, 7.1, 6.0, 8.0),
+                "M5x8", heatSetInsert(6.4, 8.0, 8.0, 9.0),
+                "M6x10", heatSetInsert(8.0, 9.6, 10.0, 11.0)
+        ));
+        spec.put("fitNotes", Map.of(
+                "holeDiaMm", "Printed hole diameter for press-fit before heating",
+                "bossOuterDiaMm", "Minimum outer diameter of the surrounding boss",
+                "engagementMm", "Usable thread engagement length of the insert",
+                "wallMm", "Minimum wall of plastic between hole and nearest free edge"
+        ));
+        return spec;
+    }
+
+    private Map<String, Object> heatSetInsert(double hole, double bossOuter, double engagement, double wall) {
+        Map<String, Object> i = new LinkedHashMap<>();
+        i.put("holeDiaMm", hole);
+        i.put("bossOuterDiaMm", bossOuter);
+        i.put("engagementMm", engagement);
+        i.put("wallMm", wall);
+        return i;
+    }
+
+    /** Common FDM filament print parameters and mechanical trade-offs. */
+    private Map<String, Object> buildFilamentsSpec() {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("units", List.of("degC", "MPa", "%"));
+        spec.put("nozzleTempC", Map.of(
+                "PLA", List.of(200, 215),
+                "PETG", List.of(230, 250),
+                "ABS", List.of(235, 255),
+                "ASA", List.of(240, 260),
+                "TPU", List.of(220, 235),
+                "Nylon", List.of(250, 275),
+                "PC", List.of(280, 300)
+        ));
+        spec.put("bedTempC", Map.of(
+                "PLA", List.of(55, 65),
+                "PETG", List.of(70, 85),
+                "ABS", List.of(95, 110),
+                "ASA", List.of(95, 110),
+                "TPU", List.of(35, 45),
+                "Nylon", List.of(70, 90),
+                "PC", List.of(90, 110)
+        ));
+        Map<String, Object> materials = new LinkedHashMap<>();
+        materials.put("PLA", filament(58.0, 0.3, "Low warp, brittle, best for prototypes and display parts"));
+        materials.put("PETG", filament(49.0, 1.0, "Tough, chemically resistant, mild flexibility, good layer adhesion"));
+        materials.put("ABS", filament(40.0, 0.5, "Impact resistant, acetone-soluble, warps without enclosure"));
+        materials.put("ASA", filament(44.0, 0.5, "UV-stable ABS alternative for outdoor parts"));
+        materials.put("TPU", filament(26.0, 3.0, "Flexible rubber-like, prints slow, Shore 95A typical"));
+        materials.put("Nylon", filament(70.0, 1.5, "Strong and wear resistant, hygroscopic, needs drybox"));
+        materials.put("PC", filament(64.0, 0.6, "High temp stiffness, transparent grades available"));
+        spec.put("properties", materials);
+        spec.put("notes", Map.of(
+                "enclosure", "ABS, ASA, Nylon, PC benefit from a heated enclosure",
+                "shrinkage", "PLA < PETG < ABS < Nylon; compensate critical fits",
+                "retraction", "Direct drive 0.5-1.0 mm; Bowden 4.0-6.0 mm")
+        );
+        return spec;
+    }
+
+    private Map<String, Object> filament(double tensileMpa, double shrinkPercent, String useCase) {
+        Map<String, Object> f = new LinkedHashMap<>();
+        f.put("tensileStrengthMpa", tensileMpa);
+        f.put("shrinkagePercent", shrinkPercent);
+        f.put("useCase", useCase);
+        return f;
+    }
+
+    /** Printer build volumes (mm) for part fit-checking. */
+    private Map<String, Object> buildPrinterBuildVolumesSpec() {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("units", "millimeters");
+        Map<String, Object> printers = new LinkedHashMap<>();
+        printers.put("prusa_mk4", printer(250, 210, 220, 0.4));
+        printers.put("bambu_lab_p1s", printer(256, 256, 256, 0.4));
+        printers.put("bambu_lab_a1_mini", printer(180, 180, 180, 0.4));
+        printers.put("creality_ender3_v3", printer(220, 220, 250, 0.4));
+        printers.put("voron_24_r2", printer(350, 350, 340, 0.4));
+        printers.put("bambu_lab_x1c", printer(256, 256, 256, 0.4));
+        spec.put("printers", printers);
+        spec.put("notes", "Volumes are usable axis extents; subtract 5-10 mm margin for brims and clips.");
+        return spec;
+    }
+
+    private Map<String, Object> printer(double x, double y, double z, double nozzle) {
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("buildVolumeMm", List.of(x, y, z));
+        p.put("standardNozzleMm", nozzle);
+        return p;
+    }
+
+    /** ISO 2768 general tolerance classes for linear dimensions. */
+    private Map<String, Object> buildIso2768TolerancesSpec() {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("standard", "ISO 2768-1/2 (general tolerances)");
+        spec.put("units", "millimeters");
+        spec.put("classes", Map.of(
+                "f", Map.of("description", "fine — precision fits and inspection parts",
+                        "ranges", List.of(
+                                toleranceRange(0.5, 3.0, 0.05),
+                                toleranceRange(3.0, 6.0, 0.05),
+                                toleranceRange(6.0, 30.0, 0.10),
+                                toleranceRange(30.0, 120.0, 0.15),
+                                toleranceRange(120.0, 400.0, 0.20))),
+                "m", Map.of("description", "medium — general machining default",
+                        "ranges", List.of(
+                                toleranceRange(0.5, 3.0, 0.10),
+                                toleranceRange(3.0, 6.0, 0.10),
+                                toleranceRange(6.0, 30.0, 0.20),
+                                toleranceRange(30.0, 120.0, 0.30),
+                                toleranceRange(120.0, 400.0, 0.50))),
+                "c", Map.of("description", "coarse — sheet metal and castings",
+                        "ranges", List.of(
+                                toleranceRange(0.5, 3.0, 0.20),
+                                toleranceRange(3.0, 6.0, 0.30),
+                                toleranceRange(6.0, 30.0, 0.50),
+                                toleranceRange(30.0, 120.0, 0.80),
+                                toleranceRange(120.0, 400.0, 1.20))),
+                "v", Map.of("description", "very coarse — raw stock and weldments",
+                        "ranges", List.of(
+                                toleranceRange(0.5, 3.0, 0.50),
+                                toleranceRange(3.0, 6.0, 1.00),
+                                toleranceRange(6.0, 30.0, 1.50),
+                                toleranceRange(30.0, 120.0, 2.50),
+                                toleranceRange(120.0, 400.0, 4.00)))
+        ));
+        spec.put("angular", Map.of("defaultClass", "m",
+                "degrees", List.of(10.0, 30.0, 120.0),
+                "toleranceDeg", List.of(1.0, 0.5, 0.25)));
+        spec.put("fitNotes", "3D printed parts: design to class 'c' or looser; compensate FDM hole shrinkage separately.");
+        return spec;
+    }
+
+    private Map<String, Object> toleranceRange(double over, double upTo, double tol) {
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("overMm", over);
+        r.put("upToMm", upTo);
+        r.put("toleranceMm", tol);
+        return r;
     }
 }

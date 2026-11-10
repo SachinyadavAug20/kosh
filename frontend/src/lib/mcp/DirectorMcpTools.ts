@@ -1489,6 +1489,106 @@ export const DIRECTOR_MCP_TOOLS: McpToolDefinition[] = [
       sheetSize: "A4",
     },
   },
+  {
+    name: "cad_linear_array",
+    description: "Duplicates a mesh in a linear grid pattern with count, per-axis offset, and optional axis alignment. Fast pattern duplication for brackets, vents, and rack parts.",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        targetMeshName: { type: "string", description: "Name of the source mesh to duplicate" },
+        count: { type: "integer", description: "Number of copies per axis (>=1, default 3)" },
+        offset: { type: "array", items: { type: "number" }, description: "Per-copy translation offset [x, y, z] in meters" },
+        axis: { type: "string", enum: ["x", "y", "z"], description: "Dominant array axis (default x)" },
+        format: { type: "string", enum: ["glb", "stl", "obj"], description: "Export format (default: glb)" },
+      },
+    },
+    samplePayload: {
+      targetMeshName: "Vent_Louver",
+      count: 6,
+      offset: [0, 0.05, 0],
+      axis: "y",
+      format: "glb",
+    },
+  },
+  {
+    name: "cad_radial_array",
+    description: "Duplicates a mesh around a circular path with count, radius, and start angle. For bolts on flanges, spokes, fan blades, and rotary mounts.",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        targetMeshName: { type: "string", description: "Name of the source mesh to duplicate" },
+        count: { type: "integer", description: "Number of copies around the circle (>=1, default 6)" },
+        radius: { type: "number", description: "Array circle radius in meters" },
+        startAngleDeg: { type: "number", description: "Starting angle in degrees (default 0)" },
+        axis: { type: "string", enum: ["x", "y", "z"], description: "Rotation axis of the circle (default z)" },
+        format: { type: "string", enum: ["glb", "stl", "obj"], description: "Export format (default: glb)" },
+      },
+    },
+    samplePayload: {
+      targetMeshName: "Flange_Bolt",
+      count: 8,
+      radius: 0.04,
+      startAngleDeg: 0,
+      axis: "z",
+      format: "glb",
+    },
+  },
+  {
+    name: "cad_text_emboss",
+    description: "Creates 3D text geometry embossed (raised) or debossed (engraved) onto a target mesh surface via boolean operation.",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        text: { type: "string", description: "Text string to emboss (ASCII only)" },
+        targetMeshName: { type: "string", description: "Target mesh to carve into; creates a new plate if missing" },
+        depthMm: { type: "number", description: "Engraving/embossing depth in millimeters (default 0.8)" },
+        sizeMm: { type: "number", description: "Text height in millimeters (default 6)" },
+        mode: { type: "string", enum: ["engrave", "emboss"], description: "engrave subtracts text, emboss raises it" },
+        format: { type: "string", enum: ["glb", "stl", "obj"], description: "Export format (default: glb)" },
+      },
+    },
+    samplePayload: {
+      text: "KOSH",
+      targetMeshName: "Nameplate",
+      depthMm: 0.8,
+      sizeMm: 8,
+      mode: "engrave",
+      format: "glb",
+    },
+  },
+  {
+    name: "cad_check_manifold",
+    description: "Validates mesh topology for 3D printing: watertight/manifold check, boundary and non-manifold edge counts, volume, and bounding box. Read-only diagnosis.",
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        targetMeshName: { type: "string", description: "Name of the mesh to validate (defaults to active object)" },
+      },
+    },
+    samplePayload: {
+      targetMeshName: "Bracket_Arm",
+    },
+  },
 ];
 
 export interface McpResourceDefinition {
@@ -1619,6 +1719,30 @@ export const DIRECTOR_MCP_RESOURCES: McpResourceDefinition[] = [
     description: "Turnkey multi-part engineering and cinematic assemblies: quadcopter drone, planetary gearbox, compound microscope, electronics chassis, astronaut scene",
     mimeType: "application/json",
   },
+  {
+    uri: "kosh://specs/hardware/heat-set-inserts",
+    name: "Heat-Set Threaded Insert Specifications",
+    description: "Brass heat-set insert sizing for FDM plastics: hole diameter, boss wall thickness, engagement length, and installation temperature by thread size",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://materials/filaments",
+    name: "3D Printing Filament Material Library",
+    description: "FDM filament properties: nozzle/bed temperatures, shrinkage, strength, layer adhesion, and typical use cases for common engineering filaments",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://specs/printers/build-volumes",
+    name: "3D Printer Build Volume Database",
+    description: "Popular printer build volumes and nozzle limits for fit checking: Prusa, Bambu Lab, Creality, Printrbot, and Voron class machines",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://standards/iso-2768-tolerances",
+    name: "ISO 2768 General Tolerances Standard",
+    description: "Linear and angular tolerance classes (f, m, c, v) for machined and printed parts, plus derived geographic fits for holes and shafts",
+    mimeType: "application/json",
+  },
 ];
 
 export interface McpPromptArgument {
@@ -1744,6 +1868,36 @@ export const DIRECTOR_MCP_PROMPTS: McpPromptDefinition[] = [
       { name: "recipeName", description: "Target composite puzzle recipe name (interlocking_dovetail_plate, robotic_articulated_arm, modular_cube_chassis, geodesic_hex_truss, bearing_transmission_carrier)", required: true },
       { name: "clearanceMm", description: "Mating slide-fit joint clearance in millimeters (default: 0.2 for FDM printing)", required: false },
       { name: "scaleMultiplier", description: "Uniform scaling factor applied across all assembled components (default: 1.0)", required: false },
+    ],
+  },
+  {
+    name: "optimize_model_for_3d_printing",
+    description: "Print-readiness optimization blueprint: validates manifold topology, orients the part for minimal support, sizes walls/nozzles for the target filament, and verifies clearances.",
+    arguments: [
+      { name: "meshName", description: "Name of the model to prepare for slicing", required: true },
+      { name: "filament", description: "Target filament (PLA, PETG, ABS, ASA, TPU, Nylon, PC)", required: false },
+      { name: "nozzleDiameterMm", description: "Printer nozzle diameter in millimeters (default: 0.4)", required: false },
+      { name: "supportless", description: "If true, re-orient to avoid supports entirely (default: false)", required: false },
+    ],
+  },
+  {
+    name: "design_heat_set_insert_mount",
+    description: "Designs printed bosses for brass heat-set threaded inserts using the kosh://specs/hardware/heat-set-inserts resource for hole sizing, wall thickness, and engagement.",
+    arguments: [
+      { name: "threadSize", description: "Insert thread size (M2, M3, M4, M5, M6)", required: true },
+      { name: "insertLengthMm", description: "Insert engagement length in millimeters (e.g. 5.0)", required: false },
+      { name: "mountCount", description: "Number of insert bosses to place (e.g. 4)", required: false },
+      { name: "patternPcdMm", description: "Bolt circle diameter for radial patterns in millimeters (optional)", required: false },
+    ],
+  },
+  {
+    name: "plan_linear_motion_stage",
+    description: "Plans a linear motion sub-assembly: rail length, bearing blocks, stepper mount, belt/pulley or leadscrew drive, and end-stop clearances from build volume constraints.",
+    arguments: [
+      { name: "travelMm", description: "Required travel in millimeters (e.g. 200)", required: true },
+      { name: "payloadKg", description: "Moving payload mass in kilograms (e.g. 2.0)", required: false },
+      { name: "driveType", description: "Drive mechanism (belt, leadscrew, rack_pinion)", required: false },
+      { name: "buildVolumeMm", description: "Printer build volume as 'X,Y,Z' in millimeters for part sizing (e.g. '256,256,256')", required: false },
     ],
   },
 ];

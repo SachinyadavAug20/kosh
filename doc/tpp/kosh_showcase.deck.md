@@ -83,7 +83,7 @@ engines, and asset storage tiers.
 |               |                                  |                    |
 |               v                                  |                    |
 |  +--------------------------------------------+  |                    |
-|  |        McpToolRegistry (55 CAD Tools)      |  |                    |
+|  |        McpToolRegistry (60 CAD Tools)      |  |                    |
 |  +--------------------------------------------+  |                    |
 |         |                     |                  |                    |
 |         v                     v                  |                    |
@@ -233,7 +233,7 @@ Client / Agent       McpController     McpToolRegistry   BlenderDaemon   Storage
 
 # 6. Model Context Protocol (MCP) Workstation Ecosystem
 
-Kosh exposes 55 native tools, 20 resources, and 13 prompts over JSON-RPC:
+Kosh exposes 60 native tools, 24 resources, and 16 prompts over JSON-RPC:
 
 ### 1. Composable 3D CAD, Digital Calipers & Kinematics
 * `cad_create_primitive`: Parametric solids (cube, cylinder, cone, sphere).
@@ -245,20 +245,29 @@ Kosh exposes 55 native tools, 20 resources, and 13 prompts over JSON-RPC:
 * `cad_convex_hull`: Minimal convex bounding hull for physics colliders.
 * `cad_separate_loose_parts`: Splits multi-body meshes into distinct parts.
 * `cad_export_engineering_drawing`: Generates SVG 2D blueprint drawings.
+* `cad_linear_array` / `cad_radial_array`: Pattern duplication grids and circles.
+* `cad_text_emboss`: Engrave or raise text via exact boolean operation.
+* `cad_check_manifold`: Watertight diagnosis with boundary edge counts.
 
-### 2. Enterprise In-Memory Resources (20 Direct Schemas)
+### 2. Enterprise In-Memory Resources (24 Direct Schemas)
 * Modular: `kosh://library/puzzle-pieces` & `kosh://library/saved-models`.
 * Standards: `kosh://specs/standards/iso-bearings` (608, 624, 625, 6900).
 * Hardware: `kosh://specs/hardware/metric-fasteners` (M2-M12 clearances).
 * Motors: `kosh://specs/engineering/stepper-motors` (NEMA 14, 17, 23, 34).
 * Physics: `kosh://materials/physical-constants` (Density, Young's Modulus).
+* Printing: `kosh://materials/filaments`, `kosh://specs/printers/build-volumes`.
+* Hardware: `kosh://specs/hardware/heat-set-inserts` (M2-M6 bosses).
+* Tolerancing: `kosh://standards/iso-2768-tolerances` (f/m/c/v classes).
 
-### 3. Precision Engineering Prompts (13 Standardized Blueprints)
+### 3. Precision Engineering Prompts (16 Standardized Blueprints)
 * `assemble_modular_puzzle_recipe`: Puzzle piece assembly protocol.
 * `design_spur_gear_train`: 2-gear interlocking transmission protocol.
 * `photorealistic_product_hero_shot`: 85mm studio lighting & framing pipeline.
 * `generative_drone_frame`: UAV multirotor airframe and motor PCD synthesis.
 * `generate_3d_printable_snapfit`: Cantilever beam snap-fit joint engineering.
+* `optimize_model_for_3d_printing`: Manifold check, orientation, fit gate.
+* `design_heat_set_insert_mount`: Heat-set boss sizing from spec resource.
+* `plan_linear_motion_stage`: Rail, drive, and build-volume planning.
 
 ---
 
@@ -391,7 +400,7 @@ Kosh achieves high trust ratings by enforcing defense-in-depth principles:
 ### Project Milestones Achieved
 * Full Model Context Protocol (MCP) compliance over SSE and JSON-RPC 2.0.
 * Headless Blender 5.2 LTS warm daemon delivering sub-400ms turnaround.
-* 55 native parametric tools with behavioral annotations and zero CVEs.
+* 60 native parametric tools with behavioral annotations and zero CVEs.
 * Responsive web-based 3D CAD DCC studio built on Next.js 15 and Three.js.
 
 ### Upcoming Milestones

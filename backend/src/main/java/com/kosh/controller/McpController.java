@@ -315,9 +315,13 @@ public class McpController {
                             "cad_generate_gear",
                             "cad_uv_unwrap_auto",
                             "cad_wireframe_cage",
-                            "cad_point_cloud_surface",
-                            "cad_export_engineering_drawing"
-                    ).contains(toolName.toLowerCase());
+                        "cad_point_cloud_surface",
+                        "cad_export_engineering_drawing",
+                        "cad_linear_array",
+                        "cad_radial_array",
+                        "cad_text_emboss",
+                        "cad_check_manifold"
+                ).contains(toolName.toLowerCase());
 
                     boolean hasRawScript = arguments.containsKey("script") && arguments.get("script") != null && !arguments.get("script").toString().isBlank();
 

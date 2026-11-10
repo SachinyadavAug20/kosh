@@ -135,6 +135,36 @@ public class McpPromptRegistry {
                         arg("scaleMultiplier", "Uniform scaling factor applied across all assembled components (default: 1.0)", false)
                 )
         );
+        register(
+                "optimize_model_for_3d_printing",
+                "Print-readiness optimization blueprint: validates manifold topology, orients the part for minimal support, sizes walls/nozzles for the target filament, and verifies clearances.",
+                List.of(
+                        arg("meshName", "Name of the model to prepare for slicing", true),
+                        arg("filament", "Target filament (PLA, PETG, ABS, ASA, TPU, Nylon, PC)", false),
+                        arg("nozzleDiameterMm", "Printer nozzle diameter in millimeters (default: 0.4)", false),
+                        arg("supportless", "If true, re-orient to avoid supports entirely (default: false)", false)
+                )
+        );
+        register(
+                "design_heat_set_insert_mount",
+                "Designs printed bosses for brass heat-set threaded inserts using the kosh://specs/hardware/heat-set-inserts resource for hole sizing, wall thickness, and engagement.",
+                List.of(
+                        arg("threadSize", "Insert thread size (M2, M3, M4, M5, M6)", true),
+                        arg("insertLengthMm", "Insert engagement length in millimeters (e.g. 5.0)", false),
+                        arg("mountCount", "Number of insert bosses to place (e.g. 4)", false),
+                        arg("patternPcdMm", "Bolt circle diameter for radial patterns in millimeters (optional)", false)
+                )
+        );
+        register(
+                "plan_linear_motion_stage",
+                "Plans a linear motion sub-assembly: rail length, bearing blocks, stepper mount, belt/pulley or leadscrew drive, and end-stop clearances from build volume constraints.",
+                List.of(
+                        arg("travelMm", "Required travel in millimeters (e.g. 200)", true),
+                        arg("payloadKg", "Moving payload mass in kilograms (e.g. 2.0)", false),
+                        arg("driveType", "Drive mechanism (belt, leadscrew, rack_pinion)", false),
+                        arg("buildVolumeMm", "Printer build volume as 'X,Y,Z' in millimeters for part sizing (e.g. '256,256,256')", false)
+                )
+        );
 
         log.info("McpPromptRegistry initialized with {} prompt blueprints", promptsList.size());
     }
@@ -525,6 +555,93 @@ public class McpPromptRegistry {
                                 recipe, clearance, scale,
                                 recipe, clearance, scale,
                                 clearance
+                        )
+                );
+            }
+
+            case "optimize_model_for_3d_printing" -> {
+                String meshName = arg(args, "meshName", "Part_A");
+                String filament = arg(args, "filament", "PLA");
+                String nozzle = arg(args, "nozzleDiameterMm", "0.4");
+                String supportless = arg(args, "supportless", "false");
+
+                yield textPrompt(
+                        "3D print preparation workflow for '" + meshName + "' (" + filament + ")",
+                        String.format("""
+                                You are a 3D Print Preparation Agent. Target model: %s. Filament: %s. Nozzle: %smm. Supportless: %s.
+
+                                Workflow:
+                                1. Validate topology with 'cad_check_manifold' (targetMeshName='%s').
+                                   - isWatertight must be true; if not, repair via 'cad_apply_modifier' (remesh) or boolean union with itself.
+                                2. Derive print parameters from resource 'kosh://materials/filaments':
+                                   - Nozzle/bed temperatures, shrinkage, and enclosure needs for %s.
+                                   - Wall thickness >= 2x nozzle (%.1f mm minimum).
+                                3. Fit check against resource 'kosh://specs/printers/build-volumes':
+                                   - Confirm the bounding box fits the printer with a 5-10mm margin.
+                                4. Orientation: if supportless=true, use 'Lay Flat' heuristics (largest flat face on bed, overhangs <= 45 deg)
+                                   per resource 'kosh://guidelines/fdm-tolerances' (maxOverhangAngleDeg=45).
+                                5. Apply terminal chamfers (0.3-0.5mm) on first-layer edges via 'cad_apply_fillet_chamfer' so elephant-foot is compensated.
+                                6. Final gate: 'cad_inspect_scene' must report isWatertight=true before slicing.
+                                """,
+                                meshName, filament, nozzle, supportless,
+                                meshName,
+                                filament, Double.parseDouble(nozzle) * 2.0
+                        )
+                );
+            }
+
+            case "design_heat_set_insert_mount" -> {
+                String threadSize = arg(args, "threadSize", "M3");
+                String insertLen = arg(args, "insertLengthMm", "5.0");
+                String mountCount = arg(args, "mountCount", "4");
+                String pcd = arg(args, "patternPcdMm", "0");
+
+                yield textPrompt(
+                        "Heat-set insert boss design for " + threadSize + " inserts",
+                        String.format("""
+                                You are a Heat-Set Insert Mount Design Agent. Thread: %s. Insert length: %smm. Count: %s. PCD: %smm.
+
+                                Protocol:
+                                1. Read sizing ground truth from resource 'kosh://specs/hardware/heat-set-inserts':
+                                   - holeDiaMm (printed hole), bossOuterDiaMm, engagementMm, wallMm for %s.
+                                   - Installation: 230C iron, chamfered end first, 15s cooldown.
+                                2. Model one boss with 'cad_create_primitive' (cylinder shell):
+                                   - Inner hole = insert holeDiaMm; outer = bossOuterDiaMm; height >= insertLen + 1.0mm top cap clearance.
+                                   - Leave wallMm of material to any free edge (see fitNotes).
+                                3. Pattern: use 'cad_radial_array' if patternPcdMm > 0, else 'cad_linear_array'.
+                                4. Union bosses into the mount body with 'cad_boolean_operation' (operation='UNION').
+                                5. Validate with 'cad_check_manifold' (must be watertight) and export for printing with format 'stl'.
+                                """,
+                                threadSize, insertLen, mountCount, pcd, threadSize
+                        )
+                );
+            }
+
+            case "plan_linear_motion_stage" -> {
+                String travel = arg(args, "travelMm", "200");
+                String payload = arg(args, "payloadKg", "2.0");
+                String drive = arg(args, "driveType", "belt");
+                String buildVol = arg(args, "buildVolumeMm", "256,256,256");
+
+                yield textPrompt(
+                        "Linear motion stage planning for " + travel + "mm travel (" + drive + " drive)",
+                        String.format("""
+                                You are a Linear Motion Stage Architect. Travel: %smm. Payload: %skg. Drive: %s. Build volume: %smm.
+
+                                Planning steps:
+                                1. Size the rail/base: extrusion length >= travel + 2 x block length + 40mm for end-stops.
+                                   - If extrusion exceeds the build volume (%s), split into printable segments and join with 'cad_batch_csg' (UNION).
+                                2. Select drive from resource 'kosh://specs/hardware/metric-fasteners':
+                                   - Belt: GT2 belt, 20T pulley (6.35mm/rev), NEMA17 mount with M3 clearance 3.4mm / tap 2.5mm.
+                                   - Leadscrew: T8x2 or T8x8, anti-backlash nut, M3/M5 mounting pattern.
+                                3. Rails: MGN9H for <= 2kg payload, MGN12H for 2-8kg; boss screw holes to 3.5mm clearance (M3).
+                                4. Model in sub-assemblies with 'cad_create_primitive' + 'cad_assemble_kit':
+                                   base extrusion, carriage plate, motor mount, idler bracket, end-stop tabs.
+                                5. Verify full travel: 'cad_inspect_scene' sweep at 0%% and 100%% travel positions; no part may exceed build volume.
+                                6. Export printable parts individually (format 'stl') via 'export_cad_artifact'.
+                                """,
+                                travel, payload, drive, buildVol,
+                                buildVol
                         )
                 );
             }

@@ -28,9 +28,9 @@
     },
     "logging": {}
   },
-  "toolsCount": 55,
-  "resourcesCount": 20,
-  "promptsCount": 13,
+  "toolsCount": 60,
+  "resourcesCount": 24,
+  "promptsCount": 16,
   "environment": {
     "BLENDER_PATH": {
       "description": "Path to local Blender binary (defaults to system PATH or /snap/bin/blender)",

@@ -46,6 +46,11 @@ public class McpToolRegistry {
             "cad_wireframe_cage",
             "cad_point_cloud_surface",
             "cad_export_engineering_drawing",
+            // Array, Typography & Validation Tools
+            "cad_linear_array",
+            "cad_radial_array",
+            "cad_text_emboss",
+            "cad_check_manifold",
             // Instant Composite Assembly Tools (no LLM round-trip, pre-baked templates)
             "cad_assemble_kit",
             "cad_assemble_puzzle_pieces",
@@ -900,6 +905,70 @@ public class McpToolRegistry {
                 true
         ));
 
+        tools.add(createToolSchema(
+                "cad_linear_array",
+                "Duplicates a mesh in a linear grid pattern with count, per-axis offset, and optional axis alignment. Fast pattern duplication for brackets, vents, and rack parts.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of the source mesh to duplicate"),
+                        "count", Map.of("type", "integer", "description", "Number of copies per axis (>=1, default 3)"),
+                        "offset", Map.of("type", "array", "items", Map.of("type", "number"), "description", "Per-copy translation offset [x, y, z] in meters, e.g. [0.05, 0, 0]"),
+                        "axis", Map.of("type", "string", "enum", List.of("x", "y", "z"), "description", "Dominant array axis for single-axis patterns (default x)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_radial_array",
+                "Duplicates a mesh around a circular path with count, radius, and start angle. For bolts on flanges, spokes, fan blades, and rotary mounts.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of the source mesh to duplicate"),
+                        "count", Map.of("type", "integer", "description", "Number of copies around the circle (>=1, default 6)"),
+                        "radius", Map.of("type", "number", "description", "Array circle radius in meters"),
+                        "startAngleDeg", Map.of("type", "number", "description", "Starting angle in degrees (default 0)"),
+                        "axis", Map.of("type", "string", "enum", List.of("x", "y", "z"), "description", "Rotation axis of the circle (default z)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_text_emboss",
+                "Creates 3D text geometry embossed (raised) or debossed (engraved) onto a target mesh surface via boolean operation.",
+                Map.of(
+                        "text", Map.of("type", "string", "description", "Text string to emboss (ASCII only)"),
+                        "targetMeshName", Map.of("type", "string", "description", "Target mesh to carve into; creates a new plate if missing"),
+                        "depthMm", Map.of("type", "number", "description", "Engraving/embossing depth in millimeters (default 0.8)"),
+                        "sizeMm", Map.of("type", "number", "description", "Text height in millimeters (default 6)"),
+                        "mode", Map.of("type", "string", "enum", List.of("engrave", "emboss"), "description", "engrave subtracts text, emboss raises it (default engrave)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_check_manifold",
+                "Validates mesh topology for 3D printing: watertight/manifold check, boundary and non-manifold edge counts, volume, and bounding box. Read-only diagnosis.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of the mesh to validate (defaults to active object)")
+                ),
+                true,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_quick_fillet_chamfer",
+                "Alias of cad_apply_fillet_chamfer: quickly rounds or chamfers selected edges of a mesh with exact radius control.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of the mesh to fillet/chamfer"),
+                        "radiusMm", Map.of("type", "number", "description", "Fillet/chamfer radius in millimeters (default 1.0)"),
+                        "segments", Map.of("type", "integer", "description", "Curve segment count (default 3)"),
+                        "mode", Map.of("type", "string", "enum", List.of("fillet", "chamfer"), "description", "Rounded fillet or flat chamfer (default fillet)")
+                ),
+                false,
+                true
+        ));
+
         return tools;
     }
 
@@ -1139,6 +1208,14 @@ public class McpToolRegistry {
             finalScript = buildWireframeCageScript(arguments, format);
         } else if ("cad_point_cloud_surface".equals(normalizedName)) {
             finalScript = buildPointCloudSurfaceScript(arguments, format);
+        } else if ("cad_linear_array".equals(normalizedName)) {
+            finalScript = buildLinearArrayScript(arguments, format);
+        } else if ("cad_radial_array".equals(normalizedName)) {
+            finalScript = buildRadialArrayScript(arguments, format);
+        } else if ("cad_text_emboss".equals(normalizedName)) {
+            finalScript = buildTextEmbossScript(arguments, format);
+        } else if ("cad_check_manifold".equals(normalizedName)) {
+            finalScript = buildManifoldCheckScript(arguments, format);
         } else if ("cad_compose_compound_scene".equals(normalizedName)) {
             String subject = arguments != null && arguments.containsKey("subject") && arguments.get("subject") != null
                     ? arguments.get("subject").toString() : "cat";
@@ -2816,6 +2893,170 @@ public class McpToolRegistry {
                 bpy.context.collection.objects.link(obj)
                 bpy.context.view_layer.objects.active = obj
                 """, res, profile, name, name);
+    }
+
+    private String buildLinearArrayScript(Map<String, Object> args, String format) {
+        String target = escapePy(arg(args, "targetMeshName", arg(args, "targetMesh", "Array_Source")));
+        int count = Math.max(1, Math.min(200, getIntArg(args, "count", 3)));
+        double dx = getDoubleArg(args, "offsetX", 0.0);
+        double dy = getDoubleArg(args, "offsetY", 0.0);
+        double dz = getDoubleArg(args, "offsetZ", 0.0);
+        Object offsetArr = args != null ? args.get("offset") : null;
+        if (offsetArr instanceof java.util.List<?> list && list.size() >= 3) {
+            dx = toDouble(list.get(0), dx);
+            dy = toDouble(list.get(1), dy);
+            dz = toDouble(list.get(2), dz);
+        }
+        String axis = arg(args, "axis", "x").toLowerCase();
+        if (axis.equals("y")) { dx = 0; dz = 0; if (dy == 0) dy = 0.05; }
+        else if (axis.equals("z")) { dx = 0; dy = 0; if (dz == 0) dz = 0.05; }
+        else { dy = 0; dz = 0; if (dx == 0) dx = 0.05; }
+        String name = escapePy(arg(args, "name", target + "_LinearArray"));
+        return String.format(Locale.US, """
+                import bpy
+                src = bpy.data.objects.get("%s")
+                if not src:
+                    bpy.ops.mesh.primitive_cube_add(size=0.4, location=(0, 0, 0.2))
+                    src = bpy.context.active_object
+                    src.name = "%s"
+                mod = src.modifiers.new(name="CAD_LinearArray", type='ARRAY')
+                mod.count = %d
+                mod.use_relative_offset = False
+                mod.use_constant_offset = True
+                mod.constant_offset_displace = (%.6f, %.6f, %.6f)
+                bpy.context.view_layer.objects.active = src
+                bpy.ops.object.modifier_apply(modifier=mod.name)
+                src.name = "%s"
+                """, target, target, count, dx, dy, dz, name);
+    }
+
+    private String buildRadialArrayScript(Map<String, Object> args, String format) {
+        String target = escapePy(arg(args, "targetMeshName", arg(args, "targetMesh", "Radial_Source")));
+        int count = Math.max(1, Math.min(120, getIntArg(args, "count", 6)));
+        double radius = Math.max(0.0, getDoubleArg(args, "radius", 0.1));
+        double startDeg = getDoubleArg(args, "startAngleDeg", 0.0);
+        String axis = arg(args, "axis", "z").toLowerCase();
+        double startRad = Math.toRadians(startDeg);
+        String euler;
+        if (axis.equals("x")) euler = "(0, angle, 0)";
+        else if (axis.equals("y")) euler = "(angle, 0, 0)";
+        else euler = "(0, 0, angle)";
+        String name = escapePy(arg(args, "name", target + "_RadialArray"));
+        return String.format(Locale.US, """
+                import bpy, math
+                src = bpy.data.objects.get("%s")
+                if not src:
+                    bpy.ops.mesh.primitive_cube_add(size=0.1, location=(%.6f, 0, 0.2))
+                    src = bpy.context.active_object
+                    src.name = "%s"
+                copies = []
+                for i in range(%d):
+                    angle = %.6f + (2.0 * math.pi * i / %d)
+                    loc = (%.6f * math.cos(angle), %.6f * math.sin(angle), src.location.z)
+                    dup = src.copy()
+                    dup.data = src.data.copy()
+                    bpy.context.collection.objects.link(dup)
+                    dup.rotation_euler = %s
+                    dup.location = loc
+                    copies.append(dup)
+                bpy.ops.object.select_all(action='DESELECT')
+                src.select_set(True)
+                for c in copies:
+                    c.select_set(True)
+                bpy.context.view_layer.objects.active = src
+                bpy.ops.object.join()
+                src.name = "%s"
+                """, target, radius, target, count, startRad, count, radius, radius, euler, name);
+    }
+
+    private String buildTextEmbossScript(Map<String, Object> args, String format) {
+        String text = escapePy(arg(args, "text", "KOSH"));
+        String target = escapePy(arg(args, "targetMeshName", arg(args, "targetMesh", "Emboss_Plate")));
+        double depthMm = getDoubleArg(args, "depthMm", 0.8);
+        double sizeMm = getDoubleArg(args, "sizeMm", 6.0);
+        String mode = arg(args, "mode", "engrave").toLowerCase();
+        double depth = Math.max(0.0001, depthMm) / 1000.0;
+        double size = Math.max(0.001, sizeMm) / 1000.0;
+        boolean engrave = !"emboss".equals(mode);
+        return String.format(Locale.US, """
+                import bpy
+                target = bpy.data.objects.get("%s")
+                if not target:
+                    bpy.ops.mesh.primitive_cube_add(size=0.06, location=(0, 0, 0.015))
+                    target = bpy.context.active_object
+                    target.name = "%s"
+                bpy.ops.object.text_add(location=(0, 0, 0))
+                txt = bpy.context.active_object
+                txt.data.body = "%s"
+                txt.data.size = %.6f
+                txt.data.extrude = %.6f
+                txt.data.align_x = 'CENTER'
+                txt.data.align_y = 'CENTER'
+                bpy.ops.object.convert(target='MESH')
+                txt = bpy.context.active_object
+                zs = [target.matrix_world @ v.co for v in target.data.vertices]
+                top_z = max((v.z for v in zs), default=0.0)
+                txt.location.z = top_z - %.6f
+                mod = target.modifiers.new(name="CAD_TextEmboss", type='BOOLEAN')
+                mod.operation = 'DIFFERENCE' if %s else 'UNION'
+                mod.solver = 'EXACT'
+                mod.object = txt
+                bpy.context.view_layer.objects.active = target
+                bpy.ops.object.modifier_apply(modifier=mod.name)
+                bpy.data.objects.remove(txt, do_unlink=True)
+                """, target, target, text, size, depth, depth, engrave ? "True" : "False");
+    }
+
+    private String buildManifoldCheckScript(Map<String, Object> args, String format) {
+        String target = escapePy(arg(args, "targetMeshName", arg(args, "targetMesh", "")));
+        return String.format(Locale.US, """
+                import bpy, bmesh, json
+                target_obj = bpy.data.objects.get("%s") if "%s" else bpy.context.active_object
+                if not target_obj or target_obj.type != 'MESH':
+                    for o in bpy.context.scene.objects:
+                        if o.type == 'MESH':
+                            target_obj = o
+                            break
+                if not target_obj:
+                    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 0.5))
+                    target_obj = bpy.context.active_object
+                me = target_obj.data
+                bm = bmesh.new()
+                bm.from_mesh(me)
+                boundary = 0
+                non_manifold = 0
+                for e in bm.edges:
+                    n = len(e.link_faces)
+                    if n == 1:
+                        boundary += 1
+                    elif n > 2:
+                        non_manifold += 1
+                watertight = (boundary == 0 and non_manifold == 0)
+                volume = bm.calc_volume(signed=True)
+                bm.free()
+                dims = target_obj.dimensions
+                report = {
+                    "tool": "cad_check_manifold",
+                    "target": target_obj.name,
+                    "isWatertight": watertight,
+                    "boundaryEdges": boundary,
+                    "nonManifoldEdges": non_manifold,
+                    "vertexCount": len(me.vertices),
+                    "polygonCount": len(me.polygons),
+                    "volumeM3": abs(volume),
+                    "dimensionsM": [round(dims.x, 6), round(dims.y, 6), round(dims.z, 6)],
+                    "recommendation": "Ready for slicing." if watertight else "Repair mesh: fill %%d boundary and %%d non-manifold edges before printing."
+                    %% (boundary, non_manifold)
+                }
+                print(json.dumps(report))
+                """, target, target);
+    }
+
+    private double toDouble(Object v, double fallback) {
+        if (v instanceof Number n) {
+            return n.doubleValue();
+        }
+        return fallback;
     }
 
     private String generateEngineeringDrawingSvg(String targetMesh, String standard, String units, String sheetSize) {

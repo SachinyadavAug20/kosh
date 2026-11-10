@@ -81,7 +81,7 @@ Built with a titanium-slate CAD workstation aesthetic, Kosh couples a **Spring B
 
 ## Expanded Creative MCP Tools Suite
 
-Kosh exposes a comprehensive suite of 55 native creative CAD and DCC tools over JSON-RPC 2.0 (`POST /mcp` and `GET /mcp/sse`), every single one declaring explicit boolean behavioral hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) for full M8ven Trust Index Grade A compliance:
+Kosh exposes a comprehensive suite of 60 native creative CAD and DCC tools over JSON-RPC 2.0 (`POST /mcp` and `GET /mcp/sse`), every single one declaring explicit boolean behavioral hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) for full M8ven Trust Index Grade A compliance:
 
 ### Precision 3D CAD & Engineering
 | # | Tool Name | Domain | Description | Hints (RO, Destr, Idemp, OpenW) |
@@ -141,9 +141,18 @@ Kosh exposes a comprehensive suite of 55 native creative CAD and DCC tools over 
 | 41 | `mcp_check_tool` | Trust Index | Vets any MCP server across 120,000+ indexed servers via M8ven Trust Index. | `true, false, true, true` |
 | 42 | `kosh_system_health` | Telemetry | Live operational diagnostics, Blender 5.2 LTS status, and daemon telemetry. | `true, false, true, true` |
 
+### Arrays, Typography & Print Validation
+| # | Tool Name | Domain | Description | Hints (RO, Destr, Idemp, OpenW) |
+|---|---|---|---|---|
+| 43 | `cad_linear_array` | Pattern Array | Duplicates a mesh in a linear grid with count, per-axis offset, and axis alignment. | `false, false, true, false` |
+| 44 | `cad_radial_array` | Pattern Array | Duplicates a mesh around a circular path with count, radius, and start angle. | `false, false, true, false` |
+| 45 | `cad_text_emboss` | Typography | Embosses or engraves 3D text onto a mesh surface via exact boolean operation. | `false, false, true, false` |
+| 46 | `cad_check_manifold` | Print Validation | Watertight/manifold diagnosis: boundary and non-manifold edge counts, volume, bbox. | `true, false, true, false` |
+| 47 | `cad_quick_fillet_chamfer` | Edge Bevel | Alias of `cad_apply_fillet_chamfer` for instant edge rounding/chamfering. | `false, false, true, false` |
+
 ---
 
-## Enterprise MCP Resources (20 Direct In-Memory Schemas)
+## Enterprise MCP Resources (24 Direct In-Memory Schemas)
 
 Kosh pre-serializes domain knowledge into JVM memory at startup for sub-2ms `resources/read` resolution, eliminating LLM dimension hallucinations:
 
@@ -169,10 +178,14 @@ Kosh pre-serializes domain knowledge into JVM memory at startup for sub-2ms `res
 | 18 | `kosh://specs/aerospace/unmanned-airframe` | Aerospace | UAV multirotor airframe design rules, prop tip clearances, motor PCD standards. |
 | 19 | `kosh://library/puzzle-pieces` | Modular Library | 12 CAD puzzle pieces with mate sockets, dovetails, NEMA brackets, and compound recipes. |
 | 20 | `kosh://library/saved-models` | Pre-Engineered | Complete multi-part assemblies: quadcopter drone, planetary gearbox, compound microscope. |
+| 21 | `kosh://specs/hardware/heat-set-inserts` | Fasteners | Brass heat-set insert hole/boss/engagement sizing (M2-M6) for printed bosses. |
+| 22 | `kosh://materials/filaments` | 3D Printing | FDM filament nozzle/bed temps, tensile strength, shrinkage, and use cases. |
+| 23 | `kosh://specs/printers/build-volumes` | Printers | Prusa, Bambu Lab, Creality, and Voron build volumes for part fit-checking. |
+| 24 | `kosh://standards/iso-2768-tolerances` | Tolerancing | ISO 2768 f/m/c/v tolerance classes for linear and angular dimensions. |
 
 ---
 
-## Precision Engineering MCP Prompts (13 Standardized Blueprints)
+## Precision Engineering MCP Prompts (16 Standardized Blueprints)
 
 Connected LLM clients (Claude Desktop, Cursor, Gemini) can query `prompts/list` and `prompts/get` to pull hardened step-by-step CAD plans with zero syntax hallucinations:
 
@@ -191,6 +204,9 @@ Connected LLM clients (Claude Desktop, Cursor, Gemini) can query `prompts/list` 
 | 11 | `sculpt_creature_bust` | Digital Sculpting | `creatureType`, `voxelResolutionMm` |
 | 12 | `generate_3d_printable_snapfit` | Snap-Fit Engineering | `beamLengthMm`, `wallThicknessMm`, `catchDepthMm`, `entryAngleDeg` |
 | 13 | `assemble_modular_puzzle_recipe` | Modular Assembly | `recipeName`, `clearanceMm`, `scaleMultiplier` |
+| 14 | `optimize_model_for_3d_printing` | Print Readiness | `meshName`, `filament`, `nozzleDiameterMm`, `supportless` |
+| 15 | `design_heat_set_insert_mount` | Insert Boss Design | `threadSize`, `insertLengthMm`, `mountCount`, `patternPcdMm` |
+| 16 | `plan_linear_motion_stage` | Linear Motion | `travelMm`, `payloadKg`, `driveType`, `buildVolumeMm` |
 
 ---
 
@@ -342,6 +358,43 @@ curl -s -X POST http://localhost:8080/mcp \
       }
     }
   }' | jq
+```
+
+### 3. Connect Claude Desktop / Cursor / Zed (`claude_desktop_config.json`)
+
+**Option A — SSE transport (no Python required):**
+
+```json
+{
+  "mcpServers": {
+    "kosh": {
+      "url": "http://localhost:8080/mcp/sse"
+    }
+  }
+}
+```
+
+**Option B — stdio bridge (works with clients that only support `command`/`args`):**
+
+```json
+{
+  "mcpServers": {
+    "kosh": {
+      "command": "python3",
+      "args": ["/path/to/Kosh/scripts/kosh_mcp_stdio.py"]
+    }
+  }
+}
+```
+
+The stdio bridge (`scripts/kosh_mcp_stdio.py`) forwards line-delimited JSON-RPC over stdio to `http://localhost:8080/mcp` (override with `KOSH_MCP_URL`; sends `X-Google-Key: $GEMINI_API_KEY` when set). With the server running, the client will discover all 60 tools, 24 resources, and 16 prompts automatically on connect.
+
+**Verify the connection:**
+
+```bash
+curl -s -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"kosh://specs/hardware/metric-fasteners"}}' | jq
 ```
 
 ---
