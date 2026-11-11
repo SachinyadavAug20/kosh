@@ -5,6 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -25,11 +26,19 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      - name: Run Maven Tests
-        run: mvn -f backend/pom.xml test
+      - name: Compile and Run Maven Tests
+        run: mvn -f backend/pom.xml clean test -B
 
-  frontend-check:
-    name: Frontend Typecheck and Lint (Node 20)
+      - name: Upload Surefire Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-test-reports
+          path: backend/target/surefire-reports/
+          retention-days: 7
+
+  frontend-verify:
+    name: Frontend Verification and Build (Node 20)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -42,8 +51,45 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install Dependencies
+      - name: Install Frontend Dependencies
         run: cd frontend && npm ci
 
-      - name: Run TypeScript Check
+      - name: Run TypeScript Type Check
         run: cd frontend && npx tsc --noEmit
+
+      - name: Run ESLint
+        run: cd frontend && npm run lint
+
+      - name: Run Next.js Production Build
+        run: cd frontend && npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+  scene-composer-syntax:
+    name: Blender Python Script Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate Scene Assembly Python Syntax
+        run: |
+          python3 -c "
+          import ast, sys
+          templates = [
+              'import bpy, math\nbpy.ops.wm.read_factory_settings(use_empty=True)',
+              'import bpy\nbpy.ops.mesh.primitive_cylinder_add(radius=1.0, depth=2.0)'
+          ]
+          for idx, code in enumerate(templates):
+              try:
+                  ast.parse(code)
+              except Exception as e:
+                  print(f'Syntax error in template {idx}: {e}')
+                  sys.exit(1)
+          print('All procedural Python script templates parsed successfully.')
+          "

@@ -93,16 +93,19 @@ public class McpToolRegistry {
     private final BlenderExecutionService blenderExecutionService;
     private final ScriptSanitizer scriptSanitizer;
     private final McpSceneStateService mcpSceneStateService;
+    private final SceneComposerService sceneComposerService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public McpToolRegistry(GoogleGeminiClient googleGeminiClient,
                            BlenderExecutionService blenderExecutionService,
                            ScriptSanitizer scriptSanitizer,
-                           McpSceneStateService mcpSceneStateService) {
+                           McpSceneStateService mcpSceneStateService,
+                           SceneComposerService sceneComposerService) {
         this.googleGeminiClient = googleGeminiClient;
         this.blenderExecutionService = blenderExecutionService;
         this.scriptSanitizer = scriptSanitizer;
         this.mcpSceneStateService = mcpSceneStateService;
+        this.sceneComposerService = sceneComposerService;
     }
 
     private void attachHints(Map<String, Object> tool, boolean readOnly, boolean destructive, boolean idempotent, boolean openWorld) {
@@ -1216,6 +1219,13 @@ public class McpToolRegistry {
             finalScript = buildTextEmbossScript(arguments, format);
         } else if ("cad_check_manifold".equals(normalizedName)) {
             finalScript = buildManifoldCheckScript(arguments, format);
+        } else if ("scene_assembler".equals(normalizedName)) {
+            String targetPrompt = (prompt != null && !prompt.isBlank())
+                    ? prompt
+                    : (arguments != null && arguments.containsKey("prompt") && arguments.get("prompt") != null
+                    ? arguments.get("prompt").toString()
+                    : "A man on the moon with guitar");
+            finalScript = sceneComposerService.buildAssemblyScript(targetPrompt, format);
         } else if ("cad_compose_compound_scene".equals(normalizedName)) {
             String subject = arguments != null && arguments.containsKey("subject") && arguments.get("subject") != null
                     ? arguments.get("subject").toString() : "cat";

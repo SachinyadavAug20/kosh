@@ -22,9 +22,10 @@ import {
   RotateCcw,
   Sparkles,
   TrendingUp,
+  MessageSquare,
 } from "lucide-react";
 
-export type EditorType = "viewport" | "timeline" | "graph_editor" | "director" | "outliner" | "properties" | "mcp_console" | "script";
+export type EditorType = "viewport" | "timeline" | "graph_editor" | "director" | "outliner" | "properties" | "mcp_console" | "script" | "chat";
 export type SplitDirection = "horizontal" | "vertical"; // horizontal = left/right columns, vertical = top/bottom rows
 export type WorkspacePreset = "default" | "modeling" | "animation" | "director" | "render" | "scripting";
 
@@ -369,6 +370,8 @@ function AreaHeader({
         return { label: "MCP Live Console", icon: <Code2 className="w-3.5 h-3.5 text-sky-400" /> };
       case "script":
         return { label: "Python Scripting IDE", icon: <Code2 className="w-3.5 h-3.5 text-indigo-400" /> };
+      case "chat":
+        return { label: "CAD Copilot Chat", icon: <MessageSquare className="w-3.5 h-3.5 text-[#ea580c]" /> };
     }
   };
 
@@ -392,7 +395,7 @@ function AreaHeader({
 
           {isTypeDropdownOpen && (
             <div className="absolute top-7 left-0 w-48 bg-[#18181b] border border-[#3f3f46] shadow-2xl rounded-sm p-1 z-50 space-y-0.5">
-              {(["viewport", "timeline", "graph_editor", "director", "outliner", "properties", "mcp_console", "script"] as const).map((t) => {
+              {(["viewport", "timeline", "graph_editor", "director", "outliner", "properties", "mcp_console", "script", "chat"] as const).map((t) => {
                 const meta = getEditorMeta(t);
                 const isActive = leaf.editorType === t;
                 return (
@@ -543,6 +546,9 @@ function AreaHeader({
               <Play className="w-2.5 h-2.5 fill-current" />
               <span>Run (Alt+P)</span>
             </button>
+          )}
+          {leaf.editorType === "chat" && (
+            <span className="text-[#52525b] text-[10px]">Copilot & Scene Assembly</span>
           )}
         </div>
       </div>

@@ -363,7 +363,8 @@ public class McpController {
                         "cad_linear_array",
                         "cad_radial_array",
                         "cad_text_emboss",
-                        "cad_check_manifold"
+                        "cad_check_manifold",
+                        "scene_assembler"
                 ).contains(toolName.toLowerCase());
 
                     boolean hasRawScript = arguments.containsKey("script") && arguments.get("script") != null && !arguments.get("script").toString().isBlank();

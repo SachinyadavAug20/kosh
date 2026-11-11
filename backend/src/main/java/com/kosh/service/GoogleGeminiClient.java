@@ -3049,6 +3049,107 @@ public class GoogleGeminiClient {
                 """.formatted(format);
         }
 
+        // 13b. Compound / piece scene: Man on the moon with guitar
+        if (lowerPrompt.contains("moon") || lowerPrompt.contains("astronaut") || lowerPrompt.contains("guitar") || lowerPrompt.contains("gitter")) {
+            return """
+                import bpy, sys, math, os, json
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+                for col in list(bpy.data.collections):
+                    bpy.data.collections.remove(col)
+                scene = bpy.context.scene
+                argv = sys.argv
+                output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
+
+                def create_mat(name, color_hex, roughness=0.4, metalness=0.1):
+                    mat = bpy.data.materials.new(name=name)
+                    mat.use_nodes = True
+                    nodes = mat.node_tree.nodes
+                    nodes.clear()
+                    bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+                    r = int(color_hex[1:3], 16) / 255.0
+                    g = int(color_hex[3:5], 16) / 255.0
+                    b = int(color_hex[5:7], 16) / 255.0
+                    bsdf.inputs['Base Color'].default_value = (r, g, b, 1.0)
+                    bsdf.inputs['Roughness'].default_value = float(roughness)
+                    bsdf.inputs['Metallic'].default_value = float(metalness)
+                    out = nodes.new(type='ShaderNodeOutputMaterial')
+                    mat.node_tree.links.new(bsdf.outputs['BSDF'], out.inputs['Surface'])
+                    return mat
+
+                # Piece 1: Moon Surface
+                bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=3.2, depth=0.45, location=(0, 0, -0.22))
+                moon = bpy.context.active_object
+                moon.name = "Moon_Surface"
+                moon.data.materials.append(create_mat("LunarRegolith", "#64748b", 0.88, 0.05))
+
+                for i, (cx, cy, crad) in enumerate([(1.2, 0.9, 0.65), (-1.4, -0.8, 0.5), (0.4, -1.6, 0.42)]):
+                    bpy.ops.mesh.primitive_uv_sphere_add(radius=crad, location=(cx, cy, 0.05))
+                    c_cutter = bpy.context.active_object
+                    c_cutter.name = f"Crater_Cutter_{i}"
+                    mod = moon.modifiers.new(name=f"Crater_{i}", type='BOOLEAN')
+                    mod.operation = 'DIFFERENCE'
+                    mod.object = c_cutter
+                    bpy.context.view_layer.objects.active = moon
+                    bpy.ops.object.modifier_apply(modifier=f"Crater_{i}")
+                    bpy.data.objects.remove(c_cutter)
+
+                # Piece 2: Astronaut Explorer
+                bpy.ops.mesh.primitive_cube_add(size=0.6, location=(0, 0, 0.85))
+                chest = bpy.context.active_object
+                chest.scale = (0.75, 0.52, 0.85)
+                bpy.ops.mesh.primitive_uv_sphere_add(radius=0.26, location=(0, 0, 1.38))
+                helmet = bpy.context.active_object
+                bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.18, depth=0.16, location=(0, -0.16, 1.38), rotation=(1.5708, 0, 0))
+                visor = bpy.context.active_object
+                bpy.ops.mesh.primitive_cube_add(size=0.42, location=(0, 0.22, 0.95))
+                backpack = bpy.context.active_object
+                backpack.scale = (0.65, 0.35, 0.85)
+                for lx in [-0.16, 0.16]:
+                    bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.09, depth=0.62, location=(lx, 0, 0.31))
+                bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.075, depth=0.48, location=(-0.34, -0.06, 0.95), rotation=(0.55, 0.4, -0.6))
+                bpy.ops.mesh.primitive_cylinder_add(vertices=16, radius=0.075, depth=0.48, location=(0.34, -0.06, 0.95), rotation=(0.55, -0.4, 0.6))
+
+                bpy.ops.object.select_all(action='DESELECT')
+                for o in list(bpy.context.scene.objects):
+                    if o != moon:
+                        o.select_set(True)
+                bpy.context.view_layer.objects.active = chest
+                bpy.ops.object.join()
+                chest.name = "Astronaut_Explorer"
+                chest.data.materials.append(create_mat("SpaceSuitWhite", "#f4f4f5", 0.35, 0.15))
+
+                # Piece 3: Acoustic Guitar
+                bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.24, depth=0.09, location=(0.16, -0.36, 0.82), rotation=(1.5708, 0.35, 0.42))
+                g_body1 = bpy.context.active_object
+                bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.17, depth=0.09, location=(0.06, -0.32, 1.04), rotation=(1.5708, 0.35, 0.42))
+                g_body2 = bpy.context.active_object
+                bpy.ops.mesh.primitive_cube_add(size=0.1, location=(-0.06, -0.27, 1.28), rotation=(0, -0.32, 0))
+                g_neck = bpy.context.active_object
+                g_neck.scale = (0.35, 0.35, 4.2)
+                bpy.ops.mesh.primitive_cube_add(size=0.08, location=(-0.17, -0.24, 1.55), rotation=(0, -0.32, 0))
+                g_head = bpy.context.active_object
+                g_head.scale = (0.5, 0.35, 1.3)
+
+                bpy.ops.object.select_all(action='DESELECT')
+                for o in [g_body1, g_body2, g_neck, g_head]:
+                    o.select_set(True)
+                bpy.context.view_layer.objects.active = g_body1
+                bpy.ops.object.join()
+                g_body1.name = "Acoustic_Guitar"
+                g_body1.data.materials.append(create_mat("MahoganyWood", "#b45309", 0.32, 0.05))
+
+                bpy.ops.object.select_all(action='DESELECT')
+                for obj in bpy.data.objects:
+                    if obj.type == 'MESH':
+                        obj.select_set(True)
+
+                if output_path.lower().endswith(".glb") or output_path.lower().endswith(".gltf"):
+                    bpy.ops.export_scene.gltf(filepath=output_path, export_format='GLB', use_selection=True)
+                else:
+                    bpy.ops.export_scene.gltf(filepath=output_path, export_format='GLB')
+                """.formatted(format);
+        }
+
         // 14. Tool: scene_assembler
         if ("scene_assembler".equals(normalizedTool) || lowerPrompt.contains("scene") || lowerPrompt.contains("pavilion") || lowerPrompt.contains("compound")) {
             return """

@@ -39,6 +39,8 @@ import {
   Camera,
   Image as ImageIcon,
   ShieldCheck,
+  Search,
+  MessageSquareCode,
 } from "lucide-react";
 
 export type InteractionMode = "object" | "edit" | "sculpt" | "paint" | "weight";
@@ -132,6 +134,11 @@ export interface BlenderTopBarProps {
   // 3D Model Generation Mode
   generationMode?: "ai" | "procedural";
   onToggleGenerationMode?: (mode: "ai" | "procedural") => void;
+
+  // Dedicated CAD Copilot Chat Panel & Universal Search
+  isChatOpen?: boolean;
+  onToggleChat?: () => void;
+  onOpenSearch?: () => void;
 }
 
 export function BlenderTopBar({
@@ -207,6 +214,9 @@ export function BlenderTopBar({
   onToggleNormals,
   generationMode = "ai",
   onToggleGenerationMode,
+  isChatOpen = false,
+  onToggleChat,
+  onOpenSearch,
 }: BlenderTopBarProps) {
   const { theme, setTheme } = useTheme();
 
@@ -395,6 +405,18 @@ export function BlenderTopBar({
               : selectedMeshName || "Scene Root"}
           </span>
         </div>
+
+        {/* Universal Search (Ctrl+K) Trigger */}
+        <button
+          type="button"
+          onClick={onOpenSearch}
+          title="Universal Search models, tools, objects, actions [Ctrl+K]"
+          className="hidden lg:flex items-center space-x-1.5 px-2.5 py-0.5 bg-[#1c1c1f] hover:bg-[#27272a] border border-[#27272a] hover:border-[#3f3f46] rounded text-[#a1a1aa] hover:text-[#f4f4f5] text-[10px] font-mono transition-colors"
+        >
+          <Search className="w-3 h-3 text-[#ea580c]" />
+          <span>Search anything...</span>
+          <kbd className="bg-[#27272a] px-1 py-0.2 rounded text-[9px] text-[#71717a]">Ctrl+K</kbd>
+        </button>
       </div>
 
       {/* CENTER: Transform Orientation & Pivot Point Selectors */}
@@ -1121,6 +1143,22 @@ export function BlenderTopBar({
         </button>
 
         <div className="w-px h-4 bg-[#27272a]" />
+
+        {/* Dedicated CAD Copilot Chat Panel Trigger (Ctrl+L) */}
+        <button
+          type="button"
+          onClick={onToggleChat}
+          title={`CAD Copilot Chat (${isChatOpen ? "Close" : "Open"}) [Ctrl+L]`}
+          className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-[10px] font-mono transition-all ${
+            isChatOpen
+              ? "bg-[#ea580c] text-white shadow-[0_0_10px_rgba(234,88,12,0.3)] font-bold border border-[#ea580c]"
+              : "bg-[#202024] hover:bg-[#27272a] text-[#f4f4f5] border border-[#27272a] hover:border-[#ea580c]/50"
+          }`}
+        >
+          <MessageSquareCode className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Copilot</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+        </button>
 
         {/* N-Panel (Properties / Outliner) Toggle Button (N) */}
         <button

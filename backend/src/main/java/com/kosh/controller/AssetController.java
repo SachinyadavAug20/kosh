@@ -28,9 +28,12 @@ import java.util.stream.Stream;
 public class AssetController {
 
     private final BlenderExecutionService blenderExecutionService;
+    private final com.kosh.service.SceneComposerService sceneComposerService;
 
-    public AssetController(BlenderExecutionService blenderExecutionService) {
+    public AssetController(BlenderExecutionService blenderExecutionService,
+                           com.kosh.service.SceneComposerService sceneComposerService) {
         this.blenderExecutionService = blenderExecutionService;
+        this.sceneComposerService = sceneComposerService;
     }
 
     /**
@@ -190,5 +193,32 @@ public class AssetController {
             log.error("Asset render error: {}", e.getMessage(), e);
             return ResponseEntity.status(500).body(Map.of("success", false, "error", e.getMessage()));
         }
+    }
+
+    /**
+     * Composes and assembles multi-component 3D scenes from decomposed prompt pieces.
+     */
+    @org.springframework.web.bind.annotation.PostMapping(value = "/assemble-scene", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> assembleScene(@org.springframework.web.bind.annotation.RequestBody(required = false) Map<String, Object> req) {
+        String prompt = req != null && req.containsKey("prompt") && req.get("prompt") != null
+                ? req.get("prompt").toString() : "A man on the moon with guitar";
+        String format = req != null && req.containsKey("format") && req.get("format") != null
+                ? req.get("format").toString() : "glb";
+        Map<String, Object> result = sceneComposerService.assembleScene(prompt, format);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Inspects decomposed scene pieces and catalog metadata for a given prompt query.
+     */
+    @org.springframework.web.bind.annotation.GetMapping(value = "/search-pieces", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> searchPieces(@org.springframework.web.bind.annotation.RequestParam(value = "query", defaultValue = "") String query) {
+        com.kosh.service.SceneComposerService.AssemblyPlan plan = sceneComposerService.planScene(query);
+        return ResponseEntity.ok(Map.of(
+                "query", query,
+                "sceneName", plan.getSceneName(),
+                "pieces", plan.getPieces(),
+                "steps", plan.getExecutionSteps()
+        ));
     }
 }
