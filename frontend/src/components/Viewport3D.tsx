@@ -28,7 +28,7 @@ import { BlenderLeftToolbar } from "./BlenderLeftToolbar";
 import { BlenderNPanel } from "./BlenderNPanel";
 import { BlenderTimeline } from "./BlenderTimeline";
 import { BlenderWorkspace, WorkspacePreset, LeafNode } from "./BlenderWorkspace";
-import { OutlinerEditor, PropertiesEditor, ScriptingEditor, DirectorEditor, McpConsoleEditor } from "./BlenderEditors";
+import { OutlinerEditor, PropertiesEditor, ScriptingEditor, DirectorEditor, McpConsoleEditor, TransformValues } from "./BlenderEditors";
 import { AspectRatioFramer, FramingMode } from "./narrative/AspectRatioFramer";
 import {
   PhotoStudioPanel,
@@ -418,14 +418,11 @@ export function Viewport3D({
   const [transformOrientation, setTransformOrientation] = useState<TransformOrientation>("global");
   const [pivotPoint, setPivotPoint] = useState<PivotPoint>("median");
   const [isProportionalEditing, setIsProportionalEditing] = useState<boolean>(false);
-  const [selectedTransform, setSelectedTransform] = useState<{
-    position: { x: number; y: number; z: number };
-    rotation: { x: number; y: number; z: number };
-    scale: { x: number; y: number; z: number };
-  }>({
+  const [selectedTransform, setSelectedTransform] = useState<TransformValues>({
     position: { x: 0, y: 0, z: 0 },
     rotation: { x: 0, y: 0, z: 0 },
     scale: { x: 1, y: 1, z: 1 },
+    dimensions: { x: 0, y: 0, z: 0 },
   });
 
 
@@ -556,10 +553,18 @@ export function Viewport3D({
       selectedMesh.scale.set(scl[0], scl[1], scl[2]);
       if (universalGizmoRef.current) universalGizmoRef.current.update();
       updateSelectionHelpers();
+      const box = new THREE.Box3().setFromObject(selectedMesh);
+      const size = new THREE.Vector3();
+      box.getSize(size);
       setSelectedTransform({
         position: { x: pos[0], y: pos[1], z: pos[2] },
         rotation: { x: rot[0], y: rot[1], z: rot[2] },
         scale: { x: scl[0], y: scl[1], z: scl[2] },
+        dimensions: {
+          x: parseFloat(size.x.toFixed(3)),
+          y: parseFloat(size.y.toFixed(3)),
+          z: parseFloat(size.z.toFixed(3)),
+        },
       });
     },
     [selectedMesh, updateSelectionHelpers]
@@ -964,10 +969,22 @@ export function Viewport3D({
         y: parseFloat(mesh.scale.y.toFixed(2)),
         z: parseFloat(mesh.scale.z.toFixed(2)),
       };
+
+      // Compute precise world-space AABB bounding dimensions for DCC Inspector
+      const box = new THREE.Box3().setFromObject(mesh);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const nextDim = {
+        x: parseFloat(size.x.toFixed(3)),
+        y: parseFloat(size.y.toFixed(3)),
+        z: parseFloat(size.z.toFixed(3)),
+      };
+
       setSelectedTransform({
         position: nextPos,
         rotation: nextRot,
         scale: nextScale,
+        dimensions: nextDim,
       });
       setLiveTransform({
         pos: [nextPos.x, nextPos.y, nextPos.z],
@@ -975,8 +992,48 @@ export function Viewport3D({
         scale: [nextScale.x, nextScale.y, nextScale.z],
       });
       updateSelectionHelpers();
+
+      // Synchronize selection state with backend MCP resource kosh://viewport/active-selection
+      if (apiBase) {
+        let vertCount = 0;
+        let faceCount = 0;
+        if (mesh instanceof THREE.Mesh && mesh.geometry) {
+          const geo = mesh.geometry;
+          vertCount = geo.attributes.position ? geo.attributes.position.count : 0;
+          faceCount = geo.index ? geo.index.count / 3 : vertCount / 3;
+        }
+        const mat = (mesh as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+        const colorHex = mat && mat.color ? `#${mat.color.getHexString()}` : "#94a3b8";
+        const roughness = mat?.roughness ?? 0.35;
+        const metalness = mat?.metalness ?? 0.25;
+
+        fetch(`${apiBase}/mcp/selection`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            meshName: mesh.name || "ActiveMesh",
+            details: {
+              selectedMesh: mesh.name || "ActiveMesh",
+              vertices: vertCount,
+              faces: Math.round(faceCount),
+              dimensions: [nextDim.x, nextDim.y, nextDim.z],
+              transform: {
+                position: [nextPos.x, nextPos.y, nextPos.z],
+                rotation: [nextRot.x, nextRot.y, nextRot.z],
+                scale: [nextScale.x, nextScale.y, nextScale.z],
+              },
+              material: {
+                color: colorHex,
+                roughness,
+                metalness,
+              },
+              modifiers: ["subdivision_surface", "boolean_csg", "bevel_modifier", "mirror_axis", "array_offset"],
+            },
+          }),
+        }).catch(() => {});
+      }
     },
-    [updateSelectionHelpers]
+    [updateSelectionHelpers, apiBase]
   );
 
   useEffect(() => {
@@ -1310,12 +1367,18 @@ export function Viewport3D({
       depthWrite: false,
     });
     const contactShadow = new THREE.Mesh(shadowGeo, shadowMat);
+    contactShadow.name = "ContactShadow_Helper";
+    contactShadow.userData = { isHelper: true, selectable: false };
+    contactShadow.renderOrder = -1;
     contactShadow.position.y = 0.002;
     contactShadow.visible = false;
     scene.add(contactShadow);
     contactShadowRef.current = contactShadow;
 
     const axes = new THREE.AxesHelper(1.6);
+    axes.name = "Axes_Helper";
+    axes.userData = { isHelper: true, selectable: false };
+    axes.renderOrder = 99999;
     axes.position.set(0, 0.001, 0);
     if (axes.material instanceof THREE.Material) {
       axes.material.transparent = true;
@@ -1327,21 +1390,30 @@ export function Viewport3D({
 
     // H. Root Groups
     const modelGroup = new THREE.Group();
+    modelGroup.name = "root_model_group";
     scene.add(modelGroup);
     rootModelGroupRef.current = modelGroup;
 
     const wireOverlayGroup = new THREE.Group();
+    wireOverlayGroup.name = "wire_overlay_group";
+    wireOverlayGroup.userData = { isHelper: true, selectable: false };
+    wireOverlayGroup.renderOrder = 99999;
     scene.add(wireOverlayGroup);
     wireOverlayGroupRef.current = wireOverlayGroup;
 
     // I. Selection Box Outline Helper & Group
     const boxHelper = new THREE.BoxHelper(new THREE.Mesh(), 0xea580c);
+    boxHelper.name = "selection_box_helper";
+    boxHelper.userData = { isHelper: true, selectable: false };
+    boxHelper.renderOrder = 99999;
     boxHelper.visible = false;
     scene.add(boxHelper);
     selectionBoxHelperRef.current = boxHelper;
 
     const selectionGroup = new THREE.Group();
     selectionGroup.name = "selection_helpers_group";
+    selectionGroup.userData = { isHelper: true, selectable: false };
+    selectionGroup.renderOrder = 99999;
     scene.add(selectionGroup);
     selectionHelpersGroupRef.current = selectionGroup;
 
@@ -1964,33 +2036,54 @@ export function Viewport3D({
 
     // If mouse moved more than 4px, user was orbiting camera
     if (dx > 4 || dy > 4) return;
-    if (!containerRef.current || !cameraRef.current || !currentModelRef.current) return;
+    const root = rootModelGroupRef.current;
+    if (!containerRef.current || !cameraRef.current || (!root && !currentModelRef.current)) return;
 
     const rect = containerRef.current.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
     const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
-    raycasterRef.current.setFromCamera(
-      new THREE.Vector2(x, y),
-      isOrtho && orthoCameraRef.current ? orthoCameraRef.current : cameraRef.current
-    );
+    const cam = isOrtho && orthoCameraRef.current ? orthoCameraRef.current : cameraRef.current;
+    raycasterRef.current.setFromCamera(new THREE.Vector2(x, y), cam);
 
     // Build a filtered list of selectable meshes: visible, not helper/gizmo
-    const collectSelectable = (obj: THREE.Object3D, out: THREE.Object3D[]) => {
+    const collectSelectable = (obj: THREE.Object3D, out: THREE.Mesh[]) => {
       if (!obj.visible) return;
-      if (obj instanceof THREE.Mesh) {
-        const n = obj.name || "";
-        const isHelper = n.includes("Helper") || n.includes("Gizmo") || n.includes("Grid") ||
-          n.includes("Selection") || obj.userData?.isHelper === true || obj.userData?.isGizmo === true;
-        if (!isHelper) out.push(obj);
+      if (
+        obj.userData?.isGizmo === true ||
+        obj.userData?.isHelper === true ||
+        obj.userData?.selectable === false ||
+        obj.renderOrder >= 99999
+      ) {
+        return;
       }
-      for (const c of obj.children) collectSelectable(c, out);
+      const n = obj.name || "";
+      if (
+        n.includes("Helper") ||
+        n.includes("Gizmo") ||
+        n.includes("Grid") ||
+        n.includes("Selection") ||
+        n.includes("Shadow")
+      ) {
+        return;
+      }
+      if (obj instanceof THREE.Mesh) {
+        out.push(obj);
+      }
+      for (const c of obj.children) {
+        collectSelectable(c, out);
+      }
     };
 
-    const selectable: THREE.Object3D[] = [];
-    for (const child of currentModelRef.current.children) collectSelectable(child, selectable);
+    const selectable: THREE.Mesh[] = [];
+    if (root) collectSelectable(root, selectable);
+    if (currentModelRef.current && currentModelRef.current.parent !== root) {
+      collectSelectable(currentModelRef.current, selectable);
+    }
+    const uniqueSelectable = Array.from(new Set(selectable));
 
-    const intersects = raycasterRef.current.intersectObjects(selectable, false);
+    const intersects = raycasterRef.current.intersectObjects(uniqueSelectable, false);
 
     if (intersects.length > 0) {
       // Front-face priority: find the first intersection whose face normal
@@ -1999,15 +2092,12 @@ export function Viewport3D({
       // (e.g. non-indexed or degenerate geometry).
       let hitMesh: THREE.Mesh | null = null;
       for (const hit of intersects) {
-        if (!(hit.object instanceof THREE.Mesh)) continue;
-        if (!hit.object.visible) continue;
+        if (!(hit.object instanceof THREE.Mesh) || !hit.object.visible) continue;
+        if (hit.object.userData?.isGizmo || hit.object.userData?.isHelper || hit.object.renderOrder >= 99999) continue;
         if (hit.face) {
           const normal = hit.face.normal.clone();
-          // Transform normal to world space to compare with ray direction
-          const worldNormal = normal
-            .clone()
-            .applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld))
-            .normalize();
+          const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+          const worldNormal = normal.applyMatrix3(normalMatrix).normalize();
           const dot = worldNormal.dot(raycasterRef.current.ray.direction);
           if (dot < 0) {
             hitMesh = hit.object; // front-facing
@@ -2022,7 +2112,13 @@ export function Viewport3D({
       // Fallback: if no front-facing hit found, take the closest mesh hit
       if (!hitMesh) {
         for (const hit of intersects) {
-          if (hit.object instanceof THREE.Mesh && hit.object.visible) {
+          if (
+            hit.object instanceof THREE.Mesh &&
+            hit.object.visible &&
+            !hit.object.userData?.isGizmo &&
+            !hit.object.userData?.isHelper &&
+            hit.object.renderOrder < 99999
+          ) {
             hitMesh = hit.object;
             break;
           }
@@ -2034,13 +2130,19 @@ export function Viewport3D({
           setSelectedMeshes((prev) => {
             const exists = prev.some((m) => m === hitMesh || m.name === hitMesh!.name);
             if (exists) {
-              return prev.filter((m) => m !== hitMesh && m.name !== hitMesh!.name);
+              const next = prev.filter((m) => m !== hitMesh && m.name !== hitMesh!.name);
+              const nextActive = next.length > 0 ? next[next.length - 1] : null;
+              onMeshSelect?.(nextActive ? nextActive.name : null);
+              return next;
             } else {
-              return [...prev, hitMesh!];
+              const next = [...prev, hitMesh!];
+              onMeshSelect?.(hitMesh!.name);
+              return next;
             }
           });
         } else {
           setSelectedMeshes([hitMesh]);
+          onMeshSelect?.(hitMesh.name);
         }
       }
     } else {
@@ -2056,36 +2158,59 @@ export function Viewport3D({
   };
 
   const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current || !cameraRef.current || !orbitControlsRef.current || !currentModelRef.current) return;
+    const root = rootModelGroupRef.current;
+    if (!containerRef.current || !cameraRef.current || !orbitControlsRef.current || (!root && !currentModelRef.current)) return;
     const rect = containerRef.current.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
     const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
-    raycasterRef.current.setFromCamera(
-      new THREE.Vector2(x, y),
-      isOrtho && orthoCameraRef.current ? orthoCameraRef.current : cameraRef.current
-    );
+    const cam = isOrtho && orthoCameraRef.current ? orthoCameraRef.current : cameraRef.current;
+    raycasterRef.current.setFromCamera(new THREE.Vector2(x, y), cam);
 
     // Same filtered, front-face-priority raycast as handlePointerUp
-    const collectSelectable = (obj: THREE.Object3D, out: THREE.Object3D[]) => {
+    const collectSelectable = (obj: THREE.Object3D, out: THREE.Mesh[]) => {
       if (!obj.visible) return;
-      if (obj instanceof THREE.Mesh) {
-        const n = obj.name || "";
-        const isHelper = n.includes("Helper") || n.includes("Gizmo") || n.includes("Grid") ||
-          n.includes("Selection") || obj.userData?.isHelper === true || obj.userData?.isGizmo === true;
-        if (!isHelper) out.push(obj);
+      if (
+        obj.userData?.isGizmo === true ||
+        obj.userData?.isHelper === true ||
+        obj.userData?.selectable === false ||
+        obj.renderOrder >= 99999
+      ) {
+        return;
       }
-      for (const c of obj.children) collectSelectable(c, out);
+      const n = obj.name || "";
+      if (
+        n.includes("Helper") ||
+        n.includes("Gizmo") ||
+        n.includes("Grid") ||
+        n.includes("Selection") ||
+        n.includes("Shadow")
+      ) {
+        return;
+      }
+      if (obj instanceof THREE.Mesh) {
+        out.push(obj);
+      }
+      for (const c of obj.children) {
+        collectSelectable(c, out);
+      }
     };
-    const selectable: THREE.Object3D[] = [];
-    for (const child of currentModelRef.current.children) collectSelectable(child, selectable);
 
-    const intersects = raycasterRef.current.intersectObjects(selectable, false);
+    const selectable: THREE.Mesh[] = [];
+    if (root) collectSelectable(root, selectable);
+    if (currentModelRef.current && currentModelRef.current.parent !== root) {
+      collectSelectable(currentModelRef.current, selectable);
+    }
+    const uniqueSelectable = Array.from(new Set(selectable));
+
+    const intersects = raycasterRef.current.intersectObjects(uniqueSelectable, false);
 
     if (intersects.length > 0) {
       let hitMesh: THREE.Mesh | null = null;
       for (const hit of intersects) {
         if (!(hit.object instanceof THREE.Mesh) || !hit.object.visible) continue;
+        if (hit.object.userData?.isGizmo || hit.object.userData?.isHelper || hit.object.renderOrder >= 99999) continue;
         if (hit.face) {
           const worldNormal = hit.face.normal
             .clone()
@@ -2102,7 +2227,13 @@ export function Viewport3D({
       }
       if (!hitMesh) {
         for (const hit of intersects) {
-          if (hit.object instanceof THREE.Mesh && hit.object.visible) {
+          if (
+            hit.object instanceof THREE.Mesh &&
+            hit.object.visible &&
+            !hit.object.userData?.isGizmo &&
+            !hit.object.userData?.isHelper &&
+            hit.object.renderOrder < 99999
+          ) {
             hitMesh = hit.object;
             break;
           }
@@ -2110,10 +2241,14 @@ export function Viewport3D({
       }
       if (hitMesh) {
         setSelectedMeshes([hitMesh]);
+        onMeshSelect?.(hitMesh.name);
         smoothFocusObjects([hitMesh]);
       }
-    } else if (currentModelRef.current) {
-      smoothFocusObjects([currentModelRef.current]);
+    } else {
+      const focusTarget = currentModelRef.current || root;
+      if (focusTarget) {
+        smoothFocusObjects([focusTarget]);
+      }
     }
   };
 
@@ -2144,12 +2279,33 @@ export function Viewport3D({
         position: { x: 0, y: 0, z: 0 },
         rotation: { x: 0, y: 0, z: 0 },
         scale: { x: 1, y: 1, z: 1 },
+        dimensions: { x: 0, y: 0, z: 0 },
       });
       setLiveTransform({
         pos: [0, 0, 0],
         rot: [0, 0, 0],
         scale: [1, 1, 1],
       });
+      if (apiBase) {
+        fetch(`${apiBase}/mcp/selection`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            meshName: null,
+            details: {
+              selectedMesh: null,
+              vertices: 0,
+              faces: 0,
+              transform: {
+                position: [0, 0, 0],
+                rotation: [0, 0, 0],
+                scale: [1, 1, 1],
+              },
+              modifiers: ["subdivision_surface", "boolean_csg", "bevel_modifier", "mirror_axis", "array_offset"],
+            },
+          }),
+        }).catch(() => {});
+      }
     }
 
     // Rebuild multi-selection helpers
@@ -3387,11 +3543,14 @@ export function Viewport3D({
           setIsSnapPopoverOpen(false);
           return;
         }
-        if (transformMode !== "select") {
+        if (isModalTransforming) {
           handleCancelTransform();
         } else {
-          setSelectedMesh(null);
+          setSelectedMeshes([]);
           onMeshSelect?.(null);
+          universalGizmoRef.current?.attach(null);
+          universalGizmoRef.current?.setSecondaryTargets([]);
+          transformControlsRef.current?.detach();
         }
         return;
       }
@@ -3655,11 +3814,17 @@ export function Viewport3D({
         if (e.altKey) {
           setSelectedMeshes([]);
           onMeshSelect?.(null);
+          universalGizmoRef.current?.attach(null);
+          universalGizmoRef.current?.setSecondaryTargets([]);
+          transformControlsRef.current?.detach();
         } else {
           const now = Date.now();
           if (now - lastAPressTimeRef.current < 400 && selectedMeshes.length > 0) {
             setSelectedMeshes([]);
             onMeshSelect?.(null);
+            universalGizmoRef.current?.attach(null);
+            universalGizmoRef.current?.setSecondaryTargets([]);
+            transformControlsRef.current?.detach();
           } else {
             // Select ALL meshes in the scene
             const allMeshes = meshList.map((m) => m.meshRef).filter(Boolean);
@@ -5641,6 +5806,7 @@ export function Viewport3D({
                     currentMetalness={matMetalness}
                     currentColor={matColor}
                     onUpdateMaterial={handleUpdateSelectedMaterial}
+                    meshList={meshList}
                   />
                 );
 

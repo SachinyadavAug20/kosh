@@ -290,6 +290,55 @@ class McpProtocolTest {
         assertTrue(matNames.contains("ClearGlass"));
         assertTrue(matNames.contains("CastIron"));
         assertTrue(matNames.contains("NeonBlueEmissive"));
+
+        // Read kosh://viewport/active-selection
+        McpRpcRequest reqSel = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("read-sel")
+                .method("resources/read")
+                .params(Map.of("uri", "kosh://viewport/active-selection"))
+                .build();
+
+        ResponseEntity<McpRpcResponse> respSel = mcpController.handleRpcRequest(null, reqSel, null, null, null, null, null);
+        assertNotNull(respSel.getBody());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resSel = (Map<String, Object>) respSel.getBody().getResult();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> contentsSel = (List<Map<String, Object>>) resSel.get("contents");
+        assertFalse(contentsSel.isEmpty());
+        String textSel = contentsSel.get(0).get("text").toString();
+        Map<?, ?> selMap = objectMapper.readValue(textSel, Map.class);
+        assertTrue(selMap.containsKey("selectedMesh"));
+        assertTrue(selMap.containsKey("modifiers"));
+        assertTrue(selMap.containsKey("transform"));
+
+        // Test updating selection via JSON-RPC
+        McpRpcRequest updateReq = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("upd-sel-1")
+                .method("viewport/selection")
+                .params(Map.of(
+                        "selectedMesh", "Gear_M4_Pinion",
+                        "details", Map.of(
+                                "vertices", 120,
+                                "faces", 240,
+                                "modifiers", List.of("bevel_modifier", "array_offset")
+                        )
+                ))
+                .build();
+        ResponseEntity<McpRpcResponse> updateResp = mcpController.handleRpcRequest(null, updateReq, null, null, null, null, null);
+        assertNotNull(updateResp.getBody());
+        assertEquals(0, updateResp.getBody().getError() != null ? -1 : 0);
+
+        // Read again and verify dynamic update
+        ResponseEntity<McpRpcResponse> respSel2 = mcpController.handleRpcRequest(null, reqSel, null, null, null, null, null);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resSel2 = (Map<String, Object>) respSel2.getBody().getResult();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> contentsSel2 = (List<Map<String, Object>>) resSel2.get("contents");
+        Map<?, ?> selMap2 = objectMapper.readValue(contentsSel2.get(0).get("text").toString(), Map.class);
+        assertEquals("Gear_M4_Pinion", selMap2.get("selectedMesh"));
+        assertEquals(120, ((Number) selMap2.get("vertices")).intValue());
     }
 
     @Test

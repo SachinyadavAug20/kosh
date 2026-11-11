@@ -307,10 +307,45 @@ export function CodeInspector({
             </div>
           )
         ) : activeTab === "outliner" ? (
-          <div className="p-2 space-y-1">
-            <div className="text-[10px] text-[#71717a] font-mono uppercase px-1 pb-1 border-b border-[#27272a]">
-              Scene Hierarchy ({meshList.length} objects)
+          <div className="p-2 space-y-2">
+            <div className="flex items-center justify-between text-[10px] text-[#71717a] font-mono uppercase px-1 pb-1 border-b border-[#27272a]">
+              <span>Scene Hierarchy ({meshList.length} objects)</span>
+              {selectedMeshName && (
+                <span className="text-[#ea580c] font-semibold">Active Selection</span>
+              )}
             </div>
+
+            {selectedMeshName && (
+              <div className="p-2.5 bg-[#141416] border border-[#ea580c]/40 rounded space-y-1.5 font-mono text-[10px]">
+                <div className="flex items-center justify-between text-[#a1a1aa] uppercase tracking-wider text-[9px]">
+                  <div className="flex items-center space-x-1.5">
+                    <MousePointer className="w-3 h-3 text-[#ea580c]" />
+                    <span className="font-bold text-[#f4f4f5]">{selectedMeshName}</span>
+                  </div>
+                  <span className="text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                    DCC Synced
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[#f4f4f5] pt-1 border-t border-[#27272a]">
+                  <div className="flex justify-between">
+                    <span className="text-[#71717a]">Vertices:</span>
+                    <span className="font-bold">
+                      {meshList.find((m) => m.name === selectedMeshName)?.vertices.toLocaleString() || "—"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[#71717a]">Triangles:</span>
+                    <span className="font-bold">
+                      {meshList.find((m) => m.name === selectedMeshName)?.triangles.toLocaleString() || "—"}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-[9px] text-[#71717a] truncate pt-0.5">
+                  MCP URI: <span className="text-[#a1a1aa]">kosh://viewport/active-selection</span>
+                </div>
+              </div>
+            )}
+
             {meshList.length === 0 ? (
               <div className="text-[#71717a] py-4 text-center font-mono text-xs">No objects in scene</div>
             ) : (

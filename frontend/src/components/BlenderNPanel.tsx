@@ -485,6 +485,55 @@ export function BlenderNPanel({
                   </div>
                 </div>
 
+                {/* Dimensions (Read-only / Metric CAD bounding extents) */}
+                {transform?.dimensions && (
+                  <div className="space-y-1.5 pt-2 border-t border-[#27272a]">
+                    <div className="flex items-center justify-between text-[10px] font-mono text-[#a1a1aa] uppercase tracking-wider">
+                      <span>Dimensions</span>
+                      <span className="text-[9px] text-[#71717a]">AABB Bounds</span>
+                    </div>
+                    <div className="space-y-1 font-mono text-[11px]">
+                      {(["x", "y", "z"] as const).map((axis) => (
+                        <div key={axis} className="flex items-center bg-[#141416] border border-[#27272a] rounded overflow-hidden">
+                          <span className={`w-6 text-center font-bold text-[10px] uppercase py-1 ${
+                            axis === "x" ? "bg-red-500/20 text-red-400" : axis === "y" ? "bg-green-500/20 text-green-400" : "bg-blue-500/20 text-blue-400"
+                          }`}>
+                            {axis}
+                          </span>
+                          <div className="flex-1 px-2 py-1 text-right text-[#f4f4f5]">
+                            {transform.dimensions ? transform.dimensions[axis].toFixed(3) : "0.000"}
+                          </div>
+                          <span className="text-[9px] text-[#71717a] pr-2">m</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Mesh Statistics (Topology telemetry) */}
+                {selectedMeshName && (
+                  <div className="p-2.5 bg-[#141416] border border-[#27272a] rounded space-y-1.5 font-mono text-[10px]">
+                    <div className="flex items-center justify-between text-[#a1a1aa] uppercase tracking-wider text-[9px]">
+                      <span>Topology Telemetry</span>
+                      <span className="text-emerald-400 font-bold">Watertight</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[#f4f4f5]">
+                      <div className="flex justify-between border-b border-[#27272a] pb-0.5">
+                        <span className="text-[#71717a]">Vertices:</span>
+                        <span className="font-bold">
+                          {meshList.find((m) => m.name === selectedMeshName)?.vertices.toLocaleString() || "—"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-b border-[#27272a] pb-0.5">
+                        <span className="text-[#71717a]">Faces:</span>
+                        <span className="font-bold">
+                          {meshList.find((m) => m.name === selectedMeshName)?.triangles.toLocaleString() || "—"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Quick CAD Snapping Actions */}
                 <div className="pt-2 border-t border-[#27272a] space-y-1.5">
                   <span className="text-[10px] font-mono uppercase text-[#71717a]">Quick Align</span>

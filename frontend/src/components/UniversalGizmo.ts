@@ -98,6 +98,8 @@ export class UniversalGizmo {
 
     this.group = new THREE.Group();
     this.group.name = "UniversalGizmo";
+    this.group.userData = { isGizmo: true, isHelper: true, selectable: false };
+    this.group.renderOrder = 99999;
     this.group.visible = false;
 
     this.translateGroup = new THREE.Group();
@@ -472,6 +474,17 @@ export class UniversalGizmo {
     centerHitbox.userData = { handle: "scale-xyz" };
     this.scaleGroup.add(centerHitbox);
     this.colliders.push(centerHitbox);
+
+    // Ensure all gizmo handles and colliders have renderOrder 99999 and cannot be picked by raycaster
+    this.group.traverse((child) => {
+      child.renderOrder = 99999;
+      child.userData = {
+        ...child.userData,
+        isGizmo: true,
+        isHelper: true,
+        selectable: false,
+      };
+    });
   }
 
   private recordMaterials(obj: THREE.Object3D) {

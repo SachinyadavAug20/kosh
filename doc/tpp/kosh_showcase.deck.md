@@ -245,7 +245,7 @@ Kosh exposes 60 native tools, 24 resources, and 16 prompts over JSON-RPC:
 * `cad_convex_hull`: Minimal convex bounding hull for physics colliders.
 * `cad_separate_loose_parts`: Splits multi-body meshes into distinct parts.
 * `cad_export_engineering_drawing`: Generates SVG 2D blueprint drawings.
-* `cad_linear_array` / `cad_radial_array`: Pattern duplication grids and circles.
+* `cad_linear_array` / `cad_radial_array`: Grid & circular pattern duplication.
 * `cad_text_emboss`: Engrave or raise text via exact boolean operation.
 * `cad_check_manifold`: Watertight diagnosis with boundary edge counts.
 

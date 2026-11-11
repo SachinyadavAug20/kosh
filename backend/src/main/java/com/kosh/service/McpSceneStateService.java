@@ -30,6 +30,10 @@ public class McpSceneStateService {
     private volatile double[] sceneBoundingBoxMax = new double[]{1.0, 1.0, 2.0};
     private volatile double[] sceneDimensions = new double[]{2.0, 2.0, 2.0};
 
+    // Live viewport selection tracking (synchronized with Three.js DCC viewport)
+    private volatile String activeSelectedMesh = "CAD_Origin_Datum";
+    private final Map<String, Object> activeSelectionState = new ConcurrentHashMap<>();
+
     public McpSceneStateService(BlenderExecutionService blenderExecutionService) {
         this.blenderExecutionService = blenderExecutionService;
         this.objectMapper = new ObjectMapper();
@@ -64,6 +68,22 @@ public class McpSceneStateService {
         totalFaces = 6;
         totalEdges = 12;
         isWatertight = true;
+
+        updateActiveSelection("CAD_Origin_Datum", Map.of(
+                "selectedMesh", "CAD_Origin_Datum",
+                "vertices", 8,
+                "faces", 6,
+                "edges", 12,
+                "isManifold", true,
+                "modifiers", List.of("subdivision_surface", "boolean_csg", "bevel_modifier", "mirror_axis", "array_offset"),
+                "transform", Map.of(
+                        "position", List.of(0.0, 0.0, 0.0),
+                        "rotation", List.of(0.0, 0.0, 0.0),
+                        "scale", List.of(1.0, 1.0, 1.0)
+                ),
+                "materials", List.of("MatteTitanium"),
+                "dimensions", List.of(1.0, 1.0, 1.0)
+        ));
     }
 
     /**
@@ -121,10 +141,79 @@ public class McpSceneStateService {
 
             activeObjects.clear();
             activeObjects.add(entity);
+
+            // Keep active viewport selection in sync with the newly generated asset
+            String effectiveName = objectName != null ? objectName : "Mesh";
+            updateActiveSelection(effectiveName, Map.of(
+                    "selectedMesh", effectiveName,
+                    "vertices", verts,
+                    "faces", faces,
+                    "edges", edges,
+                    "isManifold", isWatertight,
+                    "modifiers", List.of("subdivision_surface", "boolean_csg", "bevel_modifier", "mirror_axis", "array_offset"),
+                    "transform", Map.of(
+                            "position", List.of(0.0, 0.0, 0.0),
+                            "rotation", List.of(0.0, 0.0, 0.0),
+                            "scale", List.of(1.0, 1.0, 1.0)
+                    ),
+                    "materials", materialList.isEmpty() ? List.of("MatteTitanium") : materialList,
+                    "dimensions", List.of(dx, dy, dz)
+            ));
+
             log.info("MCP scene state updated with object '{}': {} verts, {} faces", objectName, verts, faces);
         } catch (Exception e) {
             log.warn("Failed to record scene telemetry: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Updates active viewport selection metadata (entity name, vertices, faces, transforms, modifiers).
+     * Called live from the Three.js viewport raycaster and Universal Gizmo handlers.
+     */
+    public synchronized void updateActiveSelection(String meshName, Map<String, Object> details) {
+        this.activeSelectedMesh = meshName;
+        this.activeSelectionState.clear();
+        if (meshName == null || meshName.isBlank()) {
+            return;
+        }
+        this.activeSelectionState.put("selectedMesh", meshName);
+        if (details != null) {
+            this.activeSelectionState.putAll(details);
+        }
+        if (!this.activeSelectionState.containsKey("modifiers")) {
+            this.activeSelectionState.put("modifiers", List.of("subdivision_surface", "boolean_csg", "bevel_modifier", "mirror_axis", "array_offset"));
+        }
+        if (!this.activeSelectionState.containsKey("transform")) {
+            this.activeSelectionState.put("transform", Map.of(
+                    "position", List.of(0.0, 0.0, 0.0),
+                    "rotation", List.of(0.0, 0.0, 0.0),
+                    "scale", List.of(1.0, 1.0, 1.0)
+            ));
+        }
+    }
+
+    /**
+     * Returns JSON resource representation for kosh://viewport/active-selection.
+     */
+    public String getActiveSelectionJson() {
+        if (activeSelectedMesh == null && activeSelectionState.isEmpty()) {
+            Map<String, Object> empty = new LinkedHashMap<>();
+            empty.put("selectedMesh", null);
+            empty.put("vertices", 0);
+            empty.put("faces", 0);
+            empty.put("modifiers", List.of("subdivision_surface", "boolean_csg", "bevel_modifier", "mirror_axis", "array_offset"));
+            empty.put("transform", Map.of(
+                    "position", List.of(0.0, 0.0, 0.0),
+                    "rotation", List.of(0.0, 0.0, 0.0),
+                    "scale", List.of(1.0, 1.0, 1.0)
+            ));
+            return toJson(empty);
+        }
+        Map<String, Object> state = new LinkedHashMap<>(activeSelectionState);
+        if (!state.containsKey("selectedMesh")) {
+            state.put("selectedMesh", activeSelectedMesh);
+        }
+        return toJson(state);
     }
 
     /**

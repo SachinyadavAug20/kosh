@@ -94,17 +94,11 @@ public class McpResourceRegistry {
                 }
                 """
         );
-        registerStatic(
+        registerDynamic(
                 "kosh://viewport/active-selection",
                 "Active Viewport Selection & Modifier Stack",
                 "Currently selected entity metadata: vertex list, face count, active modifier stack, and transform matrices",
-                """
-                {
-                    "selectedMesh": null,
-                    "modifiers": ["subdivision_surface", "boolean_csg", "bevel_modifier", "mirror_axis", "array_offset"],
-                    "transform": {"position": [0,0,0], "rotation": [0,0,0], "scale": [1,1,1]}
-                }
-                """
+                sceneStateService::getActiveSelectionJson
         );
         registerStatic(
                 "kosh://library/modular-models",

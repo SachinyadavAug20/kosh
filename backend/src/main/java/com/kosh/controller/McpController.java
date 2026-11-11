@@ -7,6 +7,7 @@ import com.kosh.dto.ToolExecutionDto;
 import com.kosh.service.McpProgressListener;
 import com.kosh.service.McpPromptRegistry;
 import com.kosh.service.McpResourceRegistry;
+import com.kosh.service.McpSceneStateService;
 import com.kosh.service.McpToolRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +38,7 @@ public class McpController {
     private final McpToolRegistry mcpToolRegistry;
     private final McpResourceRegistry mcpResourceRegistry;
     private final McpPromptRegistry mcpPromptRegistry;
+    private final McpSceneStateService mcpSceneStateService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Map<String, SseEmitter> activeSseSessions = new ConcurrentHashMap<>();
     private final ExecutorService asyncWorkerPool;
@@ -50,11 +52,13 @@ public class McpController {
     public McpController(McpToolRegistry mcpToolRegistry,
                          McpResourceRegistry mcpResourceRegistry,
                          McpPromptRegistry mcpPromptRegistry,
+                         McpSceneStateService mcpSceneStateService,
                          @org.springframework.beans.factory.annotation.Qualifier("mcpWorkerPool")
                          ExecutorService asyncWorkerPool) {
         this.mcpToolRegistry = mcpToolRegistry;
         this.mcpResourceRegistry = mcpResourceRegistry;
         this.mcpPromptRegistry = mcpPromptRegistry;
+        this.mcpSceneStateService = mcpSceneStateService;
         this.asyncWorkerPool = asyncWorkerPool;
     }
 
@@ -187,6 +191,27 @@ public class McpController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Endpoint for live viewport selection synchronization (called from Three.js raycasting & gizmo drag).
+     */
+    @PostMapping(value = "/selection", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> updateSelection(@RequestBody Map<String, Object> body) {
+        String meshName = body.get("meshName") != null ? body.get("meshName").toString()
+                : (body.get("selectedMesh") != null ? body.get("selectedMesh").toString() : null);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> details = body.get("details") instanceof Map<?, ?> d ? (Map<String, Object>) d : body;
+        mcpSceneStateService.updateActiveSelection(meshName, details);
+        return ResponseEntity.ok(Map.of("status", "ok", "selectedMesh", meshName != null ? meshName : ""));
+    }
+
+    /**
+     * Reads active viewport selection JSON state.
+     */
+    @GetMapping(value = "/selection", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> getSelection() {
+        return ResponseEntity.ok(mcpSceneStateService.getActiveSelectionJson());
+    }
+
     private McpRpcResponse processRpcRequest(McpRpcRequest request, String activeToken, McpProgressListener progressListener) {
         Object id = request.getId();
         String method = request.getMethod();
@@ -244,6 +269,24 @@ public class McpController {
                     } catch (IllegalArgumentException e) {
                         return McpRpcResponse.error(id, -32602, e.getMessage(), null);
                     }
+
+                case "viewport/selection":
+                case "viewport/selection/update":
+                case "kosh/selection/update": {
+                    Map<String, Object> p = request.getParams();
+                    String meshName = p != null && p.get("meshName") != null ? p.get("meshName").toString() : null;
+                    if (meshName == null && p != null && p.get("selectedMesh") != null) {
+                        meshName = p.get("selectedMesh").toString();
+                    }
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> details = p != null && p.get("details") instanceof Map<?, ?> d ? (Map<String, Object>) d : p;
+                    mcpSceneStateService.updateActiveSelection(meshName, details);
+                    return McpRpcResponse.success(id, Map.of(
+                            "status", "ok",
+                            "selectedMesh", meshName != null ? meshName : "",
+                            "activeSelection", mcpSceneStateService.getActiveSelectionJson()
+                    ));
+                }
 
                 case "prompts/list":
                     return McpRpcResponse.success(id, Map.of("prompts", mcpPromptRegistry.listPrompts()));
