@@ -23,6 +23,7 @@ public class GoogleGeminiClient {
     private final WebClient.Builder webClientBuilder;
     private final ScriptSanitizer scriptSanitizer;
     private final ObjectMapper objectMapper;
+    private final OpenRouterClient openRouterClient;
 
     @Value("${google.gemini.api.base-url:https://generativelanguage.googleapis.com/v1beta}")
     private String geminiBaseUrl;
@@ -45,10 +46,12 @@ public class GoogleGeminiClient {
 
     public GoogleGeminiClient(WebClient.Builder webClientBuilder,
                               ScriptSanitizer scriptSanitizer,
-                              ObjectMapper objectMapper) {
+                              ObjectMapper objectMapper,
+                              @org.springframework.context.annotation.Lazy OpenRouterClient openRouterClient) {
         this.webClientBuilder = webClientBuilder;
         this.scriptSanitizer = scriptSanitizer;
         this.objectMapper = objectMapper;
+        this.openRouterClient = openRouterClient;
     }
 
     public String generateBlenderScript(String prompt, String toolType, String apiKey, String exportFormat) {
@@ -56,14 +59,31 @@ public class GoogleGeminiClient {
     }
 
     public String generateBlenderScript(String prompt, String previousScript, String toolType, String apiKey, String exportFormat) {
+        // 1. Direct OpenRouter key routing
+        if (apiKey != null && apiKey.trim().startsWith("sk-or-")) {
+            log.info("Direct OpenRouter API key detected for prompt: '{}'", prompt);
+            return openRouterClient.generateBlenderScript(prompt, previousScript, toolType, apiKey, exportFormat);
+        }
+
         String activeKey = (apiKey != null && !apiKey.isBlank()) ? apiKey.trim() : defaultApiKey;
         if (activeKey == null || activeKey.isBlank()) {
             activeKey = System.getenv("GEMINI_API_KEY");
         }
 
+        if (activeKey != null && activeKey.startsWith("sk-or-")) {
+            log.info("Configured OpenRouter key detected. Routing to OpenRouter.");
+            return openRouterClient.generateBlenderScript(prompt, previousScript, toolType, activeKey, exportFormat);
+        }
+
+        // Check if OpenRouter is available in environment
+        if ((activeKey == null || activeKey.isBlank()) && openRouterClient.isAvailable(null)) {
+            log.info("Gemini key absent but OpenRouter is available. Routing to OpenRouter.");
+            return openRouterClient.generateBlenderScript(prompt, previousScript, toolType, null, exportFormat);
+        }
+
         if (activeKey == null || activeKey.isBlank()) {
             throw new IllegalArgumentException(
-                "Google Gemini API key is required. Please paste your Google API key (from https://aistudio.google.com/app/apikey) in the top bar, set GEMINI_API_KEY in .env, or use 'demo' mode."
+                "AI API key is required. Please paste your Google Gemini or OpenRouter key in the top bar, set OPENROUTER_API_KEY/GEMINI_API_KEY in .env, or use 'demo' mode."
             );
         }
 
@@ -145,7 +165,16 @@ public class GoogleGeminiClient {
             }
         }
 
-        log.warn("All Gemini models in cascade saturated. Providing deep procedural Blender script for prompt: '{}'", prompt);
+        if (openRouterClient.isAvailable(null)) {
+            try {
+                log.info("Gemini saturated. Cascading to OpenRouter free models for prompt: '{}'", prompt);
+                return openRouterClient.generateBlenderScript(prompt, previousScript, toolType, null, exportFormat);
+            } catch (Exception e) {
+                log.warn("OpenRouter cascade also failed: {}. Continuing to procedural.", e.getMessage());
+            }
+        }
+
+        log.warn("All AI models in cascade saturated. Providing deep procedural Blender script for prompt: '{}'", prompt);
         return generateProceduralModelScript(prompt, toolType, exportFormat);
     }
 

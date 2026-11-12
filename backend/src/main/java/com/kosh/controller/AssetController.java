@@ -29,11 +29,20 @@ public class AssetController {
 
     private final BlenderExecutionService blenderExecutionService;
     private final com.kosh.service.SceneComposerService sceneComposerService;
+    private final com.kosh.service.ImageToModelService imageToModelService;
+    private final com.kosh.service.OnlineModelService onlineModelService;
+    private final com.kosh.service.AiAgentService aiAgentService;
 
     public AssetController(BlenderExecutionService blenderExecutionService,
-                           com.kosh.service.SceneComposerService sceneComposerService) {
+                           com.kosh.service.SceneComposerService sceneComposerService,
+                           com.kosh.service.ImageToModelService imageToModelService,
+                           com.kosh.service.OnlineModelService onlineModelService,
+                           com.kosh.service.AiAgentService aiAgentService) {
         this.blenderExecutionService = blenderExecutionService;
         this.sceneComposerService = sceneComposerService;
+        this.imageToModelService = imageToModelService;
+        this.onlineModelService = onlineModelService;
+        this.aiAgentService = aiAgentService;
     }
 
     /**
@@ -220,5 +229,102 @@ public class AssetController {
                 "pieces", plan.getPieces(),
                 "steps", plan.getExecutionSteps()
         ));
+    }
+
+    /**
+     * Converts an uploaded image or hand-drawn sketch to a watertight 3D solid model.
+     */
+    @org.springframework.web.bind.annotation.PostMapping(value = "/sketch-to-3d", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> sketchTo3d(@org.springframework.web.bind.annotation.RequestBody Map<String, Object> req) {
+        try {
+            String imageBase64 = req != null && req.containsKey("imageBase64") && req.get("imageBase64") != null
+                    ? req.get("imageBase64").toString() : null;
+            if (imageBase64 == null || imageBase64.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("success", false, "error", "imageBase64 is required"));
+            }
+            String prompt = req.containsKey("prompt") && req.get("prompt") != null ? req.get("prompt").toString() : "";
+            String mode = req.containsKey("mode") && req.get("mode") != null ? req.get("mode").toString() : "vision_ai";
+            String format = req.containsKey("format") && req.get("format") != null ? req.get("format").toString() : "glb";
+            String apiKey = req.containsKey("apiKey") && req.get("apiKey") != null ? req.get("apiKey").toString() : null;
+
+            Map<String, Object> result = imageToModelService.convertImageToModel(imageBase64, prompt, mode, format, apiKey);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Sketch to 3D error: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("success", false, "error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Searches real 3D models available on internet repositories.
+     */
+    @org.springframework.web.bind.annotation.GetMapping(value = "/online-search", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<List<com.kosh.service.OnlineModelService.OnlineModelEntry>> searchOnlineModels(
+            @org.springframework.web.bind.annotation.RequestParam(value = "query", defaultValue = "") String query) {
+        List<com.kosh.service.OnlineModelService.OnlineModelEntry> results = onlineModelService.search(query);
+        return ResponseEntity.ok(results);
+    }
+
+    /**
+     * Downloads an online 3D model from the internet and adapts it as a base scene.
+     */
+    @org.springframework.web.bind.annotation.PostMapping(value = "/online-download", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> downloadOnlineModel(@org.springframework.web.bind.annotation.RequestBody Map<String, Object> req) {
+        try {
+            String modelIdOrUrl = req != null && req.containsKey("modelIdOrUrl") && req.get("modelIdOrUrl") != null
+                    ? req.get("modelIdOrUrl").toString() : (req != null && req.containsKey("query") ? req.get("query").toString() : "base_duck");
+            String format = req != null && req.containsKey("format") && req.get("format") != null ? req.get("format").toString() : "glb";
+            String prompt = req != null && req.containsKey("prompt") && req.get("prompt") != null ? req.get("prompt").toString() : "";
+
+            Path cachedPath = onlineModelService.downloadModel(modelIdOrUrl);
+            String adaptationScript = onlineModelService.buildAdaptationScript(cachedPath, prompt, format);
+            com.kosh.service.BlenderExecutionService.BlenderRunResult result = blenderExecutionService.executeScript(adaptationScript, format);
+
+            return ResponseEntity.ok(Map.of(
+                    "success", result.isSuccess(),
+                    "assetUrl", "/api/assets/" + result.getAssetFileName(),
+                    "assetName", result.getAssetFileName(),
+                    "format", format,
+                    "fileSizeBytes", result.getSizeBytes(),
+                    "executionTimeMs", result.getExecutionTimeMs()
+            ));
+        } catch (Exception e) {
+            log.error("Online download error: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("success", false, "error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Autonomous agent execution pipeline coordinating online model downloads,
+     * sketch conversion, transformations, and watertight CAD export.
+     */
+    @org.springframework.web.bind.annotation.PostMapping(value = "/agent-execute", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> executeAgentTask(@org.springframework.web.bind.annotation.RequestBody Map<String, Object> req) {
+        try {
+            String goal = req != null && req.containsKey("goal") && req.get("goal") != null
+                    ? req.get("goal").toString() : "Create a 3D model";
+            String imageBase64 = req != null && req.containsKey("imageBase64") && req.get("imageBase64") != null
+                    ? req.get("imageBase64").toString() : null;
+            String baseModelUrl = req != null && req.containsKey("baseModelUrl") && req.get("baseModelUrl") != null
+                    ? req.get("baseModelUrl").toString() : null;
+            String format = req != null && req.containsKey("format") && req.get("format") != null
+                    ? req.get("format").toString() : "glb";
+            String apiKey = req != null && req.containsKey("apiKey") && req.get("apiKey") != null
+                    ? req.get("apiKey").toString() : null;
+
+            Map<String, Object> result = aiAgentService.executeAgentTask(goal, imageBase64, baseModelUrl, format, apiKey);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Agent execution error: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("success", false, "error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Lists all tools available for the AI agent to use.
+     */
+    @org.springframework.web.bind.annotation.GetMapping(value = "/agent-tools", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<List<com.kosh.service.AiAgentService.AgentToolDefinition>> listAgentTools() {
+        return ResponseEntity.ok(aiAgentService.listAgentTools());
     }
 }

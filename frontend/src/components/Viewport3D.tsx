@@ -43,6 +43,7 @@ import { McpTrustModal } from "./McpTrustModal";
 import { CadChatPanel } from "./CadChatPanel";
 import { UniversalSearchModal } from "./UniversalSearchModal";
 import { ApiKeyModal } from "./ApiKeyModal";
+import { SketchToModelModal } from "./SketchToModelModal";
 import { PostProcessingPipeline } from "../lib/rendering/PostProcessingPipeline";
 import { AudioVisemeSynthesizer } from "../lib/audio/AudioVisemeSynthesizer";
 import { GraphEditorCanvas } from "./timeline/GraphEditorCanvas";
@@ -417,6 +418,7 @@ export function Viewport3D({
   const [isNOpen, setIsNOpen] = useState<boolean>(false);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(true);
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
+  const [isSketchModalOpen, setIsSketchModalOpen] = useState<boolean>(false);
   const [lockedMeshes, setLockedMeshes] = useState<Set<string>>(new Set());
   const [transformOrientation, setTransformOrientation] = useState<TransformOrientation>("global");
   const [pivotPoint, setPivotPoint] = useState<PivotPoint>("median");
@@ -3489,6 +3491,13 @@ export function Viewport3D({
         return;
       }
 
+      // Sketch / Image to 3D Reconstruction Modal (Alt + S)
+      if (e.altKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        setIsSketchModalOpen((prev) => !prev);
+        return;
+      }
+
       // Don't intercept when user is typing in inputs or textareas
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
@@ -5122,6 +5131,7 @@ export function Viewport3D({
         isChatOpen={isChatOpen}
         onToggleChat={() => setIsChatOpen(!isChatOpen)}
         onOpenSearch={() => setIsSearchOpen(true)}
+        onOpenSketchModal={() => setIsSketchModalOpen(true)}
       />
 
       {/* Persistent Undo / Redo Floating Toast */}
@@ -5820,6 +5830,7 @@ export function Viewport3D({
                       token={token}
                       onOpenKeyModal={() => setIsKeyModalOpen(true)}
                       onResetRotation={handleResetRotation}
+                      onOpenSketchModal={() => setIsSketchModalOpen(true)}
                     />
 
                     {/* N-Panel Right Properties Strip (Drawer collapsible with N) */}
@@ -6006,6 +6017,7 @@ export function Viewport3D({
                       token={token}
                       onOpenKeyModal={() => setIsKeyModalOpen(true)}
                       onResetRotation={handleResetRotation}
+                      onOpenSketchModal={() => setIsSketchModalOpen(true)}
                     />
                   </div>
                 );
@@ -6108,6 +6120,16 @@ export function Viewport3D({
         onExport={handleExportDirect}
         meshList={meshList}
         selectedMeshName={selectedMesh?.name || null}
+        onOpenSketchModal={() => setIsSketchModalOpen(true)}
+      />
+
+      {/* Sketch & Hand-Drawn Image to 3D Neural Reconstruction Modal (Alt + S) */}
+      <SketchToModelModal
+        isOpen={isSketchModalOpen}
+        onClose={() => setIsSketchModalOpen(false)}
+        onLoadModel={(assetUrl) => handleLoadAssembledGlb(assetUrl)}
+        token={token || ""}
+        apiBase={apiBase}
       />
     </div>
   );

@@ -25,6 +25,7 @@ import {
   ArrowRight,
   MousePointer,
   Check,
+  Pencil,
 } from "lucide-react";
 import { ExportFormat } from "@/types/mcp";
 
@@ -60,6 +61,7 @@ export interface CadChatPanelProps {
   token?: string;
   onOpenKeyModal?: () => void;
   onResetRotation?: () => void;
+  onOpenSketchModal?: () => void;
 }
 
 export const STARTER_PROMPTS = [
@@ -83,6 +85,7 @@ export function CadChatPanel({
   isLoading = false,
   token = "",
   onOpenKeyModal,
+  onOpenSketchModal,
 }: CadChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
@@ -518,11 +521,22 @@ export function CadChatPanel({
         </div>
 
         <div className="flex items-center justify-between text-[10px] text-[#71717a]">
+          <div className="flex items-center space-x-1.5">
+            <button
+              type="button"
+              onClick={onOpenSketchModal}
+              className="flex items-center space-x-1 px-2 py-0.5 rounded bg-[#202024] hover:bg-[#ea580c]/20 hover:text-[#ea580c] border border-[#27272a] hover:border-[#ea580c]/40 text-[#a1a1aa] transition-colors"
+              title="Draw or Upload Hand-Drawn Sketch to 3D Model"
+            >
+              <Pencil className="w-3 h-3 text-[#ea580c]" />
+              <span>Sketch to 3D</span>
+            </button>
+            <span className="hidden sm:inline">
+              Press <kbd className="px-1 py-0.2 bg-[#202024] border border-[#27272a] rounded text-[#a1a1aa]">Enter</kbd> to send
+            </span>
+          </div>
           <span>
-            Press <kbd className="px-1 py-0.2 bg-[#202024] border border-[#27272a] rounded text-[#a1a1aa]">Enter</kbd> to send, <kbd className="px-1 py-0.2 bg-[#202024] border border-[#27272a] rounded text-[#a1a1aa]">Shift+Enter</kbd> for newline
-          </span>
-          <span>
-            Universal Search: <kbd className="px-1 py-0.2 bg-[#202024] border border-[#27272a] rounded text-[#ea580c]">Ctrl+K</kbd>
+            Search: <kbd className="px-1 py-0.2 bg-[#202024] border border-[#27272a] rounded text-[#ea580c]">Ctrl+K</kbd>
           </span>
         </div>
       </div>

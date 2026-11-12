@@ -41,6 +41,7 @@ import {
   ShieldCheck,
   Search,
   MessageSquareCode,
+  Pencil,
 } from "lucide-react";
 
 export type InteractionMode = "object" | "edit" | "sculpt" | "paint" | "weight";
@@ -139,6 +140,7 @@ export interface BlenderTopBarProps {
   isChatOpen?: boolean;
   onToggleChat?: () => void;
   onOpenSearch?: () => void;
+  onOpenSketchModal?: () => void;
 }
 
 export function BlenderTopBar({
@@ -217,6 +219,7 @@ export function BlenderTopBar({
   isChatOpen = false,
   onToggleChat,
   onOpenSearch,
+  onOpenSketchModal,
 }: BlenderTopBarProps) {
   const { theme, setTheme } = useTheme();
 
@@ -416,6 +419,18 @@ export function BlenderTopBar({
           <Search className="w-3 h-3 text-[#ea580c]" />
           <span>Search anything...</span>
           <kbd className="bg-[#27272a] px-1 py-0.2 rounded text-[9px] text-[#71717a]">Ctrl+K</kbd>
+        </button>
+
+        {/* Hand-Drawn Sketch to 3D Trigger */}
+        <button
+          type="button"
+          onClick={onOpenSketchModal}
+          title="Hand-Drawn Sketch to 3D Model [Alt+S]"
+          className="hidden md:flex items-center space-x-1.5 px-2 py-0.5 bg-[#ea580c]/15 hover:bg-[#ea580c]/25 border border-[#ea580c]/40 hover:border-[#ea580c] rounded text-[#ea580c] hover:text-white text-[10px] font-mono transition-colors"
+        >
+          <Pencil className="w-3 h-3 text-[#ea580c]" />
+          <span>Sketch to 3D</span>
+          <kbd className="bg-[#27272a] px-1 py-0.2 rounded text-[9px] text-[#a1a1aa]">Alt+S</kbd>
         </button>
       </div>
 

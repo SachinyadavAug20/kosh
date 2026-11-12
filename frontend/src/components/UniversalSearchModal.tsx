@@ -23,6 +23,7 @@ import {
   Maximize2,
   Compass,
   Palette,
+  Pencil,
 } from "lucide-react";
 
 export interface UniversalSearchItem {
@@ -49,6 +50,7 @@ interface UniversalSearchModalProps {
   onExport?: (format: "glb" | "stl" | "obj") => void;
   meshList?: Array<{ name: string; triangles?: number; vertices?: number }>;
   selectedMeshName?: string | null;
+  onOpenSketchModal?: () => void;
 }
 
 export const POPULAR_PIECE_PRESETS = [
@@ -78,6 +80,7 @@ export function UniversalSearchModal({
   onExport,
   meshList = [],
   selectedMeshName,
+  onOpenSketchModal,
 }: UniversalSearchModalProps) {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -157,6 +160,19 @@ export function UniversalSearchModal({
     });
 
     // 4. Viewport Actions & Quick Align
+    list.push({
+      id: "act_sketch_to_3d",
+      title: "Hand-Drawn Sketch to 3D Model",
+      category: "action",
+      subtitle: "Draw on canvas or upload image to reconstruct watertight 3D CAD solid",
+      shortcut: "Alt+S",
+      icon: <Pencil className="w-4 h-4 text-[#ea580c]" />,
+      onSelect: () => {
+        onOpenSketchModal?.();
+        onClose();
+      },
+    });
+
     list.push({
       id: "act_drop_floor",
       title: "Drop to Floor (Ground Plane Y=0)",
