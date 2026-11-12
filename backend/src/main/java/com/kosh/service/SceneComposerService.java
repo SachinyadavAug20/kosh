@@ -18,6 +18,7 @@ public class SceneComposerService {
 
     private final BlenderExecutionService blenderExecutionService;
     private final McpSceneStateService sceneStateService;
+    private final OnlineModelService onlineModelService;
 
     @Data
     @Builder
@@ -43,9 +44,11 @@ public class SceneComposerService {
     }
 
     public SceneComposerService(BlenderExecutionService blenderExecutionService,
-                                McpSceneStateService sceneStateService) {
+                                McpSceneStateService sceneStateService,
+                                @org.springframework.context.annotation.Lazy OnlineModelService onlineModelService) {
         this.blenderExecutionService = blenderExecutionService;
         this.sceneStateService = sceneStateService;
+        this.onlineModelService = onlineModelService;
     }
 
     /**
@@ -256,35 +259,41 @@ public class SceneComposerService {
                     .build();
         }
 
-        // Generic compound fallback: Subject + Base Pedestal + Prop
-        steps.add("Decomposed prompt into primary subject and environmental pedestal");
+        // Online 3D Base Model Matching
+        OnlineModelService.OnlineModelEntry best = onlineModelService != null ? onlineModelService.findBestMatch(prompt) : null;
+        String subjectName = best != null ? best.getName().replace(" ", "_") : "Custom_Asset";
+        String sourceDesc = best != null ? (best.getName() + " (" + best.getCategory() + ")") : "Parametric Solid Engine";
+
+        steps.add("Discovered ready-made 3D base model from online repository: " + (best != null ? best.getName() : "Adaptive Base"));
+        steps.add("Extracting user prompt styling, PBR shaders, and scale anchoring");
+
         pieces.add(ScenePiece.builder()
-                .name("Scene_Subject")
+                .name(subjectName)
                 .role("subject")
-                .source("Parametric Solid Engine")
-                .position(new double[]{0.0, 0.0, 0.6})
+                .source(sourceDesc)
+                .position(new double[]{0.0, 0.0, 0.0})
                 .rotation(new double[]{0.0, 0.0, 0.0})
                 .scale(new double[]{1.0, 1.0, 1.0})
                 .materialColor("#ea580c")
-                .roughness(0.4)
-                .metalness(0.3)
+                .roughness(0.35)
+                .metalness(0.25)
                 .build());
 
         pieces.add(ScenePiece.builder()
-                .name("Display_Pedestal")
+                .name("Studio_Ground_Plane")
                 .role("environment")
                 .source("Studio Datum Base")
                 .position(new double[]{0.0, 0.0, 0.0})
                 .rotation(new double[]{0.0, 0.0, 0.0})
-                .scale(new double[]{2.0, 2.0, 0.15})
-                .materialColor("#27272a")
-                .roughness(0.8)
-                .metalness(0.1)
+                .scale(new double[]{2.2, 2.2, 0.04})
+                .materialColor("#1e1e24")
+                .roughness(0.9)
+                .metalness(0.05)
                 .build());
 
         return AssemblyPlan.builder()
                 .prompt(prompt)
-                .sceneName("Parametric_Scene_Assembly")
+                .sceneName(best != null ? (best.getId() + "_Adapted") : "Adaptive_Scene_Assembly")
                 .pieces(pieces)
                 .executionSteps(steps)
                 .build();
@@ -510,18 +519,80 @@ public class SceneComposerService {
                 sword.data.materials.append(create_mat("BladeSteel", "#cbd5e1", 0.15, 0.95))
                 """);
         } else {
-            // General multi-object assembly
-            sb.append("""
-                bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=1.8, depth=0.2, location=(0, 0, 0.1))
-                ped = bpy.context.active_object
-                ped.name = "Display_Pedestal"
-                ped.data.materials.append(create_mat("PedestalDark", "#27272a", 0.7, 0.1))
+            // Online 3D Base Model Retrieval & Dynamic Adaptation
+            OnlineModelService.OnlineModelEntry best = onlineModelService != null ? onlineModelService.findBestMatch(prompt) : null;
+            String modelKey = best != null ? best.getId() : "base_duck";
+            java.nio.file.Path modelPath = onlineModelService != null ? onlineModelService.downloadModel(modelKey) : null;
+            String glbPathStr = modelPath != null ? modelPath.toAbsolutePath().toString().replace("\\", "/") : "";
 
-                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 0.7))
-                subj = bpy.context.active_object
-                subj.name = "Scene_Subject"
-                subj.data.materials.append(create_mat("AccentOrange", "#ea580c", 0.35, 0.25))
-                """);
+            // Parse color and material intent from user prompt
+            String lowerPrompt = prompt.toLowerCase(Locale.ROOT);
+            String tintColor = "#ea580c";
+            boolean hasTint = false;
+            double roughness = 0.35;
+            double metalness = 0.15;
+
+            if (lowerPrompt.contains("red")) { tintColor = "#ef4444"; hasTint = true; }
+            else if (lowerPrompt.contains("blue")) { tintColor = "#3b82f6"; hasTint = true; }
+            else if (lowerPrompt.contains("green")) { tintColor = "#10b981"; hasTint = true; }
+            else if (lowerPrompt.contains("gold") || lowerPrompt.contains("yellow")) { tintColor = "#f59e0b"; hasTint = true; metalness = 0.85; roughness = 0.25; }
+            else if (lowerPrompt.contains("chrome") || lowerPrompt.contains("silver")) { tintColor = "#cbd5e1"; hasTint = true; metalness = 0.95; roughness = 0.1; }
+            else if (lowerPrompt.contains("black") || lowerPrompt.contains("dark")) { tintColor = "#18181b"; hasTint = true; roughness = 0.5; }
+            else if (lowerPrompt.contains("white")) { tintColor = "#f4f4f5"; hasTint = true; roughness = 0.3; }
+            else if (lowerPrompt.contains("cyan") || lowerPrompt.contains("neon")) { tintColor = "#06b6d4"; hasTint = true; }
+
+            if (lowerPrompt.contains("metallic") || lowerPrompt.contains("metal")) { metalness = 0.9; }
+            if (lowerPrompt.contains("rough") || lowerPrompt.contains("matte")) { roughness = 0.85; }
+
+            String modelLabel = best != null ? best.getName() : "Base_Model";
+
+            sb.append(String.format("""
+                # -------------------------------------------------------------
+                # Online Base Model Import & Normalization: %s
+                # -------------------------------------------------------------
+                import os
+                base_path = "%s"
+                if os.path.exists(base_path):
+                    bpy.ops.import_scene.gltf(filepath=base_path)
+                else:
+                    bpy.ops.mesh.primitive_cylinder_add(radius=1.0, depth=1.5, location=(0,0,0.75))
+
+                # Normalize geometry scale to ~2.0m height and anchor to ground (Z=0)
+                imported_meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+                if imported_meshes:
+                    all_min_z = min([o.matrix_world.translation.z - o.dimensions.z / 2.0 for o in imported_meshes])
+                    max_dim = max([max(o.dimensions.x, o.dimensions.y, o.dimensions.z) for o in imported_meshes])
+                    if max_dim > 0:
+                        norm_scale = 2.0 / max_dim
+                        for o in imported_meshes:
+                            o.scale *= norm_scale
+                    for o in imported_meshes:
+                        o.location.z -= all_min_z * (norm_scale if max_dim > 0 else 1.0)
+                        bpy.context.view_layer.objects.active = o
+                        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+
+                # Ground Contact Shadow Catcher Datum
+                bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=2.2, depth=0.04, location=(0, 0, -0.02))
+                floor_datum = bpy.context.active_object
+                floor_datum.name = "Studio_Ground_Plane"
+                floor_datum.data.materials.append(create_mat("StudioGround", "#1e1e24", 0.9, 0.05))
+
+                # PBR Material Adaptation
+                %s
+                """,
+                modelLabel,
+                glbPathStr,
+                hasTint ? String.format("""
+                tint_mat = create_mat("AdaptivePBR_%s", "%s", %f, %f)
+                for o in imported_meshes:
+                    if o.name != "Studio_Ground_Plane":
+                        if len(o.data.materials) == 0:
+                            o.data.materials.append(tint_mat)
+                        else:
+                            for slot_idx in range(len(o.data.materials)):
+                                o.data.materials[slot_idx] = tint_mat
+                """, modelKey, tintColor, roughness, metalness) : "# Retaining authentic base model PBR textures and shading"
+            ));
         }
 
         // Export Block

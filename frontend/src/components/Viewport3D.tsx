@@ -27,7 +27,7 @@ import {
 import { BlenderLeftToolbar } from "./BlenderLeftToolbar";
 import { BlenderNPanel } from "./BlenderNPanel";
 import { BlenderTimeline } from "./BlenderTimeline";
-import { BlenderWorkspace, WorkspacePreset, LeafNode } from "./BlenderWorkspace";
+import { BlenderWorkspace, WorkspacePreset, LeafNode, BlenderWorkspaceHandle } from "./BlenderWorkspace";
 import { OutlinerEditor, PropertiesEditor, ScriptingEditor, DirectorEditor, McpConsoleEditor, TransformValues } from "./BlenderEditors";
 import { AspectRatioFramer, FramingMode } from "./narrative/AspectRatioFramer";
 import {
@@ -419,6 +419,7 @@ export function Viewport3D({
   const [isChatOpen, setIsChatOpen] = useState<boolean>(true);
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [isSketchModalOpen, setIsSketchModalOpen] = useState<boolean>(false);
+  const workspaceRef = useRef<BlenderWorkspaceHandle>(null);
   const [lockedMeshes, setLockedMeshes] = useState<Set<string>>(new Set());
   const [transformOrientation, setTransformOrientation] = useState<TransformOrientation>("global");
   const [pivotPoint, setPivotPoint] = useState<PivotPoint>("median");
@@ -3484,10 +3485,11 @@ export function Viewport3D({
         return;
       }
 
-      // CAD Copilot Chat Panel Toggle (Ctrl + L / Cmd + L)
+      // Kosh Assistant Panel Toggle (Ctrl + L / Cmd + L)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "l") {
         e.preventDefault();
-        setIsChatOpen((prev) => !prev);
+        setIsChatOpen(true);
+        workspaceRef.current?.switchToEditor("chat");
         return;
       }
 
@@ -3961,10 +3963,11 @@ export function Viewport3D({
         return;
       }
 
-      // N -> Toggle N-Panel Right Properties Strip
+      // N -> Toggle / Focus DCC Inspector Properties
       if (e.key.toLowerCase() === "n" && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
         setIsNOpen((prev) => !prev);
+        workspaceRef.current?.switchToEditor("properties");
         return;
       }
 
@@ -5066,7 +5069,10 @@ export function Viewport3D({
         isTOpen={isTOpen}
         onToggleTPanel={() => setIsTOpen(!isTOpen)}
         isNOpen={isNOpen}
-        onToggleNPanel={() => setIsNOpen(!isNOpen)}
+        onToggleNPanel={() => {
+          workspaceRef.current?.switchToEditor("properties");
+          setIsNOpen((prev) => !prev);
+        }}
         onOpenShortcuts={onOpenShortcuts || (() => {})}
         onOpenPasteBpy={onOpenPasteBpy || (() => {})}
         onOpenShare={onOpenShare || (() => {})}
@@ -5129,7 +5135,10 @@ export function Viewport3D({
         generationMode={generationMode}
         onToggleGenerationMode={handleToggleGenerationMode}
         isChatOpen={isChatOpen}
-        onToggleChat={() => setIsChatOpen(!isChatOpen)}
+        onToggleChat={() => {
+          workspaceRef.current?.switchToEditor("chat");
+          setIsChatOpen(true);
+        }}
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenSketchModal={() => setIsSketchModalOpen(true)}
       />
@@ -5145,6 +5154,7 @@ export function Viewport3D({
       {/* 2. Blender Modular Dockable Window System (Split-Pane Binary Tree Engine) */}
       <div className="flex-1 flex min-h-0 min-w-0 w-full h-full relative overflow-hidden">
         <BlenderWorkspace
+          ref={workspaceRef}
           preset={workspacePreset}
           onPresetChange={setWorkspacePreset}
           onCameraPreset={setCameraPreset}
@@ -5813,25 +5823,6 @@ export function Viewport3D({
                       )}
 
                     </div>
-
-                    {/* Dedicated CAD Copilot Chat Panel (VS Code Style) */}
-                    <CadChatPanel
-                      isOpen={isChatOpen}
-                      onToggleOpen={() => setIsChatOpen(!isChatOpen)}
-                      onAssembleScene={handleAssembleScene}
-                      onExecuteTool={(tool, args) => onExecuteTool?.(tool, { format: "glb", ...args } as any)}
-                      onSelectMesh={(name) => selectMeshByName(name)}
-                      onUpdateSelectedMaterial={handleUpdateSelectedMaterial}
-                      meshList={meshList}
-                      selectedMeshName={selectedMesh?.name || null}
-                      onPlaceOnFloor={handlePlaceOnFloor}
-                      onExport={handleExportDirect}
-                      isLoading={isLoadingModel || isLoading}
-                      token={token}
-                      onOpenKeyModal={() => setIsKeyModalOpen(true)}
-                      onResetRotation={handleResetRotation}
-                      onOpenSketchModal={() => setIsSketchModalOpen(true)}
-                    />
 
                     {/* N-Panel Right Properties Strip (Drawer collapsible with N) */}
                     <BlenderNPanel

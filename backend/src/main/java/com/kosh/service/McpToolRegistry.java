@@ -29,6 +29,9 @@ public class McpToolRegistry {
             "cad_render_frame",
             "blender_render_frame",
             "mcp_check_tool",
+            // Online Models & Asset Catalog (Instant base geometry search and caching)
+            "cad_search_online_models",
+            "cad_download_online_model",
             // Advanced Engineering & CAD Operations (Top M8ven Capabilities)
             "cad_measure_dimensions",
             "cad_hollow_shell",
@@ -94,18 +97,21 @@ public class McpToolRegistry {
     private final ScriptSanitizer scriptSanitizer;
     private final McpSceneStateService mcpSceneStateService;
     private final SceneComposerService sceneComposerService;
+    private final OnlineModelService onlineModelService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public McpToolRegistry(GoogleGeminiClient googleGeminiClient,
                            BlenderExecutionService blenderExecutionService,
                            ScriptSanitizer scriptSanitizer,
                            McpSceneStateService mcpSceneStateService,
-                           SceneComposerService sceneComposerService) {
+                           SceneComposerService sceneComposerService,
+                           @org.springframework.context.annotation.Lazy OnlineModelService onlineModelService) {
         this.googleGeminiClient = googleGeminiClient;
         this.blenderExecutionService = blenderExecutionService;
         this.scriptSanitizer = scriptSanitizer;
         this.mcpSceneStateService = mcpSceneStateService;
         this.sceneComposerService = sceneComposerService;
+        this.onlineModelService = onlineModelService;
     }
 
     private void attachHints(Map<String, Object> tool, boolean readOnly, boolean destructive, boolean idempotent, boolean openWorld) {
@@ -312,6 +318,57 @@ public class McpToolRegistry {
                 "required", List.of("identifier")
         ));
         tools.add(checkTool);
+
+        // 5f. cad_search_online_models (instant base geometry search from online catalog)
+        Map<String, Object> searchOnlineTool = new LinkedHashMap<>();
+        searchOnlineTool.put("name", "cad_search_online_models");
+        searchOnlineTool.put("description", "Searches the curated open catalog of 3D models (Khronos Sample Models, NASA, robotics, vehicles, props, creatures) for ready-made downloadable base geometry matching user queries.");
+        attachHints(searchOnlineTool, true, false, true, true);
+        searchOnlineTool.put("inputSchema", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "query", Map.of(
+                                "type", "string",
+                                "description", "Search query keywords (e.g. 'car', 'astronaut', 'duck', 'guitar', 'helmet', 'robot', 'tree', 'table')"
+                        ),
+                        "category", Map.of(
+                                "type", "string",
+                                "description", "Optional category filter: Vehicles, Animals, Characters, SciFi, Mechanical, Props, Furniture, Architecture, Electronics, Medical, Organic"
+                        ),
+                        "limit", Map.of(
+                                "type", "integer",
+                                "description", "Maximum results to return (default: 10, max: 50)"
+                        )
+                ),
+                "required", List.of("query")
+        ));
+        tools.add(searchOnlineTool);
+
+        // 5g. cad_download_online_model (downloads and caches base 3D models with optional procedural adaptation)
+        Map<String, Object> downloadOnlineTool = new LinkedHashMap<>();
+        downloadOnlineTool.put("name", "cad_download_online_model");
+        downloadOnlineTool.put("description", "Downloads and caches a 3D model (GLB) from the online catalog or direct URL, with optional procedural modifications (e.g. bevels, gold material, hollow shell).");
+        attachHints(downloadOnlineTool, false, false, true, false);
+        downloadOnlineTool.put("inputSchema", Map.of(
+                "type", "object",
+                "properties", Map.of(
+                        "modelId", Map.of(
+                                "type", "string",
+                                "description", "Model identifier from catalog (e.g. 'base_duck', 'base_buggy', 'base_guitar') or direct http/https GLB URL"
+                        ),
+                        "prompt", Map.of(
+                                "type", "string",
+                                "description", "Optional modification instructions to adapt the downloaded base model (e.g. 'Add gold finish with bevels')"
+                        ),
+                        "format", Map.of(
+                                "type", "string",
+                                "enum", List.of("glb", "stl", "obj"),
+                                "description", "Target export format (default: glb)"
+                        )
+                ),
+                "required", List.of("modelId")
+        ));
+        tools.add(downloadOnlineTool);
 
         // 6. cad_assemble_kit (instant pre-baked kitbashing assembly, zero LLM latency)
         Map<String, Object> kitTool = new LinkedHashMap<>();
@@ -1040,6 +1097,148 @@ public class McpToolRegistry {
                     .stdout(jsonOutput)
                     .telemetry(trustData)
                     .executionTimeMs(45)
+                    .build();
+        }
+
+        // Special handling for cad_search_online_models: queries online 3D catalog
+        if ("cad_search_online_models".equals(normalizedName)) {
+            if (progressListener != null && progressToken != null) {
+                progressListener.onProgress(progressToken, 0.5, 1.0, "Searching online 3D model catalog");
+            }
+            String query = arguments != null && arguments.containsKey("query") && arguments.get("query") != null
+                    ? arguments.get("query").toString() : "";
+            String category = arguments != null && arguments.containsKey("category") && arguments.get("category") != null
+                    ? arguments.get("category").toString() : null;
+            int limit = 10;
+            if (arguments != null && arguments.containsKey("limit") && arguments.get("limit") instanceof Number num) {
+                limit = Math.min(50, Math.max(1, num.intValue()));
+            }
+
+            List<OnlineModelService.OnlineModelEntry> results = (onlineModelService != null)
+                    ? onlineModelService.search(query) : List.of();
+            if (category != null && !category.isBlank()) {
+                String catLower = category.trim().toLowerCase(Locale.ROOT);
+                results = results.stream()
+                        .filter(e -> e.getCategory() != null && e.getCategory().toLowerCase(Locale.ROOT).contains(catLower))
+                        .toList();
+            }
+            if (results.size() > limit) {
+                results = results.subList(0, limit);
+            }
+
+            Map<String, Object> outputData = new LinkedHashMap<>();
+            outputData.put("query", query);
+            outputData.put("count", results.size());
+            outputData.put("results", results);
+            String jsonOutput = toJson(outputData);
+
+            if (progressListener != null && progressToken != null) {
+                progressListener.onProgress(progressToken, 1.0, 1.0, "Search complete");
+            }
+
+            return ToolExecutionDto.Result.builder()
+                    .success(true)
+                    .toolName("cad_search_online_models")
+                    .assetName("online_models_search.json")
+                    .format("json")
+                    .stdout(jsonOutput)
+                    .telemetry(outputData)
+                    .executionTimeMs(10)
+                    .build();
+        }
+
+        // Special handling for cad_download_online_model: downloads/caches model and optionally applies adaptation
+        if ("cad_download_online_model".equals(normalizedName)) {
+            if (progressListener != null && progressToken != null) {
+                progressListener.onProgress(progressToken, 0.3, 1.0, "Downloading and caching online 3D model");
+            }
+            String modelId = arguments != null && arguments.containsKey("modelId") && arguments.get("modelId") != null
+                    ? arguments.get("modelId").toString()
+                    : (arguments != null && arguments.containsKey("url") && arguments.get("url") != null
+                    ? arguments.get("url").toString() : "base_duck");
+            String modPrompt = arguments != null && arguments.containsKey("prompt") && arguments.get("prompt") != null
+                    ? arguments.get("prompt").toString() : null;
+            String targetFormat = arguments != null && arguments.containsKey("format") && arguments.get("format") != null
+                    ? arguments.get("format").toString() : "glb";
+
+            if (onlineModelService == null) {
+                return ToolExecutionDto.Result.builder()
+                        .success(false)
+                        .toolName("cad_download_online_model")
+                        .errorMessage("OnlineModelService is not available")
+                        .build();
+            }
+
+            java.nio.file.Path cachedGlb = onlineModelService.downloadModel(modelId);
+            if (cachedGlb == null || !java.nio.file.Files.exists(cachedGlb)) {
+                return ToolExecutionDto.Result.builder()
+                        .success(false)
+                        .toolName("cad_download_online_model")
+                        .errorMessage("Failed to download or locate model: " + modelId)
+                        .build();
+            }
+
+            // If a modification prompt is provided, adapt it via BlenderExecutionService
+            if (modPrompt != null && !modPrompt.isBlank()) {
+                if (progressListener != null && progressToken != null) {
+                    progressListener.onProgress(progressToken, 0.6, 1.0, "Applying CAD adaptations to base model");
+                }
+                String adaptationScript = onlineModelService.buildAdaptationScript(cachedGlb, modPrompt, targetFormat);
+                BlenderExecutionService.BlenderRunResult runResult = blenderExecutionService.executeScript(adaptationScript, targetFormat);
+                if (progressListener != null && progressToken != null) {
+                    progressListener.onProgress(progressToken, 1.0, 1.0, "Model adaptation complete");
+                }
+                return ToolExecutionDto.Result.builder()
+                        .success(runResult.isSuccess())
+                        .toolName("cad_download_online_model")
+                        .assetId(runResult.getAssetId())
+                        .assetName(runResult.getAssetFileName())
+                        .assetUrl(runResult.isSuccess() ? "/api/assets/" + runResult.getAssetFileName() : null)
+                        .snapshotUrl(runResult.isSuccess() ? runResult.getSnapshotUrl() : null)
+                        .telemetry(runResult.getTelemetry())
+                        .format(runResult.getFormat() != null ? runResult.getFormat() : targetFormat)
+                        .sizeBytes(runResult.getSizeBytes())
+                        .script(adaptationScript)
+                        .stdout(runResult.getStdout())
+                        .stderr(runResult.getStderr())
+                        .executionTimeMs(runResult.getExecutionTimeMs())
+                        .errorMessage(runResult.getErrorMessage())
+                        .build();
+            }
+
+            // Otherwise, copy cached model to storage assets if needed and return asset
+            String assetName = cachedGlb.getFileName().toString();
+            long sizeBytes = 0;
+            try {
+                sizeBytes = java.nio.file.Files.size(cachedGlb);
+                java.nio.file.Path storageTarget = blenderExecutionService.getStoragePath().resolve(assetName);
+                if (!java.nio.file.Files.exists(storageTarget)) {
+                    java.nio.file.Files.copy(cachedGlb, storageTarget, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+            } catch (Exception e) {
+                log.warn("Could not copy cached model to storage: {}", e.getMessage());
+            }
+
+            if (progressListener != null && progressToken != null) {
+                progressListener.onProgress(progressToken, 1.0, 1.0, "Download and cache complete");
+            }
+
+            Map<String, Object> telemetry = new LinkedHashMap<>();
+            telemetry.put("modelId", modelId);
+            telemetry.put("assetName", assetName);
+            telemetry.put("sizeBytes", sizeBytes);
+            telemetry.put("format", targetFormat);
+            telemetry.put("status", "CACHED_READY");
+
+            return ToolExecutionDto.Result.builder()
+                    .success(true)
+                    .toolName("cad_download_online_model")
+                    .assetName(assetName)
+                    .format(targetFormat)
+                    .sizeBytes(sizeBytes)
+                    .stdout(toJson(telemetry))
+                    .telemetry(telemetry)
+                    .executionTimeMs(35)
                     .build();
         }
 

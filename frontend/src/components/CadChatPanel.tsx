@@ -64,11 +64,61 @@ export interface CadChatPanelProps {
   onOpenSketchModal?: () => void;
 }
 
+export interface StarterCard {
+  category: string;
+  label: string;
+  prompt: string;
+  desc: string;
+}
+
+export const STARTER_CARDS: StarterCard[] = [
+  {
+    category: "Vehicles",
+    label: "Red Sports Car",
+    prompt: "A red sports car with aerodynamic spoiler",
+    desc: "Aerodynamic coupe, spoiler, alloy wheels",
+  },
+  {
+    category: "Sci-Fi",
+    label: "Combat Battle Helmet",
+    prompt: "Sci-Fi combat battle helmet",
+    desc: "Tactical armor plating with tinted visor",
+  },
+  {
+    category: "Composites",
+    label: "Man on Moon with Guitar",
+    prompt: "A man on the moon with guitar",
+    desc: "Multi-part scene with lunar terrain",
+  },
+  {
+    category: "Mechanical",
+    label: "Antique Camera",
+    prompt: "Vintage mechanical rangefinder camera",
+    desc: "Tactile brass dials and optical lens",
+  },
+  {
+    category: "Creatures",
+    label: "Low-Poly Fox",
+    prompt: "Low-poly stylized red fox",
+    desc: "Stylized low-poly polygon creature mesh",
+  },
+  {
+    category: "Props",
+    label: "Camping Lantern",
+    prompt: "Vintage brass camping lantern",
+    desc: "Vintage brass frame and glass lamp",
+  },
+];
+
 export const STARTER_PROMPTS = [
+  { label: "Red Sports Car", prompt: "A red sports car with aerodynamic spoiler" },
+  { label: "Sci-Fi Helmet", prompt: "Sci-Fi combat battle helmet" },
   { label: "Man on Moon with Guitar", prompt: "A man on the moon with guitar" },
-  { label: "Cyberpunk Car with Spoiler", prompt: "A sleek cyberpunk sports car with rear spoiler and neon headlights" },
-  { label: "Robot Warrior with Sword", prompt: "A humanoid combat robot warrior with titanium broadsword" },
-  { label: "Tavern Table with Mug", prompt: "A rustic oak dining table with beer mug and tallow candle" },
+  { label: "Antique Camera", prompt: "Vintage mechanical rangefinder camera" },
+  { label: "Low-Poly Fox", prompt: "Low-poly stylized red fox" },
+  { label: "Camping Lantern", prompt: "Vintage brass camping lantern" },
+  { label: "Water Bottle", prompt: "Stainless steel water bottle" },
+  { label: "Acoustic Guitar", prompt: "Acoustic classical guitar with soundboard" },
 ];
 
 export function CadChatPanel({
@@ -92,20 +142,21 @@ export function CadChatPanel({
       id: "welcome",
       role: "assistant",
       content:
-        "Welcome to Kosh CAD Copilot. Describe any 3D model, character, or scene. Rather than constructing from scratch, I search online repositories, retrieve verified watertight 3D pieces (characters, environments, props), and assemble them in headless Blender.",
+        "Welcome to Kosh Assistant. Describe any 3D model, vehicle, character, or composite scene. I retrieve verified watertight 3D models online, adapt geometry and PBR materials, and assemble them directly in Blender.",
       timestamp: "Just now",
       quickActions: [
+        "A red sports car",
+        "Sci-Fi combat battle helmet",
         "A man on the moon with guitar",
-        "A cyberpunk car with spoiler",
-        "A robot warrior with sword",
-        "A tavern table with mug",
+        "Vintage mechanical rangefinder camera",
+        "Low-poly stylized red fox",
+        "Vintage brass camping lantern",
       ],
     },
   ]);
 
   const [inputPrompt, setInputPrompt] = useState("");
   const [format, setFormat] = useState<ExportFormat>("glb");
-  const [mode, setMode] = useState<"assemble" | "ai_bpy" | "procedural">("assemble");
   const [collapsedSteps, setCollapsedSteps] = useState<Record<string, boolean>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -273,10 +324,12 @@ export function CadChatPanel({
         content: "Chat cleared. What 3D model would you like to search, download, or assemble next?",
         timestamp: "Just now",
         quickActions: [
+          "A red sports car",
+          "Sci-Fi combat battle helmet",
           "A man on the moon with guitar",
-          "A cyberpunk car with spoiler",
-          "A robot warrior with sword",
-          "A tavern table with mug",
+          "Vintage mechanical rangefinder camera",
+          "Low-poly stylized red fox",
+          "Vintage brass camping lantern",
         ],
       },
     ]);
@@ -285,21 +338,38 @@ export function CadChatPanel({
   if (!isOpen) return null;
 
   return (
-    <aside className="w-96 sm:w-[420px] h-full flex flex-col bg-[#141416] border-l border-[#27272a] shadow-2xl z-30 font-mono text-xs select-none shrink-0">
-      {/* Top Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#27272a] bg-[#18181b]">
+    <div className="w-full h-full flex flex-col bg-[#141416] font-mono text-xs select-none min-h-0 min-w-0 overflow-hidden">
+      {/* Sub Header Toolbar */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-[#27272a] bg-[#18181b]/90 shrink-0">
         <div className="flex items-center space-x-2">
-          <MessageSquare className="w-4 h-4 text-[#ea580c]" />
-          <span className="font-bold text-[#f4f4f5] tracking-wide uppercase text-[11px]">
-            CAD Copilot
-          </span>
-          <span className="flex items-center space-x-1 px-1.5 py-0.2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Ready</span>
-          </span>
+          <Sparkles className="w-4 h-4 text-[#ea580c]" />
+          <div className="flex items-center space-x-1.5">
+            <span className="font-bold text-[#f4f4f5] tracking-wide text-xs">
+              Kosh Assistant
+            </span>
+            <span className="flex items-center space-x-1 px-1.5 py-0.2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded text-[9px] font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Ready</span>
+            </span>
+          </div>
         </div>
 
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center space-x-1.5">
+          {/* Format Selector */}
+          <div className="flex items-center space-x-1 bg-[#202024] border border-[#27272a] rounded px-1.5 py-0.5">
+            <span className="text-[9px] text-[#71717a] uppercase font-bold">Fmt:</span>
+            <select
+              value={format}
+              onChange={(e) => setFormat(e.target.value as ExportFormat)}
+              title="Export Format (.GLB, .STL, .OBJ)"
+              className="bg-transparent text-[10px] text-[#f4f4f5] focus:outline-none uppercase font-mono cursor-pointer"
+            >
+              <option value="glb" className="bg-[#18181b]">.GLB</option>
+              <option value="stl" className="bg-[#18181b]">.STL</option>
+              <option value="obj" className="bg-[#18181b]">.OBJ</option>
+            </select>
+          </div>
+
           <button
             type="button"
             onClick={handleClearChat}
@@ -308,59 +378,58 @@ export function CadChatPanel({
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
-          <button
-            type="button"
-            onClick={onToggleOpen}
-            title="Close Copilot Panel (Ctrl+L)"
-            className="p-1 rounded text-[#71717a] hover:text-[#f4f4f5] hover:bg-[#27272a] transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
-      {/* Mode Selector Strip */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[#18181b]/60 border-b border-[#202024] text-[10px]">
-        <div className="flex items-center space-x-1">
-          <span className="text-[#71717a] uppercase text-[9px]">Engine:</span>
-          <button
-            type="button"
-            onClick={() => setMode("assemble")}
-            className={`px-2 py-0.5 rounded font-bold transition-all ${
-              mode === "assemble"
-                ? "bg-[#ea580c]/20 border border-[#ea580c] text-[#ea580c]"
-                : "bg-[#202024] border border-[#27272a] text-[#71717a] hover:text-[#a1a1aa]"
-            }`}
-          >
-            Search & Assemble (Pieces)
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("ai_bpy")}
-            className={`px-2 py-0.5 rounded font-bold transition-all ${
-              mode === "ai_bpy"
-                ? "bg-emerald-950/60 border border-emerald-500/70 text-emerald-300"
-                : "bg-[#202024] border border-[#27272a] text-[#71717a] hover:text-[#a1a1aa]"
-            }`}
-          >
-            AI Gemini
-          </button>
-        </div>
-
-        {/* Format Selector */}
-        <select
-          value={format}
-          onChange={(e) => setFormat(e.target.value as ExportFormat)}
-          className="bg-[#202024] border border-[#27272a] rounded px-1.5 py-0.5 text-[10px] text-[#f4f4f5] focus:outline-none uppercase font-mono"
-        >
-          <option value="glb">.GLB</option>
-          <option value="stl">.STL</option>
-          <option value="obj">.OBJ</option>
-        </select>
-      </div>
-
-      {/* Messages Scroll Area */}
+      {/* Messages & Discovery Area */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3.5 custom-scrollbar bg-[#141416]">
+        {/* If chat has only welcome message, show Discovery Starter Grid */}
+        {messages.length === 1 && messages[0].id.startsWith("welcome") && (
+          <div className="space-y-3 mb-2">
+            <div className="p-3 bg-[#18181b] border border-[#27272a] rounded-sm space-y-1.5">
+              <div className="flex items-center space-x-2">
+                <Sparkles className="w-4 h-4 text-[#ea580c]" />
+                <span className="font-bold text-[#f4f4f5] text-xs uppercase tracking-wider">
+                  Intelligent 3D Search & Assembly
+                </span>
+              </div>
+              <p className="text-[11px] text-[#a1a1aa] leading-relaxed">
+                Describe any 3D model, vehicle, or scene. Kosh queries online repositories, downloads verified watertight geometry, adapts PBR materials, and stages the assembly directly into your Blender scene.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="text-[10px] uppercase font-bold text-[#71717a] tracking-wider px-0.5">
+                Popular Assembly Presets
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {STARTER_CARDS.map((card, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleSendMessage(card.prompt)}
+                    className="p-2 rounded bg-[#18181b] hover:bg-[#202024] border border-[#27272a] hover:border-[#ea580c]/50 text-left transition-all group flex flex-col justify-between space-y-1"
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-[9px] uppercase font-bold text-[#ea580c] bg-[#ea580c]/10 px-1.5 py-0.2 rounded border border-[#ea580c]/20">
+                        {card.category}
+                      </span>
+                      <ArrowRight className="w-3 h-3 text-[#71717a] group-hover:text-[#ea580c] group-hover:translate-x-0.5 transition-all" />
+                    </div>
+                    <div className="font-bold text-[#f4f4f5] text-[11px] group-hover:text-white">
+                      {card.label}
+                    </div>
+                    <div className="text-[10px] text-[#71717a] line-clamp-1">
+                      {card.desc}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Message Stream */}
         {messages.map((msg) => {
           const isUser = msg.role === "user";
           const isStepsOpen = !collapsedSteps[msg.id];
@@ -372,14 +441,14 @@ export function CadChatPanel({
             >
               {/* Message Header */}
               <div className="flex items-center space-x-1.5 text-[10px] text-[#71717a] px-1">
-                <span>{isUser ? "You" : "CAD Copilot"}</span>
+                <span>{isUser ? "You" : "Kosh Assistant"}</span>
                 <span>•</span>
                 <span>{msg.timestamp}</span>
               </div>
 
               {/* Message Bubble */}
               <div
-                className={`max-w-[92%] rounded-md p-2.5 space-y-2 leading-relaxed text-[11px] ${
+                className={`max-w-[94%] rounded-md p-2.5 space-y-2 leading-relaxed text-[11px] ${
                   isUser
                     ? "bg-[#27272a] text-[#f4f4f5] border border-[#3f3f46]"
                     : "bg-[#18181b] text-[#e4e4e7] border border-[#27272a]"
@@ -397,7 +466,7 @@ export function CadChatPanel({
                     >
                       <span className="flex items-center space-x-1">
                         <Wand2 className="w-3 h-3 text-[#ea580c]" />
-                        <span>Execution Pipeline ({msg.steps.length} steps)</span>
+                        <span>Assembly Pipeline ({msg.steps.length} steps)</span>
                       </span>
                       {isStepsOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                     </button>
@@ -473,23 +542,8 @@ export function CadChatPanel({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Starter Suggestions Carousel */}
-      <div className="px-3 py-1.5 bg-[#18181b] border-t border-[#202024] flex items-center space-x-1.5 overflow-x-auto text-[10px] text-[#71717a]">
-        <span className="uppercase text-[9px] shrink-0 text-[#a1a1aa]">Quick:</span>
-        {STARTER_PROMPTS.map((sp, idx) => (
-          <button
-            key={idx}
-            type="button"
-            onClick={() => handleSendMessage(sp.prompt)}
-            className="px-2 py-0.5 bg-[#202024] hover:bg-[#27272a] hover:text-[#f4f4f5] rounded shrink-0 border border-[#27272a] transition-colors"
-          >
-            {sp.label}
-          </button>
-        ))}
-      </div>
-
       {/* Bottom Input Area */}
-      <div className="p-3 bg-[#18181b] border-t border-[#27272a] space-y-2">
+      <div className="p-2.5 bg-[#18181b] border-t border-[#27272a] space-y-2 shrink-0">
         <div className="relative">
           <textarea
             ref={inputRef}
@@ -502,7 +556,7 @@ export function CadChatPanel({
                 handleSendMessage();
               }
             }}
-            placeholder="Describe a model to assemble ('A man on the moon with guitar') or ask to change color, scale, or export..."
+            placeholder="Describe a 3D model to assemble ('A man on the moon with guitar', 'A red sports car')..."
             className="w-full bg-[#141416] border border-[#3f3f46] rounded p-2 pr-9 text-xs text-[#f4f4f5] placeholder-[#71717a] resize-none focus:outline-none focus:border-[#ea580c] transition-colors"
           />
           <button
@@ -540,6 +594,6 @@ export function CadChatPanel({
           </span>
         </div>
       </div>
-    </aside>
+    </div>
   );
 }

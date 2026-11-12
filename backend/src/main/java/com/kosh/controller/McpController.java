@@ -49,6 +49,9 @@ public class McpController {
     @org.springframework.beans.factory.annotation.Value("${kosh.bharatcode.api-key:}")
     private String defaultBharatCodeApiKey;
 
+    @org.springframework.beans.factory.annotation.Value("${kosh.openrouter.api-key:}")
+    private String defaultOpenRouterApiKey;
+
     public McpController(McpToolRegistry mcpToolRegistry,
                          McpResourceRegistry mcpResourceRegistry,
                          McpPromptRegistry mcpPromptRegistry,
@@ -121,13 +124,14 @@ public class McpController {
             @RequestBody McpRpcRequest request,
             @RequestHeader(value = "X-Google-Key", required = false) String googleKeyHeader,
             @RequestHeader(value = "X-Gemini-Key", required = false) String geminiKeyHeader,
+            @RequestHeader(value = "X-OpenRouter-Key", required = false) String openRouterKeyHeader,
             @RequestHeader(value = "X-BharatCode-Token", required = false) String tokenHeader,
             @RequestHeader(value = "X-BharatCode-Key", required = false) String keyHeader,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
         if (sessionId != null && activeSseSessions.containsKey(sessionId)) {
             SseEmitter emitter = activeSseSessions.get(sessionId);
-            String activeToken = resolveApiToken(googleKeyHeader, geminiKeyHeader, tokenHeader, keyHeader, authHeader);
+            String activeToken = resolveApiToken(googleKeyHeader, geminiKeyHeader, openRouterKeyHeader, tokenHeader, keyHeader, authHeader);
 
             // Execute asynchronously and stream notifications & response via SSE
             asyncWorkerPool.submit(() -> {
@@ -154,9 +158,20 @@ public class McpController {
         }
 
         // Fallback to synchronous HTTP execution if session is not active
-        String activeToken = resolveApiToken(googleKeyHeader, geminiKeyHeader, tokenHeader, keyHeader, authHeader);
+        String activeToken = resolveApiToken(googleKeyHeader, geminiKeyHeader, openRouterKeyHeader, tokenHeader, keyHeader, authHeader);
         McpRpcResponse response = processRpcRequest(request, activeToken, null);
         return ResponseEntity.ok(response);
+    }
+
+    public ResponseEntity<?> handleSseMessage(
+            String sessionId,
+            McpRpcRequest request,
+            String googleKeyHeader,
+            String geminiKeyHeader,
+            String tokenHeader,
+            String keyHeader,
+            String authHeader) {
+        return handleSseMessage(sessionId, request, googleKeyHeader, geminiKeyHeader, null, tokenHeader, keyHeader, authHeader);
     }
 
     /**
@@ -168,11 +183,12 @@ public class McpController {
             @RequestBody McpRpcRequest request,
             @RequestHeader(value = "X-Google-Key", required = false) String googleKeyHeader,
             @RequestHeader(value = "X-Gemini-Key", required = false) String geminiKeyHeader,
+            @RequestHeader(value = "X-OpenRouter-Key", required = false) String openRouterKeyHeader,
             @RequestHeader(value = "X-BharatCode-Token", required = false) String tokenHeader,
             @RequestHeader(value = "X-BharatCode-Key", required = false) String keyHeader,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
-        String activeToken = resolveApiToken(googleKeyHeader, geminiKeyHeader, tokenHeader, keyHeader, authHeader);
+        String activeToken = resolveApiToken(googleKeyHeader, geminiKeyHeader, openRouterKeyHeader, tokenHeader, keyHeader, authHeader);
 
         McpProgressListener progressListener = null;
         if (sessionId != null && activeSseSessions.containsKey(sessionId)) {
@@ -189,6 +205,17 @@ public class McpController {
 
         McpRpcResponse response = processRpcRequest(request, activeToken, progressListener);
         return ResponseEntity.ok(response);
+    }
+
+    public ResponseEntity<McpRpcResponse> handleRpcRequest(
+            String sessionId,
+            McpRpcRequest request,
+            String googleKeyHeader,
+            String geminiKeyHeader,
+            String tokenHeader,
+            String keyHeader,
+            String authHeader) {
+        return handleRpcRequest(sessionId, request, googleKeyHeader, geminiKeyHeader, null, tokenHeader, keyHeader, authHeader);
     }
 
     /**
@@ -332,8 +359,8 @@ public class McpController {
                         arguments.put("prompt", enhanceCadPrompt(rawPrompt));
                     }
 
-                    // Procedural CAD tools compile deterministic bpy geometry directly
-                    // and do not strictly require an external AI token.
+                    // Procedural and direct CAD tools compile deterministic bpy geometry directly
+                    // or query local services and do not strictly require an external AI token.
                     boolean isProceduralTool = List.of(
                             "cad_create_primitive",
                             "cad_boolean_operation",
@@ -352,30 +379,40 @@ public class McpController {
                             "cad_batch_multiview_render",
                             "cad_lattice_infill",
                             "kosh_system_health",
+                            "mcp_check_tool",
+                            "cad_search_online_models",
+                            "cad_download_online_model",
                             "cad_convex_hull",
                             "cad_separate_loose_parts",
                             "cad_project_curve_cut",
                             "cad_generate_gear",
                             "cad_uv_unwrap_auto",
                             "cad_wireframe_cage",
-                        "cad_point_cloud_surface",
-                        "cad_export_engineering_drawing",
-                        "cad_linear_array",
-                        "cad_radial_array",
-                        "cad_text_emboss",
-                        "cad_check_manifold",
-                        "scene_assembler"
-                ).contains(toolName.toLowerCase());
+                            "cad_point_cloud_surface",
+                            "cad_export_engineering_drawing",
+                            "cad_linear_array",
+                            "cad_radial_array",
+                            "cad_text_emboss",
+                            "cad_check_manifold",
+                            "export_cad_artifact",
+                            "inspect_geometry",
+                            "create_parametric_primitive",
+                            "apply_boolean_op",
+                            "scene_assembler"
+                    ).contains(toolName.toLowerCase());
 
                     boolean hasRawScript = arguments.containsKey("script") && arguments.get("script") != null && !arguments.get("script").toString().isBlank();
 
                     if (!isProceduralTool && !hasRawScript && (activeToken == null || activeToken.isBlank())) {
-                        log.warn("Unauthorized tools/call: Missing Google Gemini API key");
+                        log.warn("Unauthorized tools/call: Missing AI API key");
                         return McpRpcResponse.error(
                                 id,
                                 -32001,
-                                "Unauthorized: Missing Google Gemini API key. Provide header 'X-Google-Key', set GEMINI_API_KEY in .env, or use the UI key drawer.",
-                                Map.of("provider", "Google Gemini (Free tier from https://aistudio.google.com/app/apikey)")
+                                "Unauthorized: Missing AI API key. Provide header 'X-OpenRouter-Key' or 'X-Google-Key', set OPENROUTER_API_KEY/GEMINI_API_KEY in .env, or use the UI key drawer.",
+                                Map.of("providers", List.of(
+                                        "OpenRouter (Free tier at https://openrouter.ai)",
+                                        "Google Gemini (Free tier at https://aistudio.google.com)"
+                                ))
                         );
                     }
 
@@ -442,18 +479,27 @@ public class McpController {
         }
     }
 
-    private String resolveApiToken(String googleKey, String geminiKey, String token, String key, String auth) {
+    private String resolveApiToken(String googleKey, String geminiKey, String openRouterKey, String token, String key, String auth) {
+        if (openRouterKey != null && !openRouterKey.isBlank()) return openRouterKey.trim();
         if (googleKey != null && !googleKey.isBlank()) return googleKey.trim();
         if (geminiKey != null && !geminiKey.isBlank()) return geminiKey.trim();
         if (token != null && !token.isBlank()) return token.trim();
         if (key != null && !key.isBlank()) return key.trim();
         if (auth != null && !auth.isBlank()) return auth.replaceFirst("(?i)^Bearer\\s+", "").trim();
 
+        if (defaultOpenRouterApiKey != null && !defaultOpenRouterApiKey.isBlank()) return defaultOpenRouterApiKey.trim();
         if (defaultGeminiApiKey != null && !defaultGeminiApiKey.isBlank()) return defaultGeminiApiKey.trim();
+        if (System.getenv("OPENROUTER_API_KEY") != null && !System.getenv("OPENROUTER_API_KEY").isBlank()) {
+            return System.getenv("OPENROUTER_API_KEY").trim();
+        }
         if (System.getenv("GEMINI_API_KEY") != null && !System.getenv("GEMINI_API_KEY").isBlank()) {
             return System.getenv("GEMINI_API_KEY").trim();
         }
         return "demo";
+    }
+
+    private String resolveApiToken(String googleKey, String geminiKey, String token, String key, String auth) {
+        return resolveApiToken(googleKey, geminiKey, null, token, key, auth);
     }
 
     private String enhanceCadPrompt(String userPrompt) {

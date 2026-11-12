@@ -113,6 +113,8 @@ class McpProtocolTest {
         assertTrue(toolNames.contains("cad_point_cloud_surface"));
         assertTrue(toolNames.contains("cad_export_engineering_drawing"));
         assertTrue(toolNames.contains("cad_assemble_puzzle_pieces"));
+        assertTrue(toolNames.contains("cad_search_online_models"));
+        assertTrue(toolNames.contains("cad_download_online_model"));
     }
 
     @Test
@@ -1008,6 +1010,63 @@ class McpProtocolTest {
                 .params(Map.of(
                         "name", "cad_assemble_puzzle_pieces",
                         "arguments", Map.of("recipe", "interlocking_dovetail_plate", "toleranceMm", 0.2, "scale", 1.0)
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertNotNull(result);
+        assertEquals(false, result.get("isError"));
+    }
+
+    @Test
+    @DisplayName("MCP tools/call cad_search_online_models should return catalog search results")
+    void testSearchOnlineModelsTool() {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("search-online-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "cad_search_online_models",
+                        "arguments", Map.of("query", "car", "limit", 5)
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertNotNull(result);
+        assertEquals(false, result.get("isError"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
+        assertNotNull(content);
+        assertFalse(content.isEmpty());
+        String text = content.get(0).get("text").toString();
+        assertTrue(text.contains("car") || text.contains("results"));
+    }
+
+    @Test
+    @DisplayName("MCP tools/call cad_download_online_model should download and cache base model")
+    void testDownloadOnlineModelTool() {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("download-online-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "cad_download_online_model",
+                        "arguments", Map.of("modelId", "base_duck")
                 ))
                 .build();
 

@@ -414,7 +414,7 @@ export function BlenderTopBar({
           type="button"
           onClick={onOpenSearch}
           title="Universal Search models, tools, objects, actions [Ctrl+K]"
-          className="hidden lg:flex items-center space-x-1.5 px-2.5 py-0.5 bg-[#1c1c1f] hover:bg-[#27272a] border border-[#27272a] hover:border-[#3f3f46] rounded text-[#a1a1aa] hover:text-[#f4f4f5] text-[10px] font-mono transition-colors"
+          className="hidden sm:flex items-center space-x-1.5 px-2.5 py-0.5 bg-[#18181b] hover:bg-[#202024] border border-[#27272a] hover:border-[#ea580c]/50 rounded text-[#a1a1aa] hover:text-[#f4f4f5] text-[10px] font-mono transition-colors"
         >
           <Search className="w-3 h-3 text-[#ea580c]" />
           <span>Search anything...</span>
@@ -1117,76 +1117,36 @@ export function BlenderTopBar({
           </button>
         )}
 
-        {/* Generation Mode Pill */}
-        <button
-          type="button"
-          onClick={() => {
-            if (onToggleGenerationMode) {
-              onToggleGenerationMode(generationMode === "ai" ? "procedural" : "ai");
-            } else if (onOpenKeyModal) {
-              onOpenKeyModal();
-            } else {
-              setIsKeyDrawerOpen(!isKeyDrawerOpen);
-            }
-          }}
-          title={
-            generationMode === "ai"
-              ? "Active Mode: AI Generate (Google Gemini AI + Headless Blender). Click to switch to Procedural mode."
-              : "Active Mode: Procedural (Instant client-side parametric 3D synthesis). Click to switch to AI Generate mode."
-          }
-          className={`flex items-center space-x-1.5 px-2 py-0.5 rounded border text-[10px] font-mono transition-all ${
-            generationMode === "ai"
-              ? "border-emerald-500/70 bg-emerald-950/40 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.15)] hover:bg-emerald-900/50"
-              : "border-[#ea580c]/70 bg-[#ea580c]/15 text-[#ea580c] shadow-[0_0_10px_rgba(234,88,12,0.15)] hover:bg-[#ea580c]/25"
-          }`}
-        >
-          {generationMode === "ai" ? (
-            <>
-              <Sparkles className="w-3 h-3 text-emerald-400" />
-              <span className="hidden xl:inline text-[#e4e4e7]">Mode:</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="hidden sm:inline text-emerald-400 font-bold">AI Generate</span>
-            </>
-          ) : (
-            <>
-              <Box className="w-3 h-3 text-[#ea580c]" />
-              <span className="hidden xl:inline text-[#e4e4e7]">Mode:</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-[#ea580c]" />
-              <span className="hidden sm:inline text-[#ea580c] font-bold">Procedural</span>
-            </>
-          )}
-        </button>
-
-        <div className="w-px h-4 bg-[#27272a]" />
-
-        {/* Dedicated CAD Copilot Chat Panel Trigger (Ctrl+L) */}
+        {/* Unified Kosh Assistant Trigger (Ctrl+L) */}
         <button
           type="button"
           onClick={onToggleChat}
-          title={`CAD Copilot Chat (${isChatOpen ? "Close" : "Open"}) [Ctrl+L]`}
-          className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-[10px] font-mono transition-all ${
+          title={`Kosh Assistant (${isChatOpen ? "Active" : "Open"}) [Ctrl+L]`}
+          className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-[10px] font-mono transition-all border ${
             isChatOpen
-              ? "bg-[#ea580c] text-white shadow-[0_0_10px_rgba(234,88,12,0.3)] font-bold border border-[#ea580c]"
-              : "bg-[#202024] hover:bg-[#27272a] text-[#f4f4f5] border border-[#27272a] hover:border-[#ea580c]/50"
+              ? "bg-[#ea580c]/15 text-[#ea580c] border-[#ea580c] font-bold shadow-sm shadow-[#ea580c]/20"
+              : "bg-[#18181b] hover:bg-[#202024] text-[#f4f4f5] border-[#27272a] hover:border-[#ea580c]/50"
           }`}
         >
-          <MessageSquareCode className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Copilot</span>
+          <Sparkles className="w-3.5 h-3.5 text-[#ea580c]" />
+          <span>Kosh Assistant</span>
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
         </button>
 
-        {/* N-Panel (Properties / Outliner) Toggle Button (N) */}
+        {/* N-Panel (Properties / Inspector) Toggle Button (N) */}
         <button
           type="button"
           onClick={onToggleNPanel}
-          title={`Right Properties Panel (${isNOpen ? "Close" : "Open"}) [N]`}
-          className={`p-1 rounded transition-colors ${
+          title="DCC Inspector Properties [N]"
+          className={`flex items-center space-x-1 px-2 py-1 rounded text-[10px] font-mono transition-colors border ${
             isNOpen
-              ? "bg-[#27272a] text-[#ea580c]"
-              : "text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a]"
+              ? "bg-[#27272a] border-[#ea580c] text-[#ea580c]"
+              : "bg-[#18181b] border-[#27272a] text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#202024]"
           }`}
         >
-          <PanelRight className="w-3.5 h-3.5" />
+          <Sliders className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Inspector</span>
+          <kbd className="text-[9px] text-[#71717a]">N</kbd>
         </button>
       </div>
     </header>

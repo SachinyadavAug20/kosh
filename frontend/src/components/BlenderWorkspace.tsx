@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import {
   Box,
   Layers,
@@ -48,16 +48,22 @@ export interface LeafNode {
 
 export type WorkspaceNode = SplitNode | LeafNode;
 
-const STORAGE_KEY = "kosh_cad_workspace_v3";
+export interface BlenderWorkspaceHandle {
+  switchToEditor: (editorType: EditorType) => void;
+  toggleSecondaryPanel: () => void;
+  getActiveEditorTypes: () => EditorType[];
+}
+
+const STORAGE_KEY = "kosh_cad_workspace_v4";
 
 // Default Preset Layouts
 export const PRESETS: Record<WorkspacePreset, WorkspaceNode> = {
-  // 1. Default (Pure 3D Model Studio): Full-Height Viewport + Outliner/Properties right
+  // 1. Default (Pure 3D Model Studio): Full-Height Viewport + Dedicated Kosh Assistant Studio Panel
   default: {
     id: "root_split_h",
     type: "split",
     direction: "horizontal",
-    ratio: 0.78,
+    ratio: 0.68,
     first: {
       id: "leaf_viewport",
       type: "leaf",
@@ -65,20 +71,9 @@ export const PRESETS: Record<WorkspacePreset, WorkspaceNode> = {
       subView: "persp",
     },
     second: {
-      id: "split_out_prop",
-      type: "split",
-      direction: "vertical",
-      ratio: 0.42,
-      first: {
-        id: "leaf_outliner",
-        type: "leaf",
-        editorType: "outliner",
-      },
-      second: {
-        id: "leaf_properties",
-        type: "leaf",
-        editorType: "properties",
-      },
+      id: "leaf_sidebar",
+      type: "leaf",
+      editorType: "chat",
     },
   },
 
@@ -371,7 +366,7 @@ function AreaHeader({
       case "script":
         return { label: "Python Scripting IDE", icon: <Code2 className="w-3.5 h-3.5 text-indigo-400" /> };
       case "chat":
-        return { label: "CAD Copilot Chat", icon: <MessageSquare className="w-3.5 h-3.5 text-[#ea580c]" /> };
+        return { label: "Kosh Assistant", icon: <Sparkles className="w-3.5 h-3.5 text-[#ea580c]" /> };
     }
   };
 
@@ -525,30 +520,57 @@ function AreaHeader({
             </>
           )}
 
-          {leaf.editorType === "timeline" && (
-            <span className="text-[#52525b] text-[10px]">Transport & Dope Sheet</span>
-          )}
-          {leaf.editorType === "graph_editor" && (
-            <span className="text-[#52525b] text-[10px]">Mathematical Bézier F-Curves</span>
-          )}
-          {leaf.editorType === "outliner" && (
-            <span className="text-[#52525b] text-[10px]">Scene Tree</span>
-          )}
-          {leaf.editorType === "properties" && (
-            <span className="text-[#52525b] text-[10px]">DCC Inspector</span>
+          {["chat", "outliner", "properties", "script"].includes(leaf.editorType) ? (
+            <div className="flex items-center space-x-0.5">
+              {[
+                { id: "chat", label: "Assistant", icon: <Sparkles className="w-3 h-3 text-[#ea580c]" /> },
+                { id: "outliner", label: "Scene Tree", icon: <Layers className="w-3 h-3 text-sky-400" /> },
+                { id: "properties", label: "Inspector", icon: <Sliders className="w-3 h-3 text-amber-400" /> },
+                { id: "script", label: "Python", icon: <Code2 className="w-3 h-3 text-emerald-400" /> },
+              ].map((tab) => {
+                const isActive = leaf.editorType === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => onSetEditorType(leaf.id, tab.id as EditorType)}
+                    className={`flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors ${
+                      isActive
+                        ? "bg-[#27272a] text-[#f4f4f5] font-semibold border-b border-[#ea580c]"
+                        : "text-[#71717a] hover:text-[#f4f4f5] hover:bg-[#1f1f23]"
+                    }`}
+                  >
+                    {tab.icon}
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <>
+              {leaf.editorType === "timeline" && (
+                <span className="text-[#52525b] text-[10px]">Transport & Dope Sheet</span>
+              )}
+              {leaf.editorType === "graph_editor" && (
+                <span className="text-[#52525b] text-[10px]">Mathematical Bézier F-Curves</span>
+              )}
+              {leaf.editorType === "director" && (
+                <span className="text-[#52525b] text-[10px]">Director AI Studio</span>
+              )}
+              {leaf.editorType === "mcp_console" && (
+                <span className="text-[#52525b] text-[10px]">MCP Live Console</span>
+              )}
+            </>
           )}
           {leaf.editorType === "script" && (
             <button
               type="button"
               onClick={onRunScript}
-              className="text-[#ea580c] hover:underline flex items-center space-x-1"
+              className="text-[#ea580c] hover:underline flex items-center space-x-1 ml-1"
             >
               <Play className="w-2.5 h-2.5 fill-current" />
               <span>Run (Alt+P)</span>
             </button>
-          )}
-          {leaf.editorType === "chat" && (
-            <span className="text-[#52525b] text-[10px]">Copilot & Scene Assembly</span>
           )}
         </div>
       </div>
@@ -795,50 +817,133 @@ export interface BlenderWorkspaceProps {
   onRunScript?: () => void;
 }
 
-export function BlenderWorkspace({
-  preset,
-  onPresetChange,
-  renderLeafContent,
-  onCameraPreset,
-  onAddPrimitive,
-  onFocus,
-  onRunScript,
-}: BlenderWorkspaceProps) {
-  const [layoutTree, setLayoutTree] = useState<WorkspaceNode>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved && !saved.includes("timeline")) return JSON.parse(saved);
-      } catch (e) {
-        console.warn("Failed to load saved workspace:", e);
+export const BlenderWorkspace = forwardRef<BlenderWorkspaceHandle, BlenderWorkspaceProps>(
+  function BlenderWorkspace(
+    {
+      preset,
+      onPresetChange,
+      renderLeafContent,
+      onCameraPreset,
+      onAddPrimitive,
+      onFocus,
+      onRunScript,
+    },
+    ref
+  ) {
+    const [layoutTree, setLayoutTree] = useState<WorkspaceNode>(() => {
+      if (typeof window !== "undefined") {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved && !saved.includes("timeline")) return JSON.parse(saved);
+        } catch (e) {
+          console.warn("Failed to load saved workspace:", e);
+        }
       }
-    }
-    return cloneTree(PRESETS[preset]);
-  });
+      return cloneTree(PRESETS[preset]);
+    });
 
-  const [maximizedLeafId, setMaximizedLeafId] = useState<string | null>(null);
+    const [maximizedLeafId, setMaximizedLeafId] = useState<string | null>(null);
 
-  // Sync preset changes
-  useEffect(() => {
-    const nextTree = cloneTree(PRESETS[preset]);
-    setLayoutTree(nextTree);
-    setMaximizedLeafId(null);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextTree));
-    } catch (e) {
-      console.warn("Failed to persist workspace layout:", e);
-    }
-  }, [preset]);
+    // Save to localStorage on changes
+    const saveTree = useCallback((nextTree: WorkspaceNode) => {
+      setLayoutTree(nextTree);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextTree));
+      } catch (e) {
+        console.warn("Failed to persist workspace layout:", e);
+      }
+    }, []);
 
-  // Save to localStorage on changes
-  const saveTree = (nextTree: WorkspaceNode) => {
-    setLayoutTree(nextTree);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextTree));
-    } catch (e) {
-      console.warn("Failed to persist workspace layout:", e);
-    }
-  };
+    useImperativeHandle(ref, () => ({
+      switchToEditor: (targetType: EditorType) => {
+        setLayoutTree((current) => {
+          setMaximizedLeafId(null);
+          const findToolLeaf = (node: WorkspaceNode): LeafNode | null => {
+            if (node.type === "leaf") {
+              return node.editorType !== "viewport" ? node : null;
+            }
+            return findToolLeaf(node.second) || findToolLeaf(node.first);
+          };
+
+          const existingTool = findToolLeaf(current);
+          if (existingTool) {
+            const updated = updateNode(current, existingTool.id, (n) => ({
+              ...(n as LeafNode),
+              editorType: targetType,
+            }));
+            saveTree(updated);
+            return updated;
+          }
+
+          if (current.type === "leaf") {
+            const splitNode: SplitNode = {
+              id: `split_${Date.now()}`,
+              type: "split",
+              direction: "horizontal",
+              ratio: 0.68,
+              first: current,
+              second: {
+                id: `leaf_${Date.now()}_side`,
+                type: "leaf",
+                editorType: targetType,
+              },
+            };
+            saveTree(splitNode);
+            return splitNode;
+          }
+
+          return current;
+        });
+      },
+      toggleSecondaryPanel: () => {
+        setLayoutTree((current) => {
+          const findToolLeaf = (node: WorkspaceNode): LeafNode | null => {
+            if (node.type === "leaf") {
+              return node.editorType !== "viewport" ? node : null;
+            }
+            return findToolLeaf(node.second) || findToolLeaf(node.first);
+          };
+
+          const existingTool = findToolLeaf(current);
+          if (existingTool && countLeaves(current) > 1) {
+            const updated = removeLeaf(current, existingTool.id);
+            saveTree(updated);
+            return updated;
+          }
+
+          if (current.type === "leaf") {
+            const splitNode: SplitNode = {
+              id: `split_${Date.now()}`,
+              type: "split",
+              direction: "horizontal",
+              ratio: 0.68,
+              first: current,
+              second: {
+                id: `leaf_${Date.now()}_side`,
+                type: "leaf",
+                editorType: "chat",
+              },
+            };
+            saveTree(splitNode);
+            return splitNode;
+          }
+
+          return current;
+        });
+      },
+      getActiveEditorTypes: () => {
+        const types: EditorType[] = [];
+        const traverse = (node: WorkspaceNode) => {
+          if (node.type === "leaf") types.push(node.editorType);
+          else {
+            traverse(node.first);
+            traverse(node.second);
+          }
+        };
+        traverse(layoutTree);
+        return types;
+      },
+    }), [layoutTree, saveTree]);
 
   // Split Area
   const handleSplit = useCallback((leafId: string, direction: SplitDirection) => {
@@ -983,4 +1088,4 @@ export function BlenderWorkspace({
       />
     </div>
   );
-}
+});
