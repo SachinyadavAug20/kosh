@@ -26,6 +26,8 @@ import {
   MousePointer,
   Check,
   Pencil,
+  Sliders,
+  Scissors,
 } from "lucide-react";
 import { ExportFormat } from "@/types/mcp";
 
@@ -541,6 +543,66 @@ export function CadChatPanel({
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Surgical Quick Operations Bar for Selected Mesh */}
+      {selectedMeshName && (
+        <div className="px-2.5 py-1.5 bg-[#1a1a1e] border-t border-[#27272a] flex items-center justify-between gap-1 overflow-x-auto text-[10px]">
+          <div className="flex items-center space-x-1 shrink-0 text-[#ea580c] font-mono font-bold">
+            <Sliders className="w-3 h-3 text-[#ea580c]" />
+            <span className="truncate max-w-[90px]">{selectedMeshName}</span>
+          </div>
+          <div className="flex items-center space-x-1 shrink-0 overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => onExecuteTool?.("cad_recolor_part", { object_name: selectedMeshName, hex_color: "#ea580c" })}
+              className="px-1.5 py-0.5 rounded bg-[#202024] hover:bg-[#ea580c]/20 hover:text-[#ea580c] text-[#a1a1aa] border border-[#27272a] hover:border-[#ea580c]/40 font-mono transition-colors whitespace-nowrap"
+              title="Apply Orange PBR Accent Recolor"
+            >
+              Recolor
+            </button>
+            <button
+              type="button"
+              onClick={() => onExecuteTool?.("cad_bisect_slice", { object_name: selectedMeshName, plane: "XY", clear_outer: true, fill_cap: true })}
+              className="px-1.5 py-0.5 rounded bg-[#202024] hover:bg-[#ea580c]/20 hover:text-[#ea580c] text-[#a1a1aa] border border-[#27272a] hover:border-[#ea580c]/40 font-mono transition-colors whitespace-nowrap"
+              title="Planar Bisect Cut with Cap Fill"
+            >
+              Bisect
+            </button>
+            <button
+              type="button"
+              onClick={() => onExecuteTool?.("cad_voxel_remesh", { object_name: selectedMeshName, voxel_size: 0.04 })}
+              className="px-1.5 py-0.5 rounded bg-[#202024] hover:bg-[#ea580c]/20 hover:text-[#ea580c] text-[#a1a1aa] border border-[#27272a] hover:border-[#ea580c]/40 font-mono transition-colors whitespace-nowrap"
+              title="Fuse & Seal Watertight Voxel Solid"
+            >
+              Voxel
+            </button>
+            <button
+              type="button"
+              onClick={() => onExecuteTool?.("cad_decimate_mesh", { object_name: selectedMeshName, ratio: 0.5 })}
+              className="px-1.5 py-0.5 rounded bg-[#202024] hover:bg-[#ea580c]/20 hover:text-[#ea580c] text-[#a1a1aa] border border-[#27272a] hover:border-[#ea580c]/40 font-mono transition-colors whitespace-nowrap"
+              title="Decimate 50% Polycount"
+            >
+              Decimate
+            </button>
+            <button
+              type="button"
+              onClick={() => onExecuteTool?.("cad_subdivide_smooth", { object_name: selectedMeshName, levels: 1 })}
+              className="px-1.5 py-0.5 rounded bg-[#202024] hover:bg-[#ea580c]/20 hover:text-[#ea580c] text-[#a1a1aa] border border-[#27272a] hover:border-[#ea580c]/40 font-mono transition-colors whitespace-nowrap"
+              title="Catmull-Clark Smooth Subdivide"
+            >
+              Smooth
+            </button>
+            <button
+              type="button"
+              onClick={() => onExecuteTool?.("cad_mirror_symmetry", { object_name: selectedMeshName, axis: "X", weld_seam: true })}
+              className="px-1.5 py-0.5 rounded bg-[#202024] hover:bg-[#ea580c]/20 hover:text-[#ea580c] text-[#a1a1aa] border border-[#27272a] hover:border-[#ea580c]/40 font-mono transition-colors whitespace-nowrap"
+              title="Mirror Symmetry on X-Axis"
+            >
+              Mirror
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Input Area */}
       <div className="p-2.5 bg-[#18181b] border-t border-[#27272a] space-y-2 shrink-0">

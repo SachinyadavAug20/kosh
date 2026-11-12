@@ -115,6 +115,16 @@ class McpProtocolTest {
         assertTrue(toolNames.contains("cad_assemble_puzzle_pieces"));
         assertTrue(toolNames.contains("cad_search_online_models"));
         assertTrue(toolNames.contains("cad_download_online_model"));
+        assertTrue(toolNames.contains("cad_transform_part"));
+        assertTrue(toolNames.contains("cad_bisect_slice"));
+        assertTrue(toolNames.contains("cad_recolor_part"));
+        assertTrue(toolNames.contains("cad_decimate_mesh"));
+        assertTrue(toolNames.contains("cad_voxel_remesh"));
+        assertTrue(toolNames.contains("cad_mirror_symmetry"));
+        assertTrue(toolNames.contains("cad_deform_taper_twist"));
+        assertTrue(toolNames.contains("cad_delete_submesh"));
+        assertTrue(toolNames.contains("cad_extrude_face_region"));
+        assertTrue(toolNames.contains("cad_subdivide_smooth"));
     }
 
     @Test
@@ -1067,6 +1077,101 @@ class McpProtocolTest {
                 .params(Map.of(
                         "name", "cad_download_online_model",
                         "arguments", Map.of("modelId", "base_duck")
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertNotNull(result);
+        assertEquals(false, result.get("isError"));
+    }
+
+    @Test
+    @DisplayName("MCP tools/call cad_transform_part should execute surgical translation and scaling")
+    void testTransformPartTool() {
+        assumeTrue(blenderExecutionService.isBlenderAvailable(), "Blender runtime is not available; skipping live test");
+
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("transform-call-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "cad_transform_part",
+                        "arguments", Map.of(
+                                "targetMeshName", "Cube",
+                                "translation", List.of(0.2, 0.4, 0.6),
+                                "scale", List.of(1.5, 1.5, 1.5)
+                        )
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertNotNull(result);
+        assertEquals(false, result.get("isError"));
+    }
+
+    @Test
+    @DisplayName("MCP tools/call cad_recolor_part should surgically assign PBR material")
+    void testRecolorPartTool() {
+        assumeTrue(blenderExecutionService.isBlenderAvailable(), "Blender runtime is not available; skipping live test");
+
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("recolor-call-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "cad_recolor_part",
+                        "arguments", Map.of(
+                                "targetMeshName", "Visor",
+                                "hexColor", "#ef4444",
+                                "roughness", 0.25,
+                                "metalness", 0.95
+                        )
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertNotNull(result);
+        assertEquals(false, result.get("isError"));
+    }
+
+    @Test
+    @DisplayName("MCP tools/call cad_bisect_slice should execute surgical planar slicing")
+    void testBisectSliceTool() {
+        assumeTrue(blenderExecutionService.isBlenderAvailable(), "Blender runtime is not available; skipping live test");
+
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("bisect-call-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "cad_bisect_slice",
+                        "arguments", Map.of(
+                                "targetMeshName", "Body",
+                                "planePoint", List.of(0.0, 0.0, 0.5),
+                                "planeNormal", List.of(0.0, 0.0, 1.0),
+                                "fillCap", true
+                        )
                 ))
                 .build();
 

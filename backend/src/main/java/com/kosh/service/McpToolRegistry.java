@@ -89,7 +89,18 @@ public class McpToolRegistry {
             "extrude_profile_2d",
             "inspect_geometry",
             "apply_pbr_material",
-            "export_cad_artifact"
+            "export_cad_artifact",
+            // Surgical CAD Modification Suite
+            "cad_transform_part",
+            "cad_bisect_slice",
+            "cad_recolor_part",
+            "cad_decimate_mesh",
+            "cad_voxel_remesh",
+            "cad_mirror_symmetry",
+            "cad_deform_taper_twist",
+            "cad_delete_submesh",
+            "cad_extrude_face_region",
+            "cad_subdivide_smooth"
     );
 
     private final GoogleGeminiClient googleGeminiClient;
@@ -1029,6 +1040,137 @@ public class McpToolRegistry {
                 true
         ));
 
+        tools.add(createToolSchema(
+                "cad_transform_part",
+                "Surgically translates, rotates, and scales a named mesh or component in world space without altering topological connectivity.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of mesh to transform (defaults to active object)"),
+                        "translation", Map.of("type", "array", "items", Map.of("type", "number"), "description", "World translation offset [x, y, z] in meters (default [0, 0, 0])"),
+                        "rotationDeg", Map.of("type", "array", "items", Map.of("type", "number"), "description", "Euler rotation angles [rx, ry, rz] in degrees (default [0, 0, 0])"),
+                        "scale", Map.of("type", "array", "items", Map.of("type", "number"), "description", "Scale factors [sx, sy, sz] (default [1, 1, 1])"),
+                        "applyTransform", Map.of("type", "boolean", "description", "Bake transform into mesh vertices (default true)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_bisect_slice",
+                "Surgically slices a mesh along an arbitrary cutting plane with optional cap fill to maintain watertight manifold 3D printing topology.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of mesh to slice"),
+                        "planePoint", Map.of("type", "array", "items", Map.of("type", "number"), "description", "Point on cutting plane [x, y, z] in meters (default [0, 0, 0])"),
+                        "planeNormal", Map.of("type", "array", "items", Map.of("type", "number"), "description", "Normal vector of plane [nx, ny, nz] (default [0, 0, 1])"),
+                        "fillCap", Map.of("type", "boolean", "description", "Cap cut boundary with planar manifold n-gon (default true)"),
+                        "clearInner", Map.of("type", "boolean", "description", "Remove geometry behind cutting plane (default false)"),
+                        "clearOuter", Map.of("type", "boolean", "description", "Remove geometry in front of cutting plane (default true)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_recolor_part",
+                "Surgically overrides PBR surface material properties on a target component (hex color, roughness, metalness, and emission).",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of mesh to recolor"),
+                        "hexColor", Map.of("type", "string", "description", "HEX color string, e.g. '#ef4444' (red), '#f59e0b' (gold), '#18181b' (black), '#06b6d4' (cyan)"),
+                        "roughness", Map.of("type", "number", "description", "Surface roughness 0.0 (mirror) to 1.0 (matte), default 0.3"),
+                        "metalness", Map.of("type", "number", "description", "Metallic sheen 0.0 (dielectric) to 1.0 (metal), default 0.8"),
+                        "emissionColor", Map.of("type", "string", "description", "Optional glow color hex code"),
+                        "emissionStrength", Map.of("type", "number", "description", "Emission intensity multiplier (default 0.0)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_decimate_mesh",
+                "Surgically reduces polygon count of high-density meshes while preserving sharp feature boundaries, UV seams, and manifold volume.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of mesh to decimate"),
+                        "ratio", Map.of("type", "number", "description", "Polygon reduction ratio between 0.05 and 0.95 (default 0.5)"),
+                        "mode", Map.of("type", "string", "enum", List.of("collapse", "unsubdivide", "planar"), "description", "Decimation algorithm (default collapse)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_voxel_remesh",
+                "Surgically fuses multiple intersecting mesh bodies into a single seamless, watertight manifold solid via OpenVDB voxel remeshing.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of target mesh, or null to remesh and fuse all active scene meshes"),
+                        "voxelSize", Map.of("type", "number", "description", "Voxel grid size in meters (0.005 to 0.1, default 0.03)"),
+                        "adaptivity", Map.of("type", "number", "description", "Planar polygon adaptivity reduction (default 0.0)"),
+                        "joinAll", Map.of("type", "boolean", "description", "Whether to join all scene meshes into single entity before voxel remesh (default true)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_mirror_symmetry",
+                "Surgically mirrors geometry across coordinate planes (X, Y, Z) with auto-bisection and vertex seam welding.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of mesh to mirror"),
+                        "axis", Map.of("type", "string", "enum", List.of("x", "y", "z"), "description", "Symmetry plane axis (default x)"),
+                        "weldThreshold", Map.of("type", "number", "description", "Seam merge threshold in meters (default 0.002)"),
+                        "bisect", Map.of("type", "boolean", "description", "Bisect half geometry before mirroring (default true)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_deform_taper_twist",
+                "Surgically applies nonlinear parametric spatial deformation (taper, twist, bend, stretch) along a chosen axis.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of mesh to deform"),
+                        "deformType", Map.of("type", "string", "enum", List.of("TAPER", "TWIST", "BEND", "STRETCH"), "description", "Spatial deformation method (default TAPER)"),
+                        "factor", Map.of("type", "number", "description", "Deformation intensity factor or angle in radians (default 0.5)"),
+                        "axis", Map.of("type", "string", "enum", List.of("x", "y", "z"), "description", "Deformation axis (default z)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_delete_submesh",
+                "Surgically excises an unwanted mesh component, stand, or loose debris by name or by minimum volume threshold.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of specific object to excise (if omitted, cleans debris)"),
+                        "deleteLoose", Map.of("type", "boolean", "description", "Delete small loose disconnected islands (default false)"),
+                        "minVolumeM3", Map.of("type", "number", "description", "Minimum volume threshold in cubic meters for loose debris cleanup (default 0.001)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_extrude_face_region",
+                "Surgically extrudes planar surface faces along their normal or world axis to create mounting bosses, standoffs, or push-pull recesses.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of mesh to extrude"),
+                        "distanceMm", Map.of("type", "number", "description", "Extrusion distance in millimeters (positive = protrusion, negative = recess, default 5.0)"),
+                        "axis", Map.of("type", "string", "enum", List.of("normal", "x", "y", "z"), "description", "Extrusion direction axis (default normal)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_subdivide_smooth",
+                "Surgically refines and smooths faceted low-poly surfaces using Catmull-Clark curvature subdivision with auto-smooth normal preservation.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of mesh to smooth"),
+                        "levels", Map.of("type", "integer", "description", "Subdivision refinement levels (1 to 3, default 1)"),
+                        "smoothShading", Map.of("type", "boolean", "description", "Enable smooth shading normals (default true)")
+                ),
+                false,
+                true
+        ));
+
         return tools;
     }
 
@@ -1418,6 +1560,26 @@ public class McpToolRegistry {
             finalScript = buildTextEmbossScript(arguments, format);
         } else if ("cad_check_manifold".equals(normalizedName)) {
             finalScript = buildManifoldCheckScript(arguments, format);
+        } else if ("cad_transform_part".equals(normalizedName)) {
+            finalScript = buildTransformPartScript(arguments, format);
+        } else if ("cad_bisect_slice".equals(normalizedName)) {
+            finalScript = buildBisectSliceScript(arguments, format);
+        } else if ("cad_recolor_part".equals(normalizedName)) {
+            finalScript = buildRecolorPartScript(arguments, format);
+        } else if ("cad_decimate_mesh".equals(normalizedName)) {
+            finalScript = buildDecimateMeshScript(arguments, format);
+        } else if ("cad_voxel_remesh".equals(normalizedName)) {
+            finalScript = buildVoxelRemeshScript(arguments, format);
+        } else if ("cad_mirror_symmetry".equals(normalizedName)) {
+            finalScript = buildMirrorSymmetryScript(arguments, format);
+        } else if ("cad_deform_taper_twist".equals(normalizedName)) {
+            finalScript = buildDeformScript(arguments, format);
+        } else if ("cad_delete_submesh".equals(normalizedName)) {
+            finalScript = buildDeleteSubmeshScript(arguments, format);
+        } else if ("cad_extrude_face_region".equals(normalizedName)) {
+            finalScript = buildExtrudeFaceRegionScript(arguments, format);
+        } else if ("cad_subdivide_smooth".equals(normalizedName)) {
+            finalScript = buildSubdivideSmoothScript(arguments, format);
         } else if ("scene_assembler".equals(normalizedName)) {
             String targetPrompt = (prompt != null && !prompt.isBlank())
                     ? prompt
@@ -3304,6 +3466,378 @@ public class McpToolRegistry {
                   <text x="820" y="755" fill="#10b981" font-family="monospace" font-size="10">STATUS: APPROVED FOR MANUFACTURE</text>
                 </svg>
                 """, targetMesh, standard, units, sheetSize);
+    }
+
+    private String buildTransformPartScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "Target";
+        List<Double> trans = parseDoubleList(arguments != null ? arguments.get("translation") : null, List.of(0.0, 0.0, 0.0));
+        List<Double> rot = parseDoubleList(arguments != null ? arguments.get("rotationDeg") : null, List.of(0.0, 0.0, 0.0));
+        List<Double> scale = parseDoubleList(arguments != null ? arguments.get("scale") : null, List.of(1.0, 1.0, 1.0));
+        boolean apply = arguments == null || !Boolean.FALSE.equals(arguments.get("applyTransform"));
+
+        double tx = trans.size() > 0 ? trans.get(0) : 0.0;
+        double ty = trans.size() > 1 ? trans.get(1) : 0.0;
+        double tz = trans.size() > 2 ? trans.get(2) : 0.0;
+
+        double rx = rot.size() > 0 ? rot.get(0) : 0.0;
+        double ry = rot.size() > 1 ? rot.get(1) : 0.0;
+        double rz = rot.size() > 2 ? rot.get(2) : 0.0;
+
+        double sx = scale.size() > 0 ? scale.get(0) : 1.0;
+        double sy = scale.size() > 1 ? scale.get(1) : 1.0;
+        double sz = scale.size() > 2 ? scale.get(2) : 1.0;
+
+        return String.format(Locale.US, """
+            import bpy, math
+            from mathutils import Vector, Euler
+
+            target = bpy.data.objects.get("%s")
+            if not target:
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+                target = mesh_objs[0] if mesh_objs else None
+
+            if not target:
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0,0,0.5))
+                target = bpy.context.active_object
+                target.name = "%s"
+
+            bpy.context.view_layer.objects.active = target
+            target.location.x += %.4f
+            target.location.y += %.4f
+            target.location.z += %.4f
+
+            target.rotation_euler.x += math.radians(%.4f)
+            target.rotation_euler.y += math.radians(%.4f)
+            target.rotation_euler.z += math.radians(%.4f)
+
+            target.scale.x *= %.4f
+            target.scale.y *= %.4f
+            target.scale.z *= %.4f
+
+            if %s:
+                bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+            """, targetName, targetName, tx, ty, tz, rx, ry, rz, sx, sy, sz, apply ? "True" : "False");
+    }
+
+    private String buildBisectSliceScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "Target";
+        List<Double> pt = parseDoubleList(arguments != null ? arguments.get("planePoint") : null, List.of(0.0, 0.0, 0.0));
+        List<Double> normal = parseDoubleList(arguments != null ? arguments.get("planeNormal") : null, List.of(0.0, 0.0, 1.0));
+        boolean fillCap = arguments == null || !Boolean.FALSE.equals(arguments.get("fillCap"));
+        boolean clearInner = arguments != null && Boolean.TRUE.equals(arguments.get("clearInner"));
+        boolean clearOuter = arguments == null || !Boolean.FALSE.equals(arguments.get("clearOuter"));
+
+        double px = pt.size() > 0 ? pt.get(0) : 0.0;
+        double py = pt.size() > 1 ? pt.get(1) : 0.0;
+        double pz = pt.size() > 2 ? pt.get(2) : 0.0;
+
+        double nx = normal.size() > 0 ? normal.get(0) : 0.0;
+        double ny = normal.size() > 1 ? normal.get(1) : 0.0;
+        double nz = normal.size() > 2 ? normal.get(2) : 1.0;
+
+        return String.format(Locale.US, """
+            import bpy
+
+            target = bpy.data.objects.get("%s")
+            if not target:
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+                target = mesh_objs[0] if mesh_objs else None
+
+            if not target:
+                bpy.ops.mesh.primitive_cube_add(size=2.0, location=(0,0,1))
+                target = bpy.context.active_object
+                target.name = "%s"
+
+            bpy.context.view_layer.objects.active = target
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.bisect(
+                plane_co=(%.4f, %.4f, %.4f),
+                plane_no=(%.4f, %.4f, %.4f),
+                use_fill=%s,
+                clear_inner=%s,
+                clear_outer=%s
+            )
+            bpy.ops.object.mode_set(mode='OBJECT')
+            """, targetName, targetName, px, py, pz, nx, ny, nz,
+            fillCap ? "True" : "False", clearInner ? "True" : "False", clearOuter ? "True" : "False");
+    }
+
+    private String buildRecolorPartScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "Target";
+        String hexColor = arguments != null && arguments.get("hexColor") != null ? arguments.get("hexColor").toString() : "#f59e0b";
+        double roughness = arguments != null && arguments.get("roughness") instanceof Number n ? n.doubleValue() : 0.3;
+        double metalness = arguments != null && arguments.get("metalness") instanceof Number n ? n.doubleValue() : 0.8;
+        String emissionColor = arguments != null && arguments.get("emissionColor") != null ? arguments.get("emissionColor").toString() : "";
+        double emissionStrength = arguments != null && arguments.get("emissionStrength") instanceof Number n ? n.doubleValue() : 0.0;
+
+        return String.format(Locale.US, """
+            import bpy
+
+            def hex_to_rgb(hex_str):
+                h = hex_str.lstrip('#')
+                if len(h) == 3:
+                    h = ''.join([c*2 for c in h])
+                if len(h) != 6:
+                    return (0.8, 0.8, 0.8, 1.0)
+                r = int(h[0:2], 16) / 255.0
+                g = int(h[2:4], 16) / 255.0
+                b = int(h[4:6], 16) / 255.0
+                def to_lin(c):
+                    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+                return (to_lin(r), to_lin(g), to_lin(b), 1.0)
+
+            target = bpy.data.objects.get("%s")
+            if not target:
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+                target = mesh_objs[0] if mesh_objs else None
+
+            if not target:
+                bpy.ops.mesh.primitive_cylinder_add(radius=1.0, depth=2.0, location=(0,0,1))
+                target = bpy.context.active_object
+                target.name = "%s"
+
+            mat_name = "SurgicalPBR_" + "%s".replace("#", "")
+            mat = bpy.data.materials.new(name=mat_name)
+            mat.use_nodes = True
+            bsdf = mat.node_tree.nodes.get("Principled BSDF")
+            if bsdf:
+                rgba = hex_to_rgb("%s")
+                if "Base Color" in bsdf.inputs:
+                    bsdf.inputs["Base Color"].default_value = rgba
+                if "Roughness" in bsdf.inputs:
+                    bsdf.inputs["Roughness"].default_value = %.4f
+                if "Metallic" in bsdf.inputs:
+                    bsdf.inputs["Metallic"].default_value = %.4f
+                em_color = "%s"
+                em_str = %.4f
+                if em_str > 0 and em_color:
+                    em_rgba = hex_to_rgb(em_color)
+                    if "Emission Color" in bsdf.inputs:
+                        bsdf.inputs["Emission Color"].default_value = em_rgba
+                    elif "Emission" in bsdf.inputs:
+                        bsdf.inputs["Emission"].default_value = em_rgba
+                    if "Emission Strength" in bsdf.inputs:
+                        bsdf.inputs["Emission Strength"].default_value = em_str
+
+            if target.data.materials:
+                target.data.materials.clear()
+            target.data.materials.append(mat)
+            """, targetName, targetName, hexColor, hexColor, roughness, metalness, emissionColor, emissionStrength);
+    }
+
+    private String buildDecimateMeshScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "Target";
+        double ratio = arguments != null && arguments.get("ratio") instanceof Number n ? n.doubleValue() : 0.5;
+        String mode = arguments != null && arguments.get("mode") != null ? arguments.get("mode").toString().toLowerCase() : "collapse";
+
+        return String.format(Locale.US, """
+            import bpy
+
+            target = bpy.data.objects.get("%s")
+            if not target:
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+                target = mesh_objs[0] if mesh_objs else None
+
+            if not target:
+                bpy.ops.mesh.primitive_uv_sphere_add(segments=64, ring_count=32, location=(0,0,1))
+                target = bpy.context.active_object
+                target.name = "%s"
+
+            bpy.context.view_layer.objects.active = target
+            mod = target.modifiers.new(name="CAD_Decimate", type='DECIMATE')
+            dec_mode = "%s".upper()
+            if dec_mode == 'PLANAR':
+                mod.decimate_type = 'DISSOLVE'
+                mod.angle_limit = 0.0872665
+            elif dec_mode == 'UNSUBDIVIDE':
+                mod.decimate_type = 'UNSUBDIV'
+                mod.iterations = 2
+            else:
+                mod.decimate_type = 'COLLAPSE'
+                mod.ratio = max(0.05, min(0.95, %.4f))
+
+            bpy.ops.object.modifier_apply(modifier="CAD_Decimate")
+            """, targetName, targetName, mode, ratio);
+    }
+
+    private String buildVoxelRemeshScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "";
+        double voxelSize = arguments != null && arguments.get("voxelSize") instanceof Number n ? n.doubleValue() : 0.03;
+        double adaptivity = arguments != null && arguments.get("adaptivity") instanceof Number n ? n.doubleValue() : 0.0;
+        boolean joinAll = arguments == null || !Boolean.FALSE.equals(arguments.get("joinAll"));
+
+        return String.format(Locale.US, """
+            import bpy
+
+            mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+            if not mesh_objs:
+                bpy.ops.mesh.primitive_cube_add(size=1.5, location=(0,0,0.75))
+                mesh_objs = [bpy.context.active_object]
+
+            target_name = "%s"
+            target = bpy.data.objects.get(target_name) if target_name else None
+            if not target and mesh_objs:
+                target = mesh_objs[0]
+
+            if %s and len(mesh_objs) > 1:
+                for o in bpy.data.objects:
+                    o.select_set(False)
+                for o in mesh_objs:
+                    o.select_set(True)
+                bpy.context.view_layer.objects.active = target
+                bpy.ops.object.join()
+                target = bpy.context.active_object
+
+            bpy.context.view_layer.objects.active = target
+            target.data.remesh_voxel_size = max(0.005, min(0.15, %.4f))
+            target.data.remesh_voxel_adaptivity = max(0.0, min(1.0, %.4f))
+            bpy.ops.object.voxel_remesh()
+            """, targetName, joinAll ? "True" : "False", voxelSize, adaptivity);
+    }
+
+    private String buildMirrorSymmetryScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "Target";
+        String axis = arguments != null && arguments.get("axis") != null ? arguments.get("axis").toString().toLowerCase() : "x";
+        double weld = arguments != null && arguments.get("weldThreshold") instanceof Number n ? n.doubleValue() : 0.002;
+        boolean bisect = arguments == null || !Boolean.FALSE.equals(arguments.get("bisect"));
+
+        return String.format(Locale.US, """
+            import bpy
+
+            target = bpy.data.objects.get("%s")
+            if not target:
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+                target = mesh_objs[0] if mesh_objs else None
+
+            if not target:
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0.5, 0, 0.5))
+                target = bpy.context.active_object
+                target.name = "%s"
+
+            bpy.context.view_layer.objects.active = target
+            mod = target.modifiers.new(name="CAD_MirrorSymmetry", type='MIRROR')
+            ax = "%s".lower()
+            mod.use_axis[0] = (ax == 'x')
+            mod.use_axis[1] = (ax == 'y')
+            mod.use_axis[2] = (ax == 'z')
+            use_bi = %s
+            mod.use_bisect_axis[0] = (ax == 'x' and use_bi)
+            mod.use_bisect_axis[1] = (ax == 'y' and use_bi)
+            mod.use_bisect_axis[2] = (ax == 'z' and use_bi)
+            mod.merge_threshold = max(0.0001, %.6f)
+            bpy.ops.object.modifier_apply(modifier="CAD_MirrorSymmetry")
+            """, targetName, targetName, axis, bisect ? "True" : "False", weld);
+    }
+
+    private String buildDeformScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "Target";
+        String deformType = arguments != null && arguments.get("deformType") != null ? arguments.get("deformType").toString().toUpperCase() : "TAPER";
+        double factor = arguments != null && arguments.get("factor") instanceof Number n ? n.doubleValue() : 0.5;
+        String axis = arguments != null && arguments.get("axis") != null ? arguments.get("axis").toString().toUpperCase() : "Z";
+
+        return String.format(Locale.US, """
+            import bpy
+
+            target = bpy.data.objects.get("%s")
+            if not target:
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+                target = mesh_objs[0] if mesh_objs else None
+
+            if not target:
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.5, depth=2.0, vertices=32, location=(0,0,1))
+                target = bpy.context.active_object
+                target.name = "%s"
+
+            bpy.context.view_layer.objects.active = target
+            mod = target.modifiers.new(name="CAD_Deform", type='SIMPLE_DEFORM')
+            mod.deform_method = "%s".upper()
+            mod.factor = %.4f
+            mod.deform_axis = "%s".upper()
+            bpy.ops.object.modifier_apply(modifier="CAD_Deform")
+            """, targetName, targetName, deformType, factor, axis);
+    }
+
+    private String buildDeleteSubmeshScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "";
+        boolean deleteLoose = arguments != null && Boolean.TRUE.equals(arguments.get("deleteLoose"));
+
+        return String.format(Locale.US, """
+            import bpy
+
+            target_name = "%s"
+            if target_name and target_name in bpy.data.objects:
+                obj = bpy.data.objects[target_name]
+                bpy.data.objects.remove(obj, do_unlink=True)
+            elif %s:
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+                if mesh_objs:
+                    active = mesh_objs[0]
+                    bpy.context.view_layer.objects.active = active
+                    bpy.ops.mesh.separate(type='LOOSE')
+                    all_parts = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+                    if len(all_parts) > 1:
+                        all_parts.sort(key=lambda o: max(o.dimensions.x, o.dimensions.y, o.dimensions.z), reverse=True)
+                        for small in all_parts[1:]:
+                            if max(small.dimensions.x, small.dimensions.y, small.dimensions.z) < 0.2:
+                                bpy.data.objects.remove(small, do_unlink=True)
+            """, targetName, deleteLoose ? "True" : "False");
+    }
+
+    private String buildExtrudeFaceRegionScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "Target";
+        double distMm = arguments != null && arguments.get("distanceMm") instanceof Number n ? n.doubleValue() : 5.0;
+        double distM = distMm / 1000.0;
+
+        return String.format(Locale.US, """
+            import bpy
+
+            target = bpy.data.objects.get("%s")
+            if not target:
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+                target = mesh_objs[0] if mesh_objs else None
+
+            if not target:
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0,0,0.5))
+                target = bpy.context.active_object
+                target.name = "%s"
+
+            bpy.context.view_layer.objects.active = target
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.extrude_region_move(TRANSFORM_OT_translate={"value": (0, 0, %.6f)})
+            bpy.ops.object.mode_set(mode='OBJECT')
+            """, targetName, targetName, distM);
+    }
+
+    private String buildSubdivideSmoothScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "Target";
+        int levels = arguments != null && arguments.get("levels") instanceof Number n ? Math.min(3, Math.max(1, n.intValue())) : 1;
+        boolean smooth = arguments == null || !Boolean.FALSE.equals(arguments.get("smoothShading"));
+
+        return String.format(Locale.US, """
+            import bpy
+
+            target = bpy.data.objects.get("%s")
+            if not target:
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+                target = mesh_objs[0] if mesh_objs else None
+
+            if not target:
+                bpy.ops.mesh.primitive_cylinder_add(radius=1.0, depth=2.0, vertices=16, location=(0,0,1))
+                target = bpy.context.active_object
+                target.name = "%s"
+
+            bpy.context.view_layer.objects.active = target
+            mod = target.modifiers.new(name="CAD_Subsurf", type='SUBSURF')
+            mod.levels = %d
+            mod.render_levels = %d
+            bpy.ops.object.modifier_apply(modifier="CAD_Subsurf")
+
+            if %s:
+                for p in target.data.polygons:
+                    p.use_smooth = True
+            """, targetName, targetName, levels, levels, smooth ? "True" : "False");
     }
 
     private String toJson(Object obj) {

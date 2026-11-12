@@ -398,7 +398,17 @@ public class McpController {
                             "inspect_geometry",
                             "create_parametric_primitive",
                             "apply_boolean_op",
-                            "scene_assembler"
+                            "scene_assembler",
+                            "cad_transform_part",
+                            "cad_bisect_slice",
+                            "cad_recolor_part",
+                            "cad_decimate_mesh",
+                            "cad_voxel_remesh",
+                            "cad_mirror_symmetry",
+                            "cad_deform_taper_twist",
+                            "cad_delete_submesh",
+                            "cad_extrude_face_region",
+                            "cad_subdivide_smooth"
                     ).contains(toolName.toLowerCase());
 
                     boolean hasRawScript = arguments.containsKey("script") && arguments.get("script") != null && !arguments.get("script").toString().isBlank();

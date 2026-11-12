@@ -143,6 +143,16 @@ export function UniversalSearchModal({
       { name: "ISO Metric Screw Threads", tool: "cad_generate_threads", desc: "Generate standard ISO metric helical pitch threads" },
       { name: "Hollow Shell & Wall Thickness", tool: "cad_hollow_shell", desc: "Hollow interior with 2.0mm calibrated wall thickness" },
       { name: "Convex Bounding Hull", tool: "cad_convex_hull", desc: "Compute minimum enclosing convex collision geometry" },
+      { name: "Transform / Move / Scale Part", tool: "cad_transform_part", desc: "Surgical translation, rotation, and scaling of selected part" },
+      { name: "Bisect / Slice Cutaway", tool: "cad_bisect_slice", desc: "Planar bisection cut across XY, XZ, or YZ with manifold cap fill" },
+      { name: "Recolor Part / Material", tool: "cad_recolor_part", desc: "Targeted PBR color, roughness, and metalness modification" },
+      { name: "Voxel Watertight Remesh", tool: "cad_voxel_remesh", desc: "Fuse intersecting components into a single watertight OpenVDB solid" },
+      { name: "Mirror Symmetry Seam Weld", tool: "cad_mirror_symmetry", desc: "Bilateral symmetry across coordinate plane with seam welding" },
+      { name: "Decimate / Simplify Mesh", tool: "cad_decimate_mesh", desc: "Intelligent polycount reduction preserving sharp CAD boundaries" },
+      { name: "Nonlinear Deform / Taper / Twist", tool: "cad_deform_taper_twist", desc: "Parametric spatial deformation (taper, twist, bend, stretch)" },
+      { name: "Subdivide & Smooth", tool: "cad_subdivide_smooth", desc: "Catmull-Clark surface smoothing with auto-smooth normal preservation" },
+      { name: "Delete Submesh / Loose Parts", tool: "cad_delete_submesh", desc: "Excise unwanted components, stands, or loose floating vertices" },
+      { name: "Extrude Face Region", tool: "cad_extrude_face_region", desc: "Push-pull normal extrusion for bosses, recesses, or flanges" },
     ];
 
     cadOperations.forEach((op) => {
