@@ -600,6 +600,38 @@ export function CadChatPanel({
             >
               Mirror
             </button>
+            <button
+              type="button"
+              onClick={() => onExecuteTool?.("cad_weld_vertices", { targetMeshName: selectedMeshName, distanceMm: 1.0 })}
+              className="px-1.5 py-0.5 rounded bg-[#202024] hover:bg-[#ea580c]/20 hover:text-[#ea580c] text-[#a1a1aa] border border-[#27272a] hover:border-[#ea580c]/40 font-mono transition-colors whitespace-nowrap"
+              title="Weld Seams & Close Crack Vertices"
+            >
+              Weld
+            </button>
+            <button
+              type="button"
+              onClick={() => onExecuteTool?.("cad_flip_recalculate_normals", { targetMeshName: selectedMeshName, mode: "OUTSIDE" })}
+              className="px-1.5 py-0.5 rounded bg-[#202024] hover:bg-[#ea580c]/20 hover:text-[#ea580c] text-[#a1a1aa] border border-[#27272a] hover:border-[#ea580c]/40 font-mono transition-colors whitespace-nowrap"
+              title="Recalculate Consistent Outward Normals"
+            >
+              Normals
+            </button>
+            <button
+              type="button"
+              onClick={() => onExecuteTool?.("cad_fill_holes", { targetMeshName: selectedMeshName, maxSides: 100 })}
+              className="px-1.5 py-0.5 rounded bg-[#202024] hover:bg-[#ea580c]/20 hover:text-[#ea580c] text-[#a1a1aa] border border-[#27272a] hover:border-[#ea580c]/40 font-mono transition-colors whitespace-nowrap"
+              title="Cap Non-Manifold Holes for Watertight 3D Print"
+            >
+              Cap Holes
+            </button>
+            <button
+              type="button"
+              onClick={() => onExecuteTool?.("cad_explode_assembly_view", { explosionFactor: 1.8, axis: "RADIAL" })}
+              className="px-1.5 py-0.5 rounded bg-[#202024] hover:bg-[#ea580c]/20 hover:text-[#ea580c] text-[#a1a1aa] border border-[#27272a] hover:border-[#ea580c]/40 font-mono transition-colors whitespace-nowrap"
+              title="Exploded Technical Assembly View"
+            >
+              Explode
+            </button>
           </div>
         </div>
       )}

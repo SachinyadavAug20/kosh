@@ -125,6 +125,16 @@ class McpProtocolTest {
         assertTrue(toolNames.contains("cad_delete_submesh"));
         assertTrue(toolNames.contains("cad_extrude_face_region"));
         assertTrue(toolNames.contains("cad_subdivide_smooth"));
+        assertTrue(toolNames.contains("cad_align_snap_objects"));
+        assertTrue(toolNames.contains("cad_weld_vertices"));
+        assertTrue(toolNames.contains("cad_flip_recalculate_normals"));
+        assertTrue(toolNames.contains("cad_fill_holes"));
+        assertTrue(toolNames.contains("cad_scale_to_bounding_box"));
+        assertTrue(toolNames.contains("cad_loft_curves"));
+        assertTrue(toolNames.contains("cad_generate_helical_spring"));
+        assertTrue(toolNames.contains("cad_generate_o_ring_groove"));
+        assertTrue(toolNames.contains("cad_split_into_components"));
+        assertTrue(toolNames.contains("cad_explode_assembly_view"));
     }
 
     @Test
@@ -1171,6 +1181,101 @@ class McpProtocolTest {
                                 "planePoint", List.of(0.0, 0.0, 0.5),
                                 "planeNormal", List.of(0.0, 0.0, 1.0),
                                 "fillCap", true
+                        )
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertNotNull(result);
+        assertEquals(false, result.get("isError"));
+    }
+
+    @Test
+    @DisplayName("MCP tools/call cad_align_snap_objects should execute datum snapping and alignment")
+    void testAlignSnapTool() {
+        assumeTrue(blenderExecutionService.isBlenderAvailable(), "Blender runtime is not available; skipping live test");
+
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("align-snap-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "cad_align_snap_objects",
+                        "arguments", Map.of(
+                                "targetMeshName", "Nut",
+                                "referenceMeshName", "Bolt",
+                                "alignmentMode", "STACK_TOP",
+                                "alignmentAxis", "z"
+                        )
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertNotNull(result);
+        assertEquals(false, result.get("isError"));
+    }
+
+    @Test
+    @DisplayName("MCP tools/call cad_generate_helical_spring should generate mechanical coil spring")
+    void testHelicalSpringTool() {
+        assumeTrue(blenderExecutionService.isBlenderAvailable(), "Blender runtime is not available; skipping live test");
+
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("spring-gen-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "cad_generate_helical_spring",
+                        "arguments", Map.of(
+                                "outerDiameterMm", 22.0,
+                                "wireDiameterMm", 2.0,
+                                "pitchMm", 5.0,
+                                "activeCoils", 4.0,
+                                "groundEnds", true
+                        )
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertNotNull(result);
+        assertEquals(false, result.get("isError"));
+    }
+
+    @Test
+    @DisplayName("MCP tools/call cad_explode_assembly_view should execute exploded assembly view")
+    void testExplodeAssemblyViewTool() {
+        assumeTrue(blenderExecutionService.isBlenderAvailable(), "Blender runtime is not available; skipping live test");
+
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("explode-view-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "cad_explode_assembly_view",
+                        "arguments", Map.of(
+                                "explosionFactor", 1.8,
+                                "axis", "RADIAL"
                         )
                 ))
                 .build();

@@ -83,7 +83,7 @@ engines, and asset storage tiers.
 |               |                                  |                    |
 |               v                                  |                    |
 |  +--------------------------------------------+  |                    |
-|  |        McpToolRegistry (60 CAD Tools)      |  |                    |
+|  |        McpToolRegistry (82 CAD Tools)      |  |                    |
 |  +--------------------------------------------+  |                    |
 |         |                     |                  |                    |
 |         v                     v                  |                    |
@@ -233,7 +233,7 @@ Client / Agent       McpController     McpToolRegistry   BlenderDaemon   Storage
 
 # 6. Model Context Protocol (MCP) Workstation Ecosystem
 
-Kosh exposes 60 native tools, 24 resources, and 16 prompts over JSON-RPC:
+Kosh exposes 82 native tools, 24 resources, and 16 prompts over JSON-RPC:
 
 ### 1. Composable 3D CAD, Digital Calipers & Kinematics
 * `cad_create_primitive`: Parametric solids (cube, cylinder, cone, sphere).
@@ -400,7 +400,7 @@ Kosh achieves high trust ratings by enforcing defense-in-depth principles:
 ### Project Milestones Achieved
 * Full Model Context Protocol (MCP) compliance over SSE and JSON-RPC 2.0.
 * Headless Blender 5.2 LTS warm daemon delivering sub-400ms turnaround.
-* 60 native parametric tools with behavioral annotations and zero CVEs.
+* 82 native parametric tools with behavioral annotations and zero CVEs.
 * Responsive web-based 3D CAD DCC studio built on Next.js 15 and Three.js.
 
 ### Upcoming Milestones

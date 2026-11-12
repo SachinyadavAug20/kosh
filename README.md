@@ -52,7 +52,7 @@ Built with a titanium-slate CAD workstation aesthetic, Kosh couples a **Spring B
  ┌─────────────────────────────────────────────────────────────┐
  │            Spring Boot 3.3 MCP Server (:8080)               │
  │  ├─ McpController (/mcp)        ├─ ShareController (/api)   │
- │  ├─ McpToolRegistry (55 Tools)  ├─ AssetController          │
+ │  ├─ McpToolRegistry (82 Tools)  ├─ AssetController          │
  │  ├─ McpResourceRegistry (20)    ├─ McpPromptRegistry (13)   │
  │  └─ GoogleGeminiClient (BYOK)   └─ BlenderExecutionService  │
  └──────────────────────────────┬──────────────────────────────┘
@@ -81,7 +81,7 @@ Built with a titanium-slate CAD workstation aesthetic, Kosh couples a **Spring B
 
 ## Expanded Creative MCP Tools Suite
 
-Kosh exposes a comprehensive suite of 60 native creative CAD and DCC tools over JSON-RPC 2.0 (`POST /mcp` and `GET /mcp/sse`), every single one declaring explicit boolean behavioral hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) for full M8ven Trust Index Grade A compliance:
+Kosh exposes a comprehensive suite of 82 native creative CAD, DCC, repair, and surgical manipulation tools over JSON-RPC 2.0 (`POST /mcp` and `GET /mcp/sse`), every single one declaring explicit boolean behavioral hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) for full M8ven Trust Index Grade A compliance:
 
 ### Precision 3D CAD & Engineering
 | # | Tool Name | Domain | Description | Hints (RO, Destr, Idemp, OpenW) |
@@ -149,6 +149,57 @@ Kosh exposes a comprehensive suite of 60 native creative CAD and DCC tools over 
 | 45 | `cad_text_emboss` | Typography | Embosses or engraves 3D text onto a mesh surface via exact boolean operation. | `false, false, true, false` |
 | 46 | `cad_check_manifold` | Print Validation | Watertight/manifold diagnosis: boundary and non-manifold edge counts, volume, bbox. | `true, false, true, false` |
 | 47 | `cad_quick_fillet_chamfer` | Edge Bevel | Alias of `cad_apply_fillet_chamfer` for instant edge rounding/chamfering. | `false, false, true, false` |
+
+### Online Models & Verified Asset Ingestion
+| # | Tool Name | Domain | Description | Hints (RO, Destr, Idemp, OpenW) |
+|---|---|---|---|---|
+| 48 | `cad_search_online_models` | Asset Search | Searches verified online catalog repositories by semantic natural language queries. | `true, false, true, true` |
+| 49 | `cad_download_online_model` | Model Ingestion | Downloads, validates, caches, and imports base 3D models directly into scene. | `false, false, true, false` |
+
+### Parametric DCC & Extended Procedural Pipeline
+| # | Tool Name | Domain | Description | Hints (RO, Destr, Idemp, OpenW) |
+|---|---|---|---|---|
+| 50 | `create_parametric_primitive` | Parametric Primitive | Direct parametric primitive synthesis (cube, cylinder, cone, sphere, torus). | `false, false, false, false` |
+| 51 | `apply_boolean_op` | CSG Boolean | Direct CSG difference, union, or intersection operation. | `false, false, false, false` |
+| 52 | `extrude_profile_2d` | 2D to 3D Extrude | Extrudes 2D polygonal cross-section profiles along normal or arbitrary vectors. | `false, false, false, false` |
+| 53 | `inspect_geometry` | Topology Telemetry | Topological inspection: vertices, faces, edges, dimensions, and bounding boxes. | `true, false, true, false` |
+| 54 | `apply_pbr_material` | Material Pipeline | Assigns calibrated PBR material shaders with roughness and metalness. | `false, false, false, false` |
+| 55 | `export_cad_artifact` | Artifact Export | Packages and exports CAD scenes into GLB, STL, or OBJ buffers. | `true, false, true, false` |
+| 56 | `blender_mesh` | Mesh Generator | Core procedural Blender mesh synthesis engine. | `false, false, false, false` |
+| 57 | `cad_model` | CAD Engine | Core CAD modeling generator with dimensional constraints. | `false, false, false, false` |
+| 58 | `blender_animation` | Animation Core | Procedural keyframing and camera animation pipeline. | `false, false, false, false` |
+| 59 | `mesh_modifier` | Modifier Stack | Universal modifier stack execution (bevel, subsurf, mirror, boolean). | `false, false, false, false` |
+| 60 | `blender_sculpt` | Dynamic Sculpt | Dynamic topology sculpting engine with voxel remeshing. | `false, false, false, false` |
+| 61 | `physics_simulation` | Physics Engine | Rigid body, cloth, and particle dynamics solver. | `false, false, false, false` |
+| 62 | `rigging_armature` | Skeletal Rig | Armature bones, forward/inverse kinematics, and vertex weighting. | `false, false, false, false` |
+
+### Surgical CAD Modification Suite
+| # | Tool Name | Domain | Description | Hints (RO, Destr, Idemp, OpenW) |
+|---|---|---|---|---|
+| 63 | `cad_transform_part` | Spatial Transform | Surgically translates, rotates, and scales named components with matrix baking. | `false, false, true, false` |
+| 64 | `cad_bisect_slice` | Planar Slicing | Planar cross-section bisection cut with manifold cap filling. | `false, false, true, false` |
+| 65 | `cad_recolor_part` | Material Surgery | Targeted PBR color, roughness, metalness, and emission reassignment. | `false, false, true, false` |
+| 66 | `cad_decimate_mesh` | Polycount Control | Intelligent polygon decimation preserving sharp CAD boundaries and UVs. | `false, false, true, false` |
+| 67 | `cad_voxel_remesh` | Solid Watertight | Fuses intersecting parts into a single seamless watertight OpenVDB solid. | `false, false, true, false` |
+| 68 | `cad_mirror_symmetry` | Bilateral Symmetry| Mirrors geometry across coordinate planes with automated seam welding. | `false, false, true, false` |
+| 69 | `cad_deform_taper_twist`| Nonlinear Deform | Spatial nonlinear deformation (taper, twist, bend, stretch) along chosen axes. | `false, false, true, false` |
+| 70 | `cad_delete_submesh` | Mesh Clean | Excises unwanted components, stands, or loose floating vertices by volume. | `false, false, true, false` |
+| 71 | `cad_extrude_face_region`| Push-Pull Extrude | Normal face extrusion for mounting tabs, bosses, flanges, and recesses. | `false, false, true, false` |
+| 72 | `cad_subdivide_smooth` | Curvature Polish | Catmull-Clark surface refinement with auto-smooth normal preservation. | `false, false, true, false` |
+
+### Advanced Geometric Repair, Assembly & Kinematics
+| # | Tool Name | Domain | Description | Hints (RO, Destr, Idemp, OpenW) |
+|---|---|---|---|---|
+| 73 | `cad_align_snap_objects` | Datum Snapping | Surgically snaps/aligns target object to anchor datum (Min/Max/Center/Stack). | `false, false, true, false` |
+| 74 | `cad_weld_vertices` | Seam Welding | Distance-based vertex merging to close cracks and seal non-manifold seams. | `false, false, true, false` |
+| 75 | `cad_flip_recalculate_normals`| Normals Repair | Consistent outward normal vector recalculation and face inversion repair. | `false, false, true, false` |
+| 76 | `cad_fill_holes` | Hole Capping | Automatically detects and caps open boundary perimeter holes for 3D printing. | `false, false, true, false` |
+| 77 | `cad_scale_to_bounding_box` | Dimensional Scale | Calibrates geometry to exact real-world dimensions in millimeters or uniform max. | `false, false, true, false` |
+| 78 | `cad_loft_curves` | Ruled Surface | Parametric cross-section profile skinning and ruled loft transitions. | `false, false, true, false` |
+| 79 | `cad_generate_helical_spring` | Coil Springs | Generates precision mechanical compression springs with ground ends. | `false, false, true, false` |
+| 80 | `cad_generate_o_ring_groove` | Fluid Seals | Precision annular O-ring gland and channel carving for hydraulic seals. | `false, false, true, false` |
+| 81 | `cad_split_into_components` | Island Separation| Separates disjoint connected mesh islands into independent child objects. | `false, false, true, false` |
+| 82 | `cad_explode_assembly_view` | Technical View | Radiates all scene components outward from assembly center of mass. | `false, false, true, false` |
 
 ---
 
@@ -360,7 +411,47 @@ curl -s -X POST http://localhost:8080/mcp \
   }' | jq
 ```
 
-### 3. Connect Claude Desktop / Cursor / Zed (`claude_desktop_config.json`)
+### 3. Execute Surgical CAD Modification (`cad_bisect_slice`)
+```bash
+curl -s -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+      "name": "cad_bisect_slice",
+      "arguments": {
+        "targetMeshName": "Engine_Block",
+        "planePoint": [0.0, 0.0, 0.05],
+        "planeNormal": [0.0, 0.0, 1.0],
+        "fillCap": true
+      }
+    }
+  }' | jq
+```
+
+### 4. Execute Multi-Part Datum Alignment (`cad_align_snap_objects`)
+```bash
+curl -s -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "tools/call",
+    "params": {
+      "name": "cad_align_snap_objects",
+      "arguments": {
+        "targetMeshName": "Bearing_Ring",
+        "referenceMeshName": "Shaft_Rotor",
+        "alignmentMode": "STACK_TOP",
+        "alignmentAxis": "z"
+      }
+    }
+  }' | jq
+```
+
+### 5. Connect Claude Desktop / Cursor / Zed (`claude_desktop_config.json`)
 
 **Option A — SSE transport (no Python required):**
 
@@ -387,7 +478,7 @@ curl -s -X POST http://localhost:8080/mcp \
 }
 ```
 
-The stdio bridge (`scripts/kosh_mcp_stdio.py`) forwards line-delimited JSON-RPC over stdio to `http://localhost:8080/mcp` (override with `KOSH_MCP_URL`; sends `X-Google-Key: $GEMINI_API_KEY` when set). With the server running, the client will discover all 60 tools, 24 resources, and 16 prompts automatically on connect.
+The stdio bridge (`scripts/kosh_mcp_stdio.py`) forwards line-delimited JSON-RPC over stdio to `http://localhost:8080/mcp` (override with `KOSH_MCP_URL`; sends `X-Google-Key: $GEMINI_API_KEY` when set). With the server running, the client will discover all 82 tools, 24 resources, and 16 prompts automatically on connect.
 
 **Verify the connection:**
 

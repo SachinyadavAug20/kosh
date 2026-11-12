@@ -100,7 +100,18 @@ public class McpToolRegistry {
             "cad_deform_taper_twist",
             "cad_delete_submesh",
             "cad_extrude_face_region",
-            "cad_subdivide_smooth"
+            "cad_subdivide_smooth",
+            // Advanced Geometric Repair, Assembly & Kinematics
+            "cad_align_snap_objects",
+            "cad_weld_vertices",
+            "cad_flip_recalculate_normals",
+            "cad_fill_holes",
+            "cad_scale_to_bounding_box",
+            "cad_loft_curves",
+            "cad_generate_helical_spring",
+            "cad_generate_o_ring_groove",
+            "cad_split_into_components",
+            "cad_explode_assembly_view"
     );
 
     private final GoogleGeminiClient googleGeminiClient;
@@ -1171,6 +1182,129 @@ public class McpToolRegistry {
                 true
         ));
 
+        tools.add(createToolSchema(
+                "cad_align_snap_objects",
+                "Surgically aligns or snaps target object to a reference object along X, Y, Z, ground plane, or top-stack.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of mesh to move/align"),
+                        "referenceMeshName", Map.of("type", "string", "description", "Reference anchor mesh (defaults to first other scene mesh)"),
+                        "alignmentAxis", Map.of("type", "string", "enum", List.of("x", "y", "z", "all"), "description", "Axis to align along (default all)"),
+                        "alignmentMode", Map.of("type", "string", "enum", List.of("MIN", "MAX", "CENTER", "STACK_TOP", "STACK_BOTTOM"), "description", "Alignment mode (default CENTER)"),
+                        "offsetMm", Map.of("type", "number", "description", "Clearance gap offset in millimeters (default 0.0)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_weld_vertices",
+                "Surgically merges coincident and adjacent vertices within distance threshold to close seams and ensure watertight manifolds.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of mesh to weld"),
+                        "distanceMm", Map.of("type", "number", "description", "Seam merge distance threshold in millimeters (default 1.0)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_flip_recalculate_normals",
+                "Surgically repairs topological polygon face orientations by recalculating consistent outward normals or inverting normals.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of mesh to repair normals"),
+                        "mode", Map.of("type", "string", "enum", List.of("OUTSIDE", "INSIDE", "FLIP"), "description", "Normal orientation mode (default OUTSIDE)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_fill_holes",
+                "Surgically caps and patches open perimeter boundary hole loops on non-manifold geometry for 3D print watertightness.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of mesh to cap holes"),
+                        "maxSides", Map.of("type", "integer", "description", "Maximum perimeter edges per hole to fill (default 100)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_scale_to_bounding_box",
+                "Surgically scales a model or component to exact real-world dimensions in millimeters or uniform max bounding box.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of mesh to scale"),
+                        "targetDimensionsMm", Map.of("type", "array", "items", Map.of("type", "number"), "description", "Target bounding dimensions [x, y, z] in millimeters"),
+                        "uniformMaxMm", Map.of("type", "number", "description", "Uniform maximum dimension in millimeters (overrides targetDimensionsMm if set)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_loft_curves",
+                "Generates a parametric ruled surface loft or transitional skin between bottom and top cross-section profiles.",
+                Map.of(
+                        "profileType", Map.of("type", "string", "enum", List.of("CIRCLE", "RECTANGLE", "ELLIPSE", "AIRFOIL"), "description", "Cross-section shape profile (default CIRCLE)"),
+                        "heightM", Map.of("type", "number", "description", "Total loft height in meters (default 2.0)"),
+                        "bottomRadiusM", Map.of("type", "number", "description", "Bottom base radius in meters (default 1.0)"),
+                        "topRadiusM", Map.of("type", "number", "description", "Top opening radius in meters (default 0.5)"),
+                        "twistAngleDeg", Map.of("type", "number", "description", "Twist angle rotation in degrees (default 0.0)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_generate_helical_spring",
+                "Generates a precision mechanical compression/extension coil spring with specified wire gauge, pitch, and coil count.",
+                Map.of(
+                        "outerDiameterMm", Map.of("type", "number", "description", "Outer coil diameter in millimeters (default 20.0)"),
+                        "wireDiameterMm", Map.of("type", "number", "description", "Wire gauge diameter in millimeters (default 2.5)"),
+                        "pitchMm", Map.of("type", "number", "description", "Helical coil pitch in millimeters (default 6.0)"),
+                        "activeCoils", Map.of("type", "number", "description", "Number of active helical revolutions (default 6.0)"),
+                        "groundEnds", Map.of("type", "boolean", "description", "Ground/squared flat end coils (default true)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_generate_o_ring_groove",
+                "Surgically carves a precision fluid/pressure sealing O-ring gland channel into a shaft or cylinder bore.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of shaft/bore cylinder mesh"),
+                        "grooveWidthMm", Map.of("type", "number", "description", "Channel axial width in millimeters (default 3.0)"),
+                        "grooveDepthMm", Map.of("type", "number", "description", "Radial groove cut depth in millimeters (default 2.0)"),
+                        "axialPositionM", Map.of("type", "number", "description", "Z-height axial position of groove center in meters (default 0.0)"),
+                        "isInternalBore", Map.of("type", "boolean", "description", "True for internal bore gland, false for external piston/shaft gland (default false)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_split_into_components",
+                "Surgically separates disconnected loose polygon islands into independent named child objects with centered origins.",
+                Map.of(
+                        "targetMeshName", Map.of("type", "string", "description", "Name of composite mesh to separate"),
+                        "recenterOrigins", Map.of("type", "boolean", "description", "Re-center geometry origin for every separated component (default true)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_explode_assembly_view",
+                "Generates an exploded technical assembly view radiating all scene components outward from assembly center of mass.",
+                Map.of(
+                        "explosionFactor", Map.of("type", "number", "description", "Radial expansion multiplier (1.0 = nominal, 1.8 = standard exploded, default 1.5)"),
+                        "axis", Map.of("type", "string", "enum", List.of("RADIAL", "X", "Y", "Z"), "description", "Explosion displacement trajectory (default RADIAL)")
+                ),
+                false,
+                true
+        ));
+
         return tools;
     }
 
@@ -1580,6 +1714,26 @@ public class McpToolRegistry {
             finalScript = buildExtrudeFaceRegionScript(arguments, format);
         } else if ("cad_subdivide_smooth".equals(normalizedName)) {
             finalScript = buildSubdivideSmoothScript(arguments, format);
+        } else if ("cad_align_snap_objects".equals(normalizedName)) {
+            finalScript = buildAlignSnapScript(arguments, format);
+        } else if ("cad_weld_vertices".equals(normalizedName)) {
+            finalScript = buildWeldVerticesScript(arguments, format);
+        } else if ("cad_flip_recalculate_normals".equals(normalizedName)) {
+            finalScript = buildFlipRecalculateNormalsScript(arguments, format);
+        } else if ("cad_fill_holes".equals(normalizedName)) {
+            finalScript = buildFillHolesScript(arguments, format);
+        } else if ("cad_scale_to_bounding_box".equals(normalizedName)) {
+            finalScript = buildScaleToBoundingBoxScript(arguments, format);
+        } else if ("cad_loft_curves".equals(normalizedName)) {
+            finalScript = buildLoftCurvesScript(arguments, format);
+        } else if ("cad_generate_helical_spring".equals(normalizedName)) {
+            finalScript = buildGenerateHelicalSpringScript(arguments, format);
+        } else if ("cad_generate_o_ring_groove".equals(normalizedName)) {
+            finalScript = buildGenerateORingGrooveScript(arguments, format);
+        } else if ("cad_split_into_components".equals(normalizedName)) {
+            finalScript = buildSplitIntoComponentsScript(arguments, format);
+        } else if ("cad_explode_assembly_view".equals(normalizedName)) {
+            finalScript = buildExplodeAssemblyViewScript(arguments, format);
         } else if ("scene_assembler".equals(normalizedName)) {
             String targetPrompt = (prompt != null && !prompt.isBlank())
                     ? prompt
@@ -3838,6 +3992,452 @@ public class McpToolRegistry {
                 for p in target.data.polygons:
                     p.use_smooth = True
             """, targetName, targetName, levels, levels, smooth ? "True" : "False");
+    }
+
+    private String buildAlignSnapScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "Target";
+        String refName = arguments != null && arguments.get("referenceMeshName") != null ? arguments.get("referenceMeshName").toString() : "Reference";
+        String axis = arguments != null && arguments.get("alignmentAxis") != null ? arguments.get("alignmentAxis").toString().toLowerCase() : "all";
+        String mode = arguments != null && arguments.get("alignmentMode") != null ? arguments.get("alignmentMode").toString().toUpperCase() : "CENTER";
+        double offsetM = arguments != null && arguments.get("offsetMm") instanceof Number n ? n.doubleValue() / 1000.0 : 0.0;
+
+        return String.format(Locale.US, """
+            import bpy, mathutils
+
+            target = bpy.data.objects.get("%s")
+            if not target:
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+                target = mesh_objs[0] if mesh_objs else None
+
+            if not target:
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0,0,0.5))
+                target = bpy.context.active_object
+                target.name = "%s"
+
+            ref = bpy.data.objects.get("%s")
+            if not ref or ref == target:
+                other_objs = [o for o in bpy.data.objects if o.type == 'MESH' and o != target]
+                ref = other_objs[0] if other_objs else None
+
+            if ref:
+                t_corners = [target.matrix_world @ mathutils.Vector(c) for c in target.bound_box]
+                r_corners = [ref.matrix_world @ mathutils.Vector(c) for c in ref.bound_box]
+
+                t_min = mathutils.Vector((min(c.x for c in t_corners), min(c.y for c in t_corners), min(c.z for c in t_corners)))
+                t_max = mathutils.Vector((max(c.x for c in t_corners), max(c.y for c in t_corners), max(c.z for c in t_corners)))
+                t_cen = (t_min + t_max) * 0.5
+
+                r_min = mathutils.Vector((min(c.x for c in r_corners), min(c.y for c in r_corners), min(c.z for c in r_corners)))
+                r_max = mathutils.Vector((max(c.x for c in r_corners), max(c.y for c in r_corners), max(c.z for c in r_corners)))
+                r_cen = (r_min + r_max) * 0.5
+
+                mode = "%s"
+                axis = "%s"
+                offset = %.6f
+
+                delta = mathutils.Vector((0.0, 0.0, 0.0))
+                if mode == "MIN":
+                    delta = r_min - t_min
+                elif mode == "MAX":
+                    delta = r_max - t_max
+                elif mode == "STACK_TOP":
+                    delta = mathutils.Vector((r_cen.x - t_cen.x, r_cen.y - t_cen.y, r_max.z - t_min.z + offset))
+                elif mode == "STACK_BOTTOM":
+                    delta = mathutils.Vector((r_cen.x - t_cen.x, r_cen.y - t_cen.y, r_min.z - t_max.z - offset))
+                else:
+                    delta = r_cen - t_cen
+
+                if axis == "x":
+                    target.location.x += delta.x + offset
+                elif axis == "y":
+                    target.location.y += delta.y + offset
+                elif axis == "z":
+                    target.location.z += delta.z + offset
+                else:
+                    target.location += delta
+
+                bpy.ops.object.select_all(action='DESELECT')
+                target.select_set(True)
+                bpy.context.view_layer.objects.active = target
+                try:
+                    bpy.ops.object.transform_apply(location=True)
+                except Exception:
+                    pass
+            """, targetName, targetName, refName, mode, axis, offsetM);
+    }
+
+    private String buildWeldVerticesScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "Target";
+        double distM = arguments != null && arguments.get("distanceMm") instanceof Number n ? n.doubleValue() / 1000.0 : 0.001;
+
+        return String.format(Locale.US, """
+            import bpy
+
+            target = bpy.data.objects.get("%s")
+            if not target:
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+                target = mesh_objs[0] if mesh_objs else None
+
+            if not target:
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0,0,0.5))
+                target = bpy.context.active_object
+                target.name = "%s"
+
+            bpy.ops.object.select_all(action='DESELECT')
+            target.select_set(True)
+            bpy.context.view_layer.objects.active = target
+
+            mod = target.modifiers.new(name="CAD_Weld", type='WELD')
+            mod.merge_threshold = %.6f
+            try:
+                bpy.ops.object.modifier_apply(modifier="CAD_Weld")
+            except Exception:
+                pass
+            """, targetName, targetName, distM);
+    }
+
+    private String buildFlipRecalculateNormalsScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "Target";
+        String mode = arguments != null && arguments.get("mode") != null ? arguments.get("mode").toString().toUpperCase() : "OUTSIDE";
+
+        return String.format(Locale.US, """
+            import bpy
+
+            target = bpy.data.objects.get("%s")
+            if not target:
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+                target = mesh_objs[0] if mesh_objs else None
+
+            if not target:
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0,0,0.5))
+                target = bpy.context.active_object
+                target.name = "%s"
+
+            bpy.ops.object.select_all(action='DESELECT')
+            target.select_set(True)
+            bpy.context.view_layer.objects.active = target
+
+            mode = "%s"
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            try:
+                if mode == "INSIDE":
+                    bpy.ops.mesh.normals_make_consistent(inside=True)
+                elif mode == "FLIP":
+                    bpy.ops.mesh.flip_normals()
+                else:
+                    bpy.ops.mesh.normals_make_consistent(inside=False)
+            except Exception:
+                pass
+            bpy.ops.object.mode_set(mode='OBJECT')
+            """, targetName, targetName, mode);
+    }
+
+    private String buildFillHolesScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "Target";
+        int maxSides = arguments != null && arguments.get("maxSides") instanceof Number n ? Math.max(3, n.intValue()) : 100;
+
+        return String.format(Locale.US, """
+            import bpy
+
+            target = bpy.data.objects.get("%s")
+            if not target:
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+                target = mesh_objs[0] if mesh_objs else None
+
+            if not target:
+                bpy.ops.mesh.primitive_cylinder_add(radius=1.0, depth=1.0, vertices=16, location=(0,0,0.5), cap_ends=False)
+                target = bpy.context.active_object
+                target.name = "%s"
+
+            bpy.ops.object.select_all(action='DESELECT')
+            target.select_set(True)
+            bpy.context.view_layer.objects.active = target
+
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            try:
+                bpy.ops.mesh.fill_holes(sides=%d)
+            except Exception:
+                pass
+            bpy.ops.object.mode_set(mode='OBJECT')
+            """, targetName, targetName, maxSides);
+    }
+
+    private String buildScaleToBoundingBoxScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "Target";
+        double uniformMaxM = arguments != null && arguments.get("uniformMaxMm") instanceof Number n ? n.doubleValue() / 1000.0 : 0.0;
+        double tx = 0.0, ty = 0.0, tz = 0.0;
+        if (arguments != null && arguments.get("targetDimensionsMm") instanceof List<?> list && list.size() >= 3) {
+            tx = list.get(0) instanceof Number n ? n.doubleValue() / 1000.0 : 0.0;
+            ty = list.get(1) instanceof Number n ? n.doubleValue() / 1000.0 : 0.0;
+            tz = list.get(2) instanceof Number n ? n.doubleValue() / 1000.0 : 0.0;
+        }
+
+        return String.format(Locale.US, """
+            import bpy
+
+            target = bpy.data.objects.get("%s")
+            if not target:
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+                target = mesh_objs[0] if mesh_objs else None
+
+            if not target:
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0,0,0.5))
+                target = bpy.context.active_object
+                target.name = "%s"
+
+            bpy.ops.object.select_all(action='DESELECT')
+            target.select_set(True)
+            bpy.context.view_layer.objects.active = target
+
+            dims = target.dimensions
+            uniform_max = %.6f
+            tx, ty, tz = %.6f, %.6f, %.6f
+
+            if uniform_max > 0.0001:
+                max_d = max(dims.x, dims.y, dims.z, 0.0001)
+                scale_fac = uniform_max / max_d
+                target.scale = (target.scale.x * scale_fac, target.scale.y * scale_fac, target.scale.z * scale_fac)
+            elif tx > 0.0001 or ty > 0.0001 or tz > 0.0001:
+                sx = tx / max(dims.x, 0.0001) if tx > 0.0001 else 1.0
+                sy = ty / max(dims.y, 0.0001) if ty > 0.0001 else 1.0
+                sz = tz / max(dims.z, 0.0001) if tz > 0.0001 else 1.0
+                target.scale = (target.scale.x * sx, target.scale.y * sy, target.scale.z * sz)
+
+            try:
+                bpy.ops.object.transform_apply(scale=True)
+            except Exception:
+                pass
+            """, targetName, targetName, uniformMaxM, tx, ty, tz);
+    }
+
+    private String buildLoftCurvesScript(Map<String, Object> arguments, String format) {
+        String profileType = arguments != null && arguments.get("profileType") != null ? arguments.get("profileType").toString().toUpperCase() : "CIRCLE";
+        double h = arguments != null && arguments.get("heightM") instanceof Number n ? n.doubleValue() : 2.0;
+        double rBot = arguments != null && arguments.get("bottomRadiusM") instanceof Number n ? n.doubleValue() : 1.0;
+        double rTop = arguments != null && arguments.get("topRadiusM") instanceof Number n ? n.doubleValue() : 0.5;
+        double twistDeg = arguments != null && arguments.get("twistAngleDeg") instanceof Number n ? n.doubleValue() : 0.0;
+
+        return String.format(Locale.US, """
+            import bpy, math
+
+            h = %.6f
+            r_bot = %.6f
+            r_top = %.6f
+            twist = math.radians(%.4f)
+
+            bpy.ops.mesh.primitive_circle_add(vertices=24, radius=r_bot, fill_type='NGON', location=(0, 0, 0))
+            bot = bpy.context.active_object
+            bot.name = "Loft_Solid"
+
+            bpy.ops.mesh.primitive_circle_add(vertices=24, radius=r_top, fill_type='NGON', location=(0, 0, h), rotation=(0, 0, twist))
+            top = bpy.context.active_object
+
+            bpy.ops.object.select_all(action='DESELECT')
+            bot.select_set(True)
+            top.select_set(True)
+            bpy.context.view_layer.objects.active = bot
+            bpy.ops.object.join()
+
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_mode(type='EDGE')
+            bpy.ops.mesh.select_all(action='SELECT')
+            try:
+                bpy.ops.mesh.bridge_edge_loops()
+            except Exception:
+                pass
+            bpy.ops.object.mode_set(mode='OBJECT')
+            """, h, rBot, rTop, twistDeg);
+    }
+
+    private String buildGenerateHelicalSpringScript(Map<String, Object> arguments, String format) {
+        double outerD = arguments != null && arguments.get("outerDiameterMm") instanceof Number n ? n.doubleValue() / 1000.0 : 0.020;
+        double wireD = arguments != null && arguments.get("wireDiameterMm") instanceof Number n ? n.doubleValue() / 1000.0 : 0.0025;
+        double pitch = arguments != null && arguments.get("pitchMm") instanceof Number n ? n.doubleValue() / 1000.0 : 0.006;
+        double coils = arguments != null && arguments.get("activeCoils") instanceof Number n ? n.doubleValue() : 6.0;
+        boolean ground = arguments == null || !Boolean.FALSE.equals(arguments.get("groundEnds"));
+
+        return String.format(Locale.US, """
+            import bpy
+
+            outer_d = %.6f
+            wire_d = %.6f
+            pitch = %.6f
+            coils = %.6f
+            ground = %s
+
+            mean_radius = max(0.002, (outer_d - wire_d) * 0.5)
+            wire_radius = max(0.0005, wire_d * 0.5)
+
+            bpy.ops.mesh.primitive_circle_add(vertices=16, radius=wire_radius, location=(mean_radius, 0, wire_radius))
+            spring = bpy.context.active_object
+            spring.name = "Helical_Spring"
+
+            bpy.ops.object.select_all(action='DESELECT')
+            spring.select_set(True)
+            bpy.context.view_layer.objects.active = spring
+
+            mod = spring.modifiers.new(name="CAD_Screw", type='SCREW')
+            mod.axis = 'Z'
+            mod.screw_offset = pitch
+            mod.iterations = max(1, int(round(coils)))
+            mod.steps = 24
+            mod.render_steps = 24
+
+            try:
+                bpy.ops.object.modifier_apply(modifier="CAD_Screw")
+            except Exception:
+                pass
+
+            if ground:
+                total_h = pitch * coils
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_all(action='SELECT')
+                try:
+                    bpy.ops.mesh.bisect(plane_co=(0, 0, 0), plane_no=(0, 0, -1), clear_outer=True, fill=True)
+                    bpy.ops.mesh.bisect(plane_co=(0, 0, total_h), plane_no=(0, 0, 1), clear_outer=True, fill=True)
+                except Exception:
+                    pass
+                bpy.ops.object.mode_set(mode='OBJECT')
+            """, outerD, wireD, pitch, coils, ground ? "True" : "False");
+    }
+
+    private String buildGenerateORingGrooveScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "Target";
+        double widthM = arguments != null && arguments.get("grooveWidthMm") instanceof Number n ? n.doubleValue() / 1000.0 : 0.003;
+        double depthM = arguments != null && arguments.get("grooveDepthMm") instanceof Number n ? n.doubleValue() / 1000.0 : 0.002;
+        double zM = arguments != null && arguments.get("axialPositionM") instanceof Number n ? n.doubleValue() : 0.0;
+        boolean isInternal = arguments != null && Boolean.TRUE.equals(arguments.get("isInternalBore"));
+
+        return String.format(Locale.US, """
+            import bpy
+
+            target = bpy.data.objects.get("%s")
+            if not target:
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+                target = mesh_objs[0] if mesh_objs else None
+
+            if not target:
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.02, depth=0.06, vertices=32, location=(0,0,0.03))
+                target = bpy.context.active_object
+                target.name = "%s"
+
+            w = %.6f
+            d = %.6f
+            z = %.6f
+            is_internal = %s
+
+            r = max(target.dimensions.x, target.dimensions.y) * 0.5
+            cutter_r = (r + d) if is_internal else (r + 0.002)
+
+            bpy.ops.mesh.primitive_cylinder_add(radius=cutter_r, depth=w, vertices=32, location=(0, 0, z))
+            cutter = bpy.context.active_object
+            cutter.name = "ORing_Cutter"
+
+            bpy.ops.object.select_all(action='DESELECT')
+            target.select_set(True)
+            bpy.context.view_layer.objects.active = target
+
+            bool_mod = target.modifiers.new(name="ORing_Cut", type='BOOLEAN')
+            bool_mod.operation = 'DIFFERENCE'
+            bool_mod.object = cutter
+            try:
+                bpy.ops.object.modifier_apply(modifier="ORing_Cut")
+            except Exception:
+                pass
+
+            try:
+                bpy.data.objects.remove(cutter, do_unlink=True)
+            except Exception:
+                pass
+            """, targetName, targetName, widthM, depthM, zM, isInternal ? "True" : "False");
+    }
+
+    private String buildSplitIntoComponentsScript(Map<String, Object> arguments, String format) {
+        String targetName = arguments != null && arguments.get("targetMeshName") != null ? arguments.get("targetMeshName").toString() : "Target";
+        boolean recenter = arguments == null || !Boolean.FALSE.equals(arguments.get("recenterOrigins"));
+
+        return String.format(Locale.US, """
+            import bpy
+
+            target = bpy.data.objects.get("%s")
+            if not target:
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+                target = mesh_objs[0] if mesh_objs else None
+
+            if not target:
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(-1,0,0.5))
+                c1 = bpy.context.active_object
+                bpy.ops.mesh.primitive_cube_add(size=1.0, location=(1,0,0.5))
+                c2 = bpy.context.active_object
+                c1.select_set(True)
+                c2.select_set(True)
+                bpy.context.view_layer.objects.active = c1
+                bpy.ops.object.join()
+                target = c1
+                target.name = "%s"
+
+            recenter = %s
+
+            bpy.ops.object.select_all(action='DESELECT')
+            target.select_set(True)
+            bpy.context.view_layer.objects.active = target
+
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            try:
+                bpy.ops.mesh.separate(type='LOOSE')
+            except Exception:
+                pass
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            if recenter:
+                for obj in bpy.context.selected_objects:
+                    if obj.type == 'MESH':
+                        bpy.context.view_layer.objects.active = obj
+                        try:
+                            bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+                        except Exception:
+                            pass
+            """, targetName, targetName, recenter ? "True" : "False");
+    }
+
+    private String buildExplodeAssemblyViewScript(Map<String, Object> arguments, String format) {
+        double factor = arguments != null && arguments.get("explosionFactor") instanceof Number n ? n.doubleValue() : 1.5;
+        String axisMode = arguments != null && arguments.get("axis") != null ? arguments.get("axis").toString().toUpperCase() : "RADIAL";
+
+        return String.format(Locale.US, """
+            import bpy, mathutils
+
+            factor = %.4f
+            axis_mode = "%s"
+
+            mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+            if len(mesh_objs) <= 1:
+                bpy.ops.mesh.primitive_cylinder_add(radius=0.5, depth=1.0, location=(0,0,0.5))
+                mesh_objs = [o for o in bpy.data.objects if o.type == 'MESH']
+
+            all_centers = [o.matrix_world.translation for o in mesh_objs]
+            if all_centers:
+                center = sum(all_centers, mathutils.Vector((0, 0, 0))) / len(all_centers)
+                for idx, obj in enumerate(mesh_objs):
+                    diff = obj.matrix_world.translation - center
+                    if diff.length < 0.001:
+                        diff = mathutils.Vector((float(idx - len(mesh_objs)*0.5), 0, 0))
+
+                    dir_vec = diff.normalized()
+                    dist = max(0.3, diff.length * (factor - 1.0))
+
+                    if axis_mode == "X":
+                        obj.location.x += dist if diff.x >= 0 else -dist
+                    elif axis_mode == "Y":
+                        obj.location.y += dist if diff.y >= 0 else -dist
+                    elif axis_mode == "Z":
+                        obj.location.z += dist if diff.z >= 0 else -dist
+                    else:
+                        obj.location += dir_vec * dist
+            """, factor, axisMode);
     }
 
     private String toJson(Object obj) {

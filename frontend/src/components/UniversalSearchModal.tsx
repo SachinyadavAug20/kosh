@@ -153,6 +153,16 @@ export function UniversalSearchModal({
       { name: "Subdivide & Smooth", tool: "cad_subdivide_smooth", desc: "Catmull-Clark surface smoothing with auto-smooth normal preservation" },
       { name: "Delete Submesh / Loose Parts", tool: "cad_delete_submesh", desc: "Excise unwanted components, stands, or loose floating vertices" },
       { name: "Extrude Face Region", tool: "cad_extrude_face_region", desc: "Push-pull normal extrusion for bosses, recesses, or flanges" },
+      { name: "Align & Snap Objects", tool: "cad_align_snap_objects", desc: "Precision 3D datum snapping and multi-part bounding box alignment" },
+      { name: "Weld Vertices & Close Seams", tool: "cad_weld_vertices", desc: "Distance-based vertex deduplication to close cracks and seal manifolds" },
+      { name: "Recalculate / Repair Normals", tool: "cad_flip_recalculate_normals", desc: "Fix inverted polygon face orientations and outward normal vectors" },
+      { name: "Cap Open Holes (Watertight)", tool: "cad_fill_holes", desc: "Automatically detect and cap open perimeter boundary hole loops" },
+      { name: "Metric Scale to Bounding Box", tool: "cad_scale_to_bounding_box", desc: "Calibrate part to exact real-world dimensions in millimeters" },
+      { name: "Loft Surface Curves", tool: "cad_loft_curves", desc: "Parametric cross-section profile skinning and ruled loft transitions" },
+      { name: "Generate Compression Spring", tool: "cad_generate_helical_spring", desc: "Parametric coil spring with calibrated wire gauge, pitch, and turns" },
+      { name: "Carve O-Ring Seal Groove", tool: "cad_generate_o_ring_groove", desc: "Precision pressure/fluid sealing gland channel on shaft or cylinder" },
+      { name: "Split Loose Components", tool: "cad_split_into_components", desc: "Separate disconnected mesh islands into independent child objects" },
+      { name: "Exploded Assembly View", tool: "cad_explode_assembly_view", desc: "Radiate all scene components outward from assembly center of mass" },
     ];
 
     cadOperations.forEach((op) => {

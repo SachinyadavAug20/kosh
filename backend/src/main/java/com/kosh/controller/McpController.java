@@ -408,7 +408,17 @@ public class McpController {
                             "cad_deform_taper_twist",
                             "cad_delete_submesh",
                             "cad_extrude_face_region",
-                            "cad_subdivide_smooth"
+                            "cad_subdivide_smooth",
+                            "cad_align_snap_objects",
+                            "cad_weld_vertices",
+                            "cad_flip_recalculate_normals",
+                            "cad_fill_holes",
+                            "cad_scale_to_bounding_box",
+                            "cad_loft_curves",
+                            "cad_generate_helical_spring",
+                            "cad_generate_o_ring_groove",
+                            "cad_split_into_components",
+                            "cad_explode_assembly_view"
                     ).contains(toolName.toLowerCase());
 
                     boolean hasRawScript = arguments.containsKey("script") && arguments.get("script") != null && !arguments.get("script").toString().isBlank();
