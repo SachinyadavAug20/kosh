@@ -33,6 +33,9 @@ class AiAgentToolExecutionTest {
     @Autowired
     private OpenRouterClient openRouterClient;
 
+    @Autowired
+    private com.kosh.service.BlenderExecutionService blenderExecutionService;
+
     @Test
     @DisplayName("Online Model Catalog: Search internet base 3D models")
     void testOnlineModelCatalogSearch() {
@@ -93,6 +96,8 @@ class AiAgentToolExecutionTest {
         List<AiAgentService.AgentToolDefinition> tools = aiAgentService.listAgentTools();
         assertNotNull(tools);
         assertTrue(tools.size() >= 8, "Agent must expose at least 8 specialized CAD tools");
+
+        assumeTrue(blenderExecutionService.isBlenderAvailable(), "Blender runtime is not available; skipping live test");
 
         // Execute agent task
         Map<String, Object> result = aiAgentService.executeAgentTask(

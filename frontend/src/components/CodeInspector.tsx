@@ -303,7 +303,7 @@ export function CodeInspector({
             )
           ) : (
             <div className="p-4 text-[#71717a] font-mono text-xs italic">
-              // No Blender bpy script generated yet. Compile a prompt to view Python execution code.
+              {"// No Blender bpy script generated yet. Compile a prompt to view Python execution code."}
             </div>
           )
         ) : activeTab === "outliner" ? (
@@ -427,7 +427,7 @@ export function CodeInspector({
               </div>
             )}
             {!stdout && !stderr && (
-              <div className="text-[#71717a] italic">// No process logs recorded.</div>
+              <div className="text-[#71717a] italic">{"// No process logs recorded."}</div>
             )}
           </div>
         )}

@@ -162,7 +162,7 @@ export function PasteBpyModal({
         <div className="px-4 py-2 bg-[#18181b] border-b border-[#333338] flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center space-x-1.5 text-[#a1a1aa] text-[11px]">
             <Sparkles className="w-3.5 h-3.5 text-[#ea580c]" />
-            <span>Paste code copied from desktop Blender's Scripting workspace. Auto-compiled to GLB in &lt;2s.</span>
+            <span>Paste code copied from desktop Blender&apos;s Scripting workspace. Auto-compiled to GLB in &lt;2s.</span>
           </div>
 
           <div className="flex items-center space-x-1">

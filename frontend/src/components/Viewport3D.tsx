@@ -5336,7 +5336,7 @@ export function Viewport3D({
                             {activeSynthesisPrompt && (
                               <div className="p-2 rounded bg-[#18181b] border border-[#27272a] text-[11px] text-[#e4e4e7] truncate flex items-center space-x-2">
                                 <span className="text-[#ea580c] font-bold shrink-0">PROMPT:</span>
-                                <span className="truncate italic text-[#a1a1aa]">"{activeSynthesisPrompt}"</span>
+                                <span className="truncate italic text-[#a1a1aa]">&quot;{activeSynthesisPrompt}&quot;</span>
                               </div>
                             )}
 

@@ -662,6 +662,8 @@ function WorkspaceNodeView({
   onFocus,
   onRunScript,
 }: WorkspaceRendererProps): React.ReactElement {
+  const containerRef = useRef<HTMLDivElement>(null);
+
   // 1. LEAF NODE
   if (node.type === "leaf") {
     const isMax = maximizedLeafId === node.id;
@@ -691,7 +693,6 @@ function WorkspaceNodeView({
   }
 
   // 2. SPLIT NODE
-  const containerRef = useRef<HTMLDivElement>(null);
   const isHorizontal = node.direction === "horizontal";
 
   const handleDividerMouseDown = (e: React.MouseEvent) => {
