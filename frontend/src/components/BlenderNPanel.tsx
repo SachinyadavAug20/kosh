@@ -26,6 +26,9 @@ import {
   Minimize2,
   FileCode,
   Terminal,
+  ArrowDownToLine,
+  ShieldCheck,
+  ShieldAlert,
 } from "lucide-react";
 
 export type NPanelTab = "item" | "outliner" | "modifiers" | "material" | "script";
@@ -67,6 +70,14 @@ export interface MeshNodeItem {
   visible?: boolean;
 }
 
+export interface TopologyStatus {
+  isWatertight: boolean;
+  boundaryEdges: number;
+  nonManifoldEdges: number;
+  vertexCount: number;
+  triangleCount: number;
+}
+
 interface BlenderNPanelProps {
   isOpen: boolean;
   onToggleOpen: () => void;
@@ -87,6 +98,8 @@ interface BlenderNPanelProps {
     scale: [number, number, number]
   ) => void;
   onPlaceOnFloor?: () => void;
+  onLayFlat?: () => void;
+  topology?: TopologyStatus | null;
   onCenterOrigin?: () => void;
   onResetRotation?: () => void;
   onResetScale?: () => void;
@@ -135,6 +148,8 @@ export function BlenderNPanel({
   transform,
   onUpdateTransform,
   onPlaceOnFloor,
+  onLayFlat,
+  topology,
   onCenterOrigin,
   onResetRotation,
   onResetScale,
@@ -515,7 +530,30 @@ export function BlenderNPanel({
                   <div className="p-2.5 bg-[#141416] border border-[#27272a] rounded space-y-1.5 font-mono text-[10px]">
                     <div className="flex items-center justify-between text-[#a1a1aa] uppercase tracking-wider text-[9px]">
                       <span>Topology Telemetry</span>
-                      <span className="text-emerald-400 font-bold">Watertight</span>
+                      {topology ? (
+                        topology.isWatertight ? (
+                          <span className="text-emerald-400 font-bold flex items-center space-x-1">
+                            <ShieldCheck className="w-3 h-3" />
+                            <span>Watertight</span>
+                          </span>
+                        ) : (
+                          <span
+                            className="text-amber-400 font-bold flex items-center space-x-1"
+                            title={`${topology.boundaryEdges} boundary edges, ${topology.nonManifoldEdges} non-manifold edges`}
+                          >
+                            <ShieldAlert className="w-3 h-3" />
+                            <span>
+                              Holes {topology.boundaryEdges}
+                              {topology.nonManifoldEdges > 0 ? ` / NM ${topology.nonManifoldEdges}` : ""}
+                            </span>
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-emerald-400 font-bold flex items-center space-x-1">
+                          <ShieldCheck className="w-3 h-3" />
+                          <span>Watertight</span>
+                        </span>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-[#f4f4f5]">
                       <div className="flex justify-between border-b border-[#27272a] pb-0.5">
@@ -530,6 +568,18 @@ export function BlenderNPanel({
                           {meshList.find((m) => m.name === selectedMeshName)?.triangles.toLocaleString() || "—"}
                         </span>
                       </div>
+                      {topology && !topology.isWatertight && (
+                        <>
+                          <div className="flex justify-between border-b border-[#27272a] pb-0.5">
+                            <span className="text-[#71717a]">Boundary:</span>
+                            <span className="font-bold text-amber-400">{topology.boundaryEdges}</span>
+                          </div>
+                          <div className="flex justify-between border-b border-[#27272a] pb-0.5">
+                            <span className="text-[#71717a]">Non-manifold:</span>
+                            <span className="font-bold text-amber-400">{topology.nonManifoldEdges}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
@@ -555,6 +605,15 @@ export function BlenderNPanel({
                     >
                       <Compass className="w-3 h-3 text-cyan-400" />
                       <span>Center Origin</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onLayFlat}
+                      className="col-span-2 px-2 py-1 bg-[#202024] hover:bg-[#27272a] border border-[#27272a] rounded text-[10px] font-mono text-[#f4f4f5] flex items-center justify-center space-x-1 transition-colors"
+                      title="Rotate the largest flat face down onto the build plate"
+                    >
+                      <ArrowDownToLine className="w-3 h-3 text-emerald-400" />
+                      <span>Lay Flat on Build Plate</span>
                     </button>
                   </div>
                 </div>

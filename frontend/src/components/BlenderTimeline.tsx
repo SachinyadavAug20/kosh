@@ -167,8 +167,14 @@ export function BlenderTimeline({
         return;
       }
 
-      // I -> Insert Keyframe Menu
-      if (e.key.toLowerCase() === "i" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      // I -> Insert Keyframe Menu (yield to face inset while in Edit mode)
+      if (
+        e.key.toLowerCase() === "i" &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !e.metaKey &&
+        document.body.dataset.koshEditMode !== "edit"
+      ) {
         e.preventDefault();
         setIsInsertMenuOpen((prev) => !prev);
         return;

@@ -58,7 +58,11 @@ import {
 } from "../lib/narrative/LowPolyProceduralLibrary";
 import { generateInstantProcedural } from "../lib/procedural/ProceduralPrimitives";
 import { disposeObjectTree } from "../lib/scene/disposeObjectTree";
-import { syncSceneMeshRegistry } from "../lib/cad/ClientCsgEngine";
+import { syncSceneMeshRegistry, executeClientCSG } from "../lib/cad/ClientCsgEngine";
+import { bevelGeometry } from "../lib/cad/BevelOperation";
+import { extrudeFace, insetFace } from "../lib/cad/FaceEditOperations";
+import { analyzeTopology, type TopologyReport } from "../lib/cad/MeshTopology";
+import { computeLayFlatQuaternion } from "../lib/cad/PrintPrep";
 import { LowPolyCharacter } from "../lib/narrative/LowPolyCharacterRig";
 import { DirectorCameraRig } from "../lib/narrative/DirectorCameraRig";
 import {
@@ -114,6 +118,7 @@ export type ShadingMode = "solid" | "material" | "wireframe" | "normals";
 export type MatcapPreset = "studio" | "clay" | "redwax" | "chrome" | "obsidian" | "pearl" | "check" | "zebra" | "toon";
 export type InteractionMode = "object" | "edit" | "sculpt" | "paint" | "weight";
 export type EditElement = "vertex" | "edge" | "face";
+export type FaceEditKind = "bevel" | "extrude" | "inset";
 export type SculptBrush = "draw" | "clay" | "inflate" | "flatten" | "grab" | "crease" | "smooth";
 export type CameraView = "iso" | "front" | "back" | "top" | "bottom" | "right" | "left";
 function createStudioGradientTexture(theme: GradientTheme): THREE.CanvasTexture {
@@ -277,6 +282,9 @@ export function Viewport3D({
   const [matcap, setMatcap] = useState<MatcapPreset>("studio");
   const [interactionMode, setInteractionMode] = useState<InteractionMode>("object");
   const [editElement, setEditElement] = useState<EditElement>("vertex");
+  // Face modeling modals (Ctrl+B bevel, E extrude, I inset) & N-panel topology pill
+  const [faceEditModal, setFaceEditModal] = useState<{ kind: FaceEditKind; value: number; segments: number } | null>(null);
+  const [topologyStatus, setTopologyStatus] = useState<TopologyReport | null>(null);
   const [sculptBrush, setSculptBrush] = useState<SculptBrush>("clay");
   const [sculptRadius, setSculptRadius] = useState<number>(0.35);
   const [sculptStrength, setSculptStrength] = useState<number>(0.5);
@@ -711,6 +719,14 @@ export function Viewport3D({
     headlampEnabledRef.current = headlampEnabled;
   }, [headlampEnabled]);
 
+  // Publish edit mode so the Timeline can yield the plain "I" key to face inset
+  useEffect(() => {
+    document.body.dataset.koshEditMode = interactionMode;
+    return () => {
+      delete document.body.dataset.koshEditMode;
+    };
+  }, [interactionMode]);
+
   const applyLightingPreset = useCallback(
     (preset: "cad_studio" | "matcap" | "high_contrast") => {
       setLightingPreset(preset);
@@ -1048,6 +1064,17 @@ export function Viewport3D({
 
   // Raycaster & Mouse Click Tracking (to distinguish click vs orbit drag)
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
+  // Face modeling modal bookkeeping (Ctrl+B / E / I) and last clicked face
+  const faceEditRef = useRef<{
+    mesh: THREE.Mesh;
+    original: THREE.BufferGeometry;
+    startX: number;
+    startValue: number;
+    kind: FaceEditKind;
+  } | null>(null);
+  const faceEditPreviewRef = useRef<THREE.BufferGeometry | null>(null);
+  const faceEditActiveRef = useRef<boolean>(false);
+  const activeFaceRef = useRef<{ mesh: THREE.Mesh; faceIndex: number | null } | null>(null);
   const pointerDownPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // -------------------------------------------------------------
@@ -1985,6 +2012,7 @@ export function Viewport3D({
   // -------------------------------------------------------------
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     latestMousePosRef.current = { x: e.clientX, y: e.clientY };
+    if (faceEditActiveRef.current) return;
     if (!containerRef.current || !cameraRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -2009,6 +2037,7 @@ export function Viewport3D({
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (faceEditActiveRef.current) return;
     pointerDownPosRef.current = { x: e.clientX, y: e.clientY };
 
     if (containerRef.current && cameraRef.current && universalGizmoRef.current) {
@@ -2029,6 +2058,7 @@ export function Viewport3D({
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (faceEditActiveRef.current) return;
     if (orbitControlsRef.current) orbitControlsRef.current.enabled = true;
     if (universalGizmoRef.current?.isDragging) {
       universalGizmoRef.current.onPointerUp();
@@ -2097,6 +2127,7 @@ export function Viewport3D({
       // Fall back to the closest intersection if none pass the front-face test
       // (e.g. non-indexed or degenerate geometry).
       let hitMesh: THREE.Mesh | null = null;
+      let hitFaceIndex: number | null = null;
       for (const hit of intersects) {
         if (!(hit.object instanceof THREE.Mesh) || !hit.object.visible) continue;
         if (hit.object.userData?.isGizmo || hit.object.userData?.isHelper || hit.object.renderOrder >= 99999) continue;
@@ -2107,10 +2138,12 @@ export function Viewport3D({
           const dot = worldNormal.dot(raycasterRef.current.ray.direction);
           if (dot < 0) {
             hitMesh = hit.object; // front-facing
+            hitFaceIndex = hit.faceIndex ?? null;
             break;
           }
         } else {
           hitMesh = hit.object; // no face data — accept closest
+          hitFaceIndex = hit.faceIndex ?? null;
           break;
         }
       }
@@ -2126,12 +2159,16 @@ export function Viewport3D({
             hit.object.renderOrder < 99999
           ) {
             hitMesh = hit.object;
+            hitFaceIndex = hit.faceIndex ?? null;
             break;
           }
         }
       }
 
       if (hitMesh) {
+        // Track the active face for edit-mode extrude/inset hotkeys
+        activeFaceRef.current =
+          interactionMode === "edit" ? { mesh: hitMesh, faceIndex: hitFaceIndex } : null;
         if (e.ctrlKey || e.shiftKey) {
           setSelectedMeshes((prev) => {
             const exists = prev.some((m) => m === hitMesh || m.name === hitMesh!.name);
@@ -2154,6 +2191,7 @@ export function Viewport3D({
     } else {
       // Clicked in empty space -> Deselect cleanly unless Ctrl or Shift held
       if (!e.ctrlKey && !e.shiftKey) {
+        activeFaceRef.current = null;
         setSelectedMeshes([]);
         onMeshSelect?.(null);
         universalGizmoRef.current?.attach(null);
@@ -2838,6 +2876,23 @@ export function Viewport3D({
     });
   }, [selectedMesh, pushUndo]);
 
+  // Edge-based watertight status for the N-panel topology pill
+  const recomputeTopology = useCallback((mesh: THREE.Mesh | null) => {
+    if (!mesh || !mesh.geometry || !mesh.geometry.attributes?.position) {
+      setTopologyStatus(null);
+      return;
+    }
+    try {
+      setTopologyStatus(analyzeTopology(mesh.geometry));
+    } catch {
+      setTopologyStatus(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    recomputeTopology(selectedMesh);
+  }, [selectedMesh, recomputeTopology]);
+
   const handleSubdivide = useCallback(() => {
     if (!selectedMesh) return;
     const geo = selectedMesh.geometry;
@@ -2886,7 +2941,8 @@ export function Viewport3D({
       )
     );
     if (selectionBoxHelperRef.current) selectionBoxHelperRef.current.update();
-  }, [selectedMesh]);
+    recomputeTopology(selectedMesh);
+  }, [selectedMesh, recomputeTopology]);
 
   const applyTypedValue = (valStr: string) => {
     const val = parseFloat(valStr);
@@ -2966,6 +3022,273 @@ export function Viewport3D({
     onMeshListUpdate?.(list);
     syncSceneMeshRegistry(list);
   }, [onMeshListUpdate]);
+
+  // -------------------------------------------------------------
+  // Face Modeling Modals: Ctrl+B Bevel, E Extrude, I Inset
+  // -------------------------------------------------------------
+  const startFaceEdit = useCallback(
+    (kind: FaceEditKind) => {
+      if (faceEditActiveRef.current || isModalTransforming) return;
+      const mesh = selectedMesh;
+      if (!mesh || !(mesh.geometry instanceof THREE.BufferGeometry)) {
+        showUndoToast("Select a mesh to edit");
+        return;
+      }
+      if (kind !== "bevel") {
+        const af = activeFaceRef.current;
+        if (!af || af.mesh !== mesh || af.faceIndex == null) {
+          showUndoToast("Edit mode: click a face first");
+          return;
+        }
+      }
+      const startValue = kind === "bevel" ? 0.02 : kind === "extrude" ? 0.05 : 0.15;
+      faceEditRef.current = {
+        mesh,
+        original: mesh.geometry,
+        startX: latestMousePosRef.current.x,
+        startValue,
+        kind,
+      };
+      faceEditPreviewRef.current = null;
+      faceEditActiveRef.current = true;
+      setFaceEditModal({ kind, value: startValue, segments: 3 });
+      showUndoToast(
+        kind === "bevel"
+          ? "Bevel: drag mouse X = width, wheel = segments"
+          : kind === "extrude"
+          ? "Extrude: drag mouse X = depth"
+          : "Inset: drag mouse X = factor"
+      );
+    },
+    [selectedMesh, isModalTransforming, showUndoToast]
+  );
+
+  const cancelFaceEdit = useCallback(() => {
+    const ref = faceEditRef.current;
+    if (!ref) {
+      faceEditActiveRef.current = false;
+      setFaceEditModal(null);
+      return;
+    }
+    ref.mesh.geometry = ref.original;
+    faceEditPreviewRef.current?.dispose();
+    faceEditPreviewRef.current = null;
+    faceEditRef.current = null;
+    faceEditActiveRef.current = false;
+    setFaceEditModal(null);
+    recomputeTopology(ref.mesh);
+    refreshMeshList();
+  }, [recomputeTopology, refreshMeshList]);
+
+  const commitFaceEdit = useCallback(() => {
+    const ref = faceEditRef.current;
+    const modal = faceEditModal;
+    if (!ref || !modal) {
+      cancelFaceEdit();
+      return;
+    }
+    const prevGeo = ref.original;
+    const finalGeo = ref.mesh.geometry;
+    const { mesh } = ref;
+    faceEditRef.current = null;
+    faceEditPreviewRef.current = null;
+    faceEditActiveRef.current = false;
+    setFaceEditModal(null);
+    if (finalGeo === prevGeo) {
+      // Preview never materialized (degenerate width) — no-op commit
+      recomputeTopology(mesh);
+      return;
+    }
+    activeFaceRef.current = null;
+    pushUndo({
+      label:
+        modal.kind === "bevel" ? "Bevel Edges" : modal.kind === "extrude" ? "Extrude Face" : "Inset Face",
+      undo: () => {
+        mesh.geometry = prevGeo;
+        refreshMeshList();
+        recomputeTopology(mesh);
+      },
+      redo: () => {
+        mesh.geometry = finalGeo;
+        refreshMeshList();
+        recomputeTopology(mesh);
+      },
+    });
+    refreshMeshList();
+    recomputeTopology(mesh);
+    showUndoToast(`Applied ${modal.kind}`);
+  }, [faceEditModal, cancelFaceEdit, pushUndo, refreshMeshList, recomputeTopology, showUndoToast]);
+
+  // Live preview: recompute from the preserved original on every modal tweak
+  useEffect(() => {
+    if (!faceEditModal) return;
+    const ref = faceEditRef.current;
+    if (!ref) return;
+    const af = activeFaceRef.current;
+    let next: THREE.BufferGeometry | null = null;
+    try {
+      if (faceEditModal.kind === "bevel") {
+        next = bevelGeometry(ref.original, {
+          width: faceEditModal.value,
+          segments: faceEditModal.segments,
+        });
+      } else if (af && af.mesh === ref.mesh && af.faceIndex != null) {
+        next =
+          faceEditModal.kind === "extrude"
+            ? extrudeFace(ref.original, af.faceIndex, faceEditModal.value)
+            : insetFace(ref.original, af.faceIndex, faceEditModal.value);
+      }
+    } catch {
+      next = null;
+    }
+    if (!next) return;
+    faceEditPreviewRef.current?.dispose();
+    faceEditPreviewRef.current = next;
+    ref.mesh.geometry = next;
+  }, [faceEditModal]);
+
+  // Mouse X drives width/depth/factor; wheel drives segments (bevel) or value
+  const faceEditKind = faceEditModal?.kind ?? null;
+  useEffect(() => {
+    if (faceEditKind === null) return;
+    const onMove = (e: MouseEvent) => {
+      const ref = faceEditRef.current;
+      if (!ref) return;
+      const dx = e.clientX - ref.startX;
+      const sens = ref.kind === "inset" ? 0.0015 : 0.0012;
+      let value = ref.startValue + dx * sens;
+      if (ref.kind === "bevel") value = Math.max(0, value);
+      else if (ref.kind === "extrude") value = Math.max(-1, Math.min(1, value));
+      else value = Math.max(0.01, Math.min(0.9, value));
+      setFaceEditModal((prev) => (prev ? { ...prev, value } : prev));
+    };
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setFaceEditModal((prev) => {
+        if (!prev) return prev;
+        if (prev.kind !== "bevel") {
+          return { ...prev, value: Math.max(0.01, prev.value + (e.deltaY < 0 ? 0.01 : -0.01)) };
+        }
+        return {
+          ...prev,
+          segments: Math.max(1, Math.min(8, prev.segments + (e.deltaY < 0 ? 1 : -1))),
+        };
+      });
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    const oc = orbitControlsRef.current;
+    const prevEnabled = oc ? oc.enabled : true;
+    if (oc) oc.enabled = false;
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("wheel", onWheel, true);
+      if (oc) oc.enabled = prevEnabled;
+    };
+  }, [faceEditKind]);
+
+  // -------------------------------------------------------------
+  // CSG Boolean Hotkeys (Ctrl+- Difference, Ctrl++ Union, Ctrl+* Intersect)
+  // -------------------------------------------------------------
+  const handleBooleanHotkey = useCallback(
+    (op: "DIFFERENCE" | "UNION" | "INTERSECT") => {
+      if (selectedMeshes.length < 2) {
+        showUndoToast("Boolean: select base then cutter (2 meshes)");
+        return;
+      }
+      const base = selectedMeshes[0];
+      const cutter = selectedMeshes[1];
+      if (base === cutter || !base.geometry || !cutter.geometry) {
+        showUndoToast("Boolean: select two different meshes");
+        return;
+      }
+      try {
+        const result = executeClientCSG(base, cutter, op);
+        const prevGeo = base.geometry;
+        const inv = new THREE.Matrix4().copy(base.matrixWorld).invert();
+        result.geometry.applyMatrix4(inv);
+        result.geometry.computeBoundingBox();
+        result.geometry.computeBoundingSphere();
+        base.geometry = result.geometry;
+        const cutterParent = cutter.parent;
+        cutter.removeFromParent();
+        const prevSelection = selectedMeshes;
+        setSelectedMeshes([base]);
+        onMeshSelect?.(base.name);
+        refreshMeshList();
+        recomputeTopology(base);
+        pushUndo({
+          label: `Boolean ${op}`,
+          undo: () => {
+            base.geometry = prevGeo;
+            cutterParent?.add(cutter);
+            setSelectedMeshes(prevSelection);
+            onMeshSelect?.(prevSelection[prevSelection.length - 1]?.name ?? null);
+            refreshMeshList();
+            recomputeTopology(base);
+          },
+          redo: () => {
+            base.geometry = result.geometry;
+            cutter.removeFromParent();
+            setSelectedMeshes([base]);
+            onMeshSelect?.(base.name);
+            refreshMeshList();
+            recomputeTopology(base);
+          },
+        });
+        showUndoToast(`${op}: ${base.name} ${op === "DIFFERENCE" ? "cut by" : "merged with"} ${cutter.name}`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        showUndoToast(`Boolean failed: ${msg}`);
+      }
+    },
+    [selectedMeshes, showUndoToast, pushUndo, refreshMeshList, recomputeTopology, onMeshSelect]
+  );
+
+  // -------------------------------------------------------------
+  // Lay Flat (dominant facet face-down onto the y=0 build plate)
+  // -------------------------------------------------------------
+  const handleLayFlat = useCallback(() => {
+    if (!selectedMesh) {
+      showUndoToast("Select a part to lay flat");
+      return;
+    }
+    const res = computeLayFlatQuaternion(selectedMesh);
+    if (!res) {
+      showUndoToast("No flat face detected on this mesh");
+      return;
+    }
+    const prevQuat = selectedMesh.quaternion.clone();
+    const prevY = selectedMesh.position.y;
+    selectedMesh.quaternion.copy(res.quaternion);
+    selectedMesh.updateMatrixWorld(true);
+    const bbox = new THREE.Box3().setFromObject(selectedMesh);
+    const finalY = selectedMesh.position.y - bbox.min.y;
+    selectedMesh.position.y = finalY;
+    selectedMesh.updateMatrixWorld(true);
+    syncMeshTransform(selectedMesh);
+    recomputeTopology(selectedMesh);
+    pushUndo({
+      label: "Lay Flat",
+      undo: () => {
+        selectedMesh.quaternion.copy(prevQuat);
+        selectedMesh.position.y = prevY;
+        selectedMesh.updateMatrixWorld(true);
+        syncMeshTransform(selectedMesh);
+        recomputeTopology(selectedMesh);
+      },
+      redo: () => {
+        selectedMesh.quaternion.copy(res.quaternion);
+        selectedMesh.position.y = finalY;
+        selectedMesh.updateMatrixWorld(true);
+        syncMeshTransform(selectedMesh);
+        recomputeTopology(selectedMesh);
+      },
+    });
+    showUndoToast(res.alreadyFlat ? "Already flat on build plate" : "Laid flat on build plate");
+  }, [selectedMesh, syncMeshTransform, pushUndo, recomputeTopology, showUndoToast]);
+
 
   // Duplicate Selected Sub-Meshes (Shift + D)
   const handleDuplicate = useCallback(() => {
@@ -3503,6 +3826,22 @@ export function Viewport3D({
       // Don't intercept when user is typing in inputs or textareas
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
+      // Face edit modals (Ctrl+B / E / I): only Enter and Escape act
+      if (faceEditActiveRef.current) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commitFaceEdit();
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          cancelFaceEdit();
+          return;
+        }
+        e.preventDefault();
+        return;
+      }
+
       // Persistent Undo / Redo (Ctrl + Z, Ctrl + Shift + Z, Ctrl + Y)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
@@ -3665,7 +4004,8 @@ export function Viewport3D({
       }
 
       // Direct Numeric Typing in active transform modal (0-9, ., -, Backspace, Enter, Esc)
-      if (transformMode !== "select") {
+      // Never swallow Ctrl/Cmd combos (booleans, camera presets, etc.)
+      if (transformMode !== "select" && !e.ctrlKey && !e.metaKey) {
         if (e.key === "Enter") {
           e.preventDefault();
           handleConfirmTransform();
@@ -3749,6 +4089,12 @@ export function Viewport3D({
       }
       if (e.key.toLowerCase() === "e" && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
+        // Blender behavior: in Edit mode E extrudes the active face;
+        // everywhere else it is the Rotate gizmo.
+        if (interactionMode === "edit") {
+          startFaceEdit("extrude");
+          return;
+        }
         setTransformMode("rotate");
         setIsModalTransforming(false);
         setAxisConstraint("none");
@@ -3834,6 +4180,49 @@ export function Viewport3D({
           return inverted;
         });
         return;
+      }
+
+      // Ctrl + B -> Modal Edge Bevel (whole-mesh round-over)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b" && !e.altKey) {
+        e.preventDefault();
+        startFaceEdit("bevel");
+        return;
+      }
+
+      // I -> Inset active face (Edit mode only; otherwise the Timeline
+      // keeps the plain I keyframe menu)
+      if (
+        e.key.toLowerCase() === "i" &&
+        !e.ctrlKey &&
+        !e.altKey &&
+        !e.shiftKey &&
+        !e.metaKey
+      ) {
+        if (interactionMode === "edit") {
+          e.preventDefault();
+          startFaceEdit("inset");
+          return;
+        }
+      }
+
+      // Ctrl + -, +, =, *, 8 -> CSG Booleans (base = 1st selected, cutter = 2nd)
+      // Shift is allowed: Ctrl+"+" needs Shift on most keyboard layouts.
+      if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+        if (e.key === "-" || e.key === "_") {
+          e.preventDefault();
+          handleBooleanHotkey("DIFFERENCE");
+          return;
+        }
+        if (e.key === "+" || e.key === "=") {
+          e.preventDefault();
+          handleBooleanHotkey("UNION");
+          return;
+        }
+        if (e.key === "*" || e.key === "8") {
+          e.preventDefault();
+          handleBooleanHotkey("INTERSECT");
+          return;
+        }
       }
 
       // Selection: A (Select All) / Alt + A or Double A (Deselect)
@@ -4022,6 +4411,11 @@ export function Viewport3D({
     handleTakeStudioSnapshot,
     onMeshSelect,
     onOpenShortcuts,
+    interactionMode,
+    startFaceEdit,
+    commitFaceEdit,
+    cancelFaceEdit,
+    handleBooleanHotkey,
   ]);
 
 
@@ -4882,8 +5276,12 @@ export function Viewport3D({
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
+          showUndoToast(`Downloaded ${baseName}.glb`);
         },
-        (err) => console.error("Export error", err),
+        (err) => {
+          console.error("Export error", err);
+          showUndoToast("GLB export failed");
+        },
         { binary: true, animations: exportAnimations }
       );
     } else if (exportFmt === "stl") {
@@ -4899,8 +5297,10 @@ export function Viewport3D({
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+        showUndoToast(`Downloaded ${baseName}.stl`);
       } catch (e) {
         console.error("STL export error", e);
+        showUndoToast("STL export failed");
       }
     } else if (exportFmt === "obj") {
       try {
@@ -4915,8 +5315,10 @@ export function Viewport3D({
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+        showUndoToast(`Downloaded ${baseName}.obj`);
       } catch (e) {
         console.error("OBJ export error", e);
+        showUndoToast("OBJ export failed");
       }
     } else if (exportFmt === "png") {
       const renderer = rendererRef.current;
@@ -4934,6 +5336,7 @@ export function Viewport3D({
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+        showUndoToast(`Downloaded ${baseName}_snapshot.png`);
       }
       if (sceneRef.current) {
         sceneRef.current.background = oldBg || null;
@@ -4959,8 +5362,12 @@ export function Viewport3D({
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+        showUndoToast(`Downloaded ${a.download}`);
       },
-      (err) => console.error("Export error", err),
+      (err) => {
+        console.error("Export error", err);
+        showUndoToast("GLB export failed");
+      },
       { binary: true }
     );
   };
@@ -5148,6 +5555,31 @@ export function Viewport3D({
         <div className="absolute top-12 left-1/2 -translate-x-1/2 z-40 px-3 py-1.5 bg-[#202024] border border-[#ea580c]/50 text-[#f4f4f5] rounded text-xs font-mono shadow-2xl flex items-center space-x-2 animate-fade-in pointer-events-none">
           <span className="w-1.5 h-1.5 rounded-full bg-[#ea580c] animate-pulse" />
           <span>{undoToast}</span>
+        </div>
+      )}
+
+      {/* Face Edit Modal HUD (Ctrl+B Bevel / E Extrude / I Inset) */}
+      {faceEditModal && (
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-40 px-4 py-2 bg-[#202024] border border-amber-500/60 text-[#f4f4f5] rounded shadow-2xl font-mono text-xs pointer-events-none flex items-center space-x-4 animate-fade-in">
+          <span className="text-amber-400 font-bold uppercase tracking-wider">
+            {faceEditModal.kind === "bevel"
+              ? "Bevel"
+              : faceEditModal.kind === "extrude"
+              ? "Extrude"
+              : "Inset"}
+          </span>
+          <span>
+            {faceEditModal.kind === "inset"
+              ? `Factor ${faceEditModal.value.toFixed(2)}`
+              : `${(faceEditModal.value * 1000).toFixed(1)} mm`}
+          </span>
+          {faceEditModal.kind === "bevel" && (
+            <span className="text-amber-300">Segments {faceEditModal.segments}</span>
+          )}
+          <span className="text-[#71717a]">
+            ← Drag X: {faceEditModal.kind === "inset" ? "factor" : "amount"} • Wheel:{" "}
+            {faceEditModal.kind === "bevel" ? "segments" : "fine-tune"} • Enter: apply • Esc: cancel
+          </span>
         </div>
       )}
 
@@ -5839,6 +6271,8 @@ export function Viewport3D({
                       transform={selectedTransform}
                       onUpdateTransform={handleUpdateTransform}
                       onPlaceOnFloor={handlePlaceOnFloor}
+                      onLayFlat={handleLayFlat}
+                      topology={topologyStatus}
                       onCenterOrigin={handleCenterToOrigin}
                       onResetRotation={handleResetRotation}
                       onResetScale={handleResetScale}

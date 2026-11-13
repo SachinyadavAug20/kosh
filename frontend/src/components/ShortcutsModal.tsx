@@ -18,7 +18,7 @@ interface ShortcutItem {
   keys: string[];
   title: string;
   description: string;
-  category: "Transform & Snapping" | "View & Navigation" | "Shading & Visibility" | "Selection & Hierarchy" | "Panels & UI";
+  category: "Transform & Snapping" | "View & Navigation" | "Shading & Visibility" | "Selection & Hierarchy" | "Panels & UI" | "Modeling & Print";
 }
 
 const SHORTCUTS: ShortcutItem[] = [
@@ -295,6 +295,50 @@ const SHORTCUTS: ShortcutItem[] = [
     description: "Toggle timeline scrubber and procedural turntable playback",
     category: "Panels & UI",
   },
+
+  // Modeling & Print
+  {
+    keys: ["Tab", "2"],
+    title: "Enter Edit Mode",
+    description: "Open the mode pie menu and switch to Edit Mode for face hotkeys",
+    category: "Modeling & Print",
+  },
+  {
+    keys: ["Ctrl", "+", "B"],
+    title: "Bevel Edges (Modal)",
+    description: "Round mesh edges — drag mouse X for width, wheel for segments, Enter applies, Esc cancels",
+    category: "Modeling & Print",
+  },
+  {
+    keys: ["E"],
+    title: "Extrude Face (Edit Mode)",
+    description: "Pull the clicked face along its normal — drag mouse X for depth, Enter applies, Esc cancels",
+    category: "Modeling & Print",
+  },
+  {
+    keys: ["I"],
+    title: "Inset Face (Edit Mode)",
+    description: "Inset the clicked face toward its centroid — drag mouse X for factor, Enter applies, Esc cancels",
+    category: "Modeling & Print",
+  },
+  {
+    keys: ["Ctrl", "+", "-"],
+    title: "Boolean Difference",
+    description: "Subtract the 2nd selected mesh (cutter) from the 1st (base) via client-side CSG",
+    category: "Modeling & Print",
+  },
+  {
+    keys: ["Ctrl", "+", "+"],
+    title: "Boolean Union",
+    description: "Merge the 2nd selected mesh into the 1st (base) via client-side CSG",
+    category: "Modeling & Print",
+  },
+  {
+    keys: ["Ctrl", "+", "*"],
+    title: "Boolean Intersect",
+    description: "Keep only the overlap of the 1st and 2nd selected meshes via client-side CSG",
+    category: "Modeling & Print",
+  },
 ];
 
 interface ShortcutsModalProps {
@@ -316,7 +360,7 @@ export function ShortcutsModal({ isOpen, onClose }: ShortcutsModalProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
-  const categories = ["All", "Transform & Snapping", "View & Navigation", "Shading & Visibility", "Selection & Hierarchy", "Panels & UI"];
+  const categories = ["All", "Transform & Snapping", "View & Navigation", "Shading & Visibility", "Selection & Hierarchy", "Panels & UI", "Modeling & Print"];
 
   const filteredShortcuts = useMemo(() => {
     const q = search.trim().toLowerCase();

@@ -521,6 +521,14 @@ curl -s -X POST http://localhost:8080/mcp \
 | `Z` | Shading Pie Menu (Solid, Wireframe, Material, Normals) |
 | `T` | Toggle Left Generator Panel |
 | `N` | Toggle Right Code Inspector Drawer |
+| `Tab` then `2` | Enter Edit Mode (enables face hotkeys below) |
+| `Ctrl + B` | Bevel Edges — modal: drag X = width, wheel = segments, `Enter` / `Esc` |
+| `E` (Edit mode) | Extrude active face — drag X = depth, `Enter` / `Esc` |
+| `I` (Edit mode) | Inset active face — drag X = factor, `Enter` / `Esc` |
+| `Ctrl + -` | Boolean Difference (1st selected = base, 2nd = cutter) |
+| `Ctrl + +` / `Ctrl + =` | Boolean Union |
+| `Ctrl + *` / `Ctrl + 8` | Boolean Intersect |
+| N-panel | Watertight topology pill (boundary/non-manifold counts) & Lay Flat on build plate |
 | `F1` or `?` | Open Hotkeys Cheat Sheet |
 
 ---
