@@ -81,7 +81,7 @@ Built with a titanium-slate CAD workstation aesthetic, Kosh couples a **Spring B
 
 ## Expanded Creative MCP Tools Suite
 
-Kosh exposes a comprehensive suite of 82 native creative CAD, DCC, repair, and surgical manipulation tools over JSON-RPC 2.0 (`POST /mcp` and `GET /mcp/sse`), every single one declaring explicit boolean behavioral hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) for full M8ven Trust Index Grade A compliance:
+Kosh exposes a comprehensive suite of 85 native creative CAD, DCC, repair, and surgical manipulation tools over JSON-RPC 2.0 (`POST /mcp` and `GET /mcp/sse`), every single one declaring explicit boolean behavioral hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) for full M8ven Trust Index Grade A compliance:
 
 ### Precision 3D CAD & Engineering
 | # | Tool Name | Domain | Description | Hints (RO, Destr, Idemp, OpenW) |
@@ -200,10 +200,13 @@ Kosh exposes a comprehensive suite of 82 native creative CAD, DCC, repair, and s
 | 80 | `cad_generate_o_ring_groove` | Fluid Seals | Precision annular O-ring gland and channel carving for hydraulic seals. | `false, false, true, false` |
 | 81 | `cad_split_into_components` | Island Separation| Separates disjoint connected mesh islands into independent child objects. | `false, false, true, false` |
 | 82 | `cad_explode_assembly_view` | Technical View | Radiates all scene components outward from assembly center of mass. | `false, false, true, false` |
+| 83 | `cad_image_to_model` | Image to 3D | Photo/sketch (base64) to watertight solid: vision_ai, base_match, or contour_extrusion with auto-fallback. | `false, false, true, false` |
+| 84 | `cad_analyze_image` | Vision Analysis | Multimodal description of a photo/sketch: primitives, proportions, features, recommended mode. | `true, false, true, false` |
+| 85 | `cad_extract_contours` | Contour Tracing | Offline sketch perimeter tracing to centered meter-space polygon points. | `true, false, true, false` |
 
 ---
 
-## Enterprise MCP Resources (24 Direct In-Memory Schemas)
+## Enterprise MCP Resources (26 Direct In-Memory Schemas)
 
 Kosh pre-serializes domain knowledge into JVM memory at startup for sub-2ms `resources/read` resolution, eliminating LLM dimension hallucinations:
 
@@ -233,10 +236,12 @@ Kosh pre-serializes domain knowledge into JVM memory at startup for sub-2ms `res
 | 22 | `kosh://materials/filaments` | 3D Printing | FDM filament nozzle/bed temps, tensile strength, shrinkage, and use cases. |
 | 23 | `kosh://specs/printers/build-volumes` | Printers | Prusa, Bambu Lab, Creality, and Voron build volumes for part fit-checking. |
 | 24 | `kosh://standards/iso-2768-tolerances` | Tolerancing | ISO 2768 f/m/c/v tolerance classes for linear and angular dimensions. |
+| 25 | `kosh://guides/image-to-3d` | Image Ingestion | Reconstruction modes, REST/MCP wiring, pipeline stages, and reliability tips for photo/sketch input. |
+| 26 | `kosh://guides/sketch-conventions` | Image Ingestion | Drawing rules for reliable sketch-to-3D: strokes, closed contours, views, per-mode expectations. |
 
 ---
 
-## Precision Engineering MCP Prompts (16 Standardized Blueprints)
+## Precision Engineering MCP Prompts (19 Standardized Blueprints)
 
 Connected LLM clients (Claude Desktop, Cursor, Gemini) can query `prompts/list` and `prompts/get` to pull hardened step-by-step CAD plans with zero syntax hallucinations:
 
@@ -258,6 +263,9 @@ Connected LLM clients (Claude Desktop, Cursor, Gemini) can query `prompts/list` 
 | 14 | `optimize_model_for_3d_printing` | Print Readiness | `meshName`, `filament`, `nozzleDiameterMm`, `supportless` |
 | 15 | `design_heat_set_insert_mount` | Insert Boss Design | `threadSize`, `insertLengthMm`, `mountCount`, `patternPcdMm` |
 | 16 | `plan_linear_motion_stage` | Linear Motion | `travelMm`, `payloadKg`, `driveType`, `buildVolumeMm` |
+| 17 | `image_to_3d_model` | Image to 3D | `imageBase64`, `prompt`, `mode`, `format` |
+| 18 | `hand_sketch_to_printable_part` | Print-Ready Sketches | `sketchBase64`, `targetSizeMm`, `material` |
+| 19 | `analyze_and_reconstruct_reference_image` | Vision Ingestion | `imageBase64`, `notes` |
 
 ---
 
@@ -478,7 +486,7 @@ curl -s -X POST http://localhost:8080/mcp \
 }
 ```
 
-The stdio bridge (`scripts/kosh_mcp_stdio.py`) forwards line-delimited JSON-RPC over stdio to `http://localhost:8080/mcp` (override with `KOSH_MCP_URL`; sends `X-Google-Key: $GEMINI_API_KEY` when set). With the server running, the client will discover all 82 tools, 24 resources, and 16 prompts automatically on connect.
+The stdio bridge (`scripts/kosh_mcp_stdio.py`) forwards line-delimited JSON-RPC over stdio to `http://localhost:8080/mcp` (override with `KOSH_MCP_URL`; sends `X-Google-Key: $GEMINI_API_KEY` when set). With the server running, the client will discover all 85 tools, 26 resources, and 19 prompts automatically on connect.
 
 **Verify the connection:**
 

@@ -1589,6 +1589,71 @@ export const DIRECTOR_MCP_TOOLS: McpToolDefinition[] = [
       targetMeshName: "Bracket_Arm",
     },
   },
+  {
+    name: "cad_image_to_model",
+    description: "Converts an uploaded photo or hand-drawn sketch (base64 data URL) into a watertight 3D solid via multimodal vision AI reconstruction, online base-model matching, or deterministic contour extrusion with automatic fallbacks.",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        image: { type: "string", description: "Required image payload: data URL (data:image/png;base64,...) or raw base64 of a PNG/JPEG sketch or photo" },
+        prompt: { type: "string", description: "Natural-language hints: color, size, features to emphasize" },
+        mode: { type: "string", enum: ["vision_ai", "base_match", "contour_extrusion"], description: "Reconstruction pipeline (default vision_ai; falls back automatically on failure)" },
+        format: { type: "string", enum: ["glb", "stl"], description: "Export format (default glb)" },
+      },
+      required: ["image"],
+    },
+    samplePayload: {
+      image: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+      prompt: "orange gear",
+      mode: "vision_ai",
+      format: "glb",
+    },
+  },
+  {
+    name: "cad_analyze_image",
+    description: "Multimodal vision analysis of a photo or sketch: object identification, primitive decomposition, proportion estimates, feature list, and recommended reconstruction mode. Read-only, returns text.",
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        image: { type: "string", description: "Required image payload: data URL (data:image/png;base64,...) or raw base64 of a PNG/JPEG" },
+        prompt: { type: "string", description: "Optional context or constraints to consider during analysis" },
+      },
+      required: ["image"],
+    },
+    samplePayload: {
+      image: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+      prompt: "mechanical bracket, 60mm wide",
+    },
+  },
+  {
+    name: "cad_extract_contours",
+    description: "Deterministic computer-vision contour tracing: extracts the traced 2D perimeter polygon from a sketch image as centered meter-space points. Zero API key, fully offline.",
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    inputSchema: {
+      type: "object",
+      properties: {
+        image: { type: "string", description: "Required image payload: data URL (data:image/png;base64,...) or raw base64 of a PNG/JPEG sketch" },
+      },
+      required: ["image"],
+    },
+    samplePayload: {
+      image: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+    },
+  },
 ];
 
 export interface McpResourceDefinition {
@@ -1741,6 +1806,18 @@ export const DIRECTOR_MCP_RESOURCES: McpResourceDefinition[] = [
     uri: "kosh://standards/iso-2768-tolerances",
     name: "ISO 2768 General Tolerances Standard",
     description: "Linear and angular tolerance classes (f, m, c, v) for machined and printed parts, plus derived geographic fits for holes and shafts",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://guides/image-to-3d",
+    name: "Image to 3D Reconstruction Guide",
+    description: "Photo and hand-drawn sketch ingestion: reconstruction modes (vision_ai, base_match, contour_extrusion), MCP/REST wiring, pipeline stages, and reliability tips",
+    mimeType: "application/json",
+  },
+  {
+    uri: "kosh://guides/sketch-conventions",
+    name: "Hand-Drawn Sketch Conventions",
+    description: "Drawing rules for reliable sketch-to-3D reconstruction: stroke contrast, closed contours, view selection, labeling, and per-mode expectations",
     mimeType: "application/json",
   },
 ];
@@ -1898,6 +1975,33 @@ export const DIRECTOR_MCP_PROMPTS: McpPromptDefinition[] = [
       { name: "payloadKg", description: "Moving payload mass in kilograms (e.g. 2.0)", required: false },
       { name: "driveType", description: "Drive mechanism (belt, leadscrew, rack_pinion)", required: false },
       { name: "buildVolumeMm", description: "Printer build volume as 'X,Y,Z' in millimeters for part sizing (e.g. '256,256,256')", required: false },
+    ],
+  },
+  {
+    name: "image_to_3d_model",
+    description: "Full image-to-3D workflow: pick a reconstruction mode, convert a photo or hand-drawn sketch into a watertight solid, and verify the result.",
+    arguments: [
+      { name: "imageBase64", description: "Photo or sketch as data URL / raw base64 (required)", required: true },
+      { name: "prompt", description: "Natural-language hints: color, size, features to emphasize", required: false },
+      { name: "mode", description: "vision_ai | base_match | contour_extrusion (auto-fallback when omitted)", required: false },
+      { name: "format", description: "glb (default) or stl", required: false },
+    ],
+  },
+  {
+    name: "hand_sketch_to_printable_part",
+    description: "Turns a hand-drawn sketch into a verified 3D-printable STL: analyze, reconstruct, check manifold, then export for the target printer.",
+    arguments: [
+      { name: "sketchBase64", description: "Hand-drawn sketch as data URL / raw base64 (required)", required: true },
+      { name: "targetSizeMm", description: "Desired largest dimension in millimeters (e.g. 60)", required: false },
+      { name: "material", description: "Target filament: PLA | PETG | ABS | TPU (default PLA)", required: false },
+    ],
+  },
+  {
+    name: "analyze_and_reconstruct_reference_image",
+    description: "Two-stage reference ingestion: vision-analyze the image first to choose the best mode, then reconstruct and validate the mesh.",
+    arguments: [
+      { name: "imageBase64", description: "Reference photo or sketch as data URL / raw base64 (required)", required: true },
+      { name: "notes", description: "User constraints: scale, orientation, which features matter", required: false },
     ],
   },
 ];
