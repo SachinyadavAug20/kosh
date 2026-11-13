@@ -165,6 +165,33 @@ public class McpPromptRegistry {
                         arg("buildVolumeMm", "Printer build volume as 'X,Y,Z' in millimeters for part sizing (e.g. '256,256,256')", false)
                 )
         );
+        register(
+                "image_to_3d_model",
+                "Full image-to-3D workflow: pick a reconstruction mode, convert a photo or hand-drawn sketch into a watertight solid, and verify the result.",
+                List.of(
+                        arg("imageBase64", "Photo or sketch as data URL / raw base64 (required)", true),
+                        arg("prompt", "Natural-language hints: color, size, features to emphasize", false),
+                        arg("mode", "vision_ai | base_match | contour_extrusion (auto-fallback when omitted)", false),
+                        arg("format", "glb (default) or stl", false)
+                )
+        );
+        register(
+                "hand_sketch_to_printable_part",
+                "Turns a hand-drawn sketch into a verified 3D-printable STL: analyze, reconstruct, check manifold, then export for the target printer.",
+                List.of(
+                        arg("sketchBase64", "Hand-drawn sketch as data URL / raw base64 (required)", true),
+                        arg("targetSizeMm", "Desired largest dimension in millimeters (e.g. 60)", false),
+                        arg("material", "Target filament: PLA | PETG | ABS | TPU (default PLA)", false)
+                )
+        );
+        register(
+                "analyze_and_reconstruct_reference_image",
+                "Two-stage reference ingestion: vision-analyze the image first to choose the best mode, then reconstruct and validate the mesh.",
+                List.of(
+                        arg("imageBase64", "Reference photo or sketch as data URL / raw base64 (required)", true),
+                        arg("notes", "User constraints: scale, orientation, which features matter", false)
+                )
+        );
 
         log.info("McpPromptRegistry initialized with {} prompt blueprints", promptsList.size());
     }
@@ -642,6 +669,120 @@ public class McpPromptRegistry {
                                 """,
                                 travel, payload, drive, buildVol,
                                 buildVol
+                        )
+                );
+            }
+
+            case "image_to_3d_model" -> {
+                String imageB64 = arg(args, "imageBase64", "");
+                String promptHints = arg(args, "prompt", "a mechanical bracket with two mounting holes");
+                String mode = arg(args, "mode", "auto");
+                String format = arg(args, "format", "glb");
+
+                yield textPrompt(
+                        "Image-to-3D reconstruction workflow (" + mode + " -> " + format + ")",
+                        String.format("""
+                                Convert this image into a watertight 3D model.
+
+                                IMAGE (data URL or raw base64):
+                                %s
+
+                                USER HINTS: %s
+
+                                WORKFLOW:
+                                1. (Optional but recommended) Call 'cad_analyze_image' with the image to get an
+                                   object description and a recommended mode.
+                                2. Call 'cad_image_to_model' with:
+                                   - image: the payload above
+                                   - mode: %s (use the recommendation from step 1 when mode is "auto")
+                                   - prompt: the user hints
+                                   - format: %s
+                                3. The pipeline auto-falls-back: vision_ai -> base_match -> contour_extrusion,
+                                   so a failed first attempt still returns a model.
+                                4. Verify the result with 'cad_inspect_scene' and, when print-bound, run
+                                   'cad_check_manifold' before exporting.
+
+                                IMAGE TIPS: single object, closed contours, dark strokes on white background.
+                                See resource 'kosh://guides/sketch-conventions' for drawing rules and
+                                'kosh://guides/image-to-3d' for mode selection.
+                                """,
+                                imageB64.isBlank() ? "(paste your base64 image here)" : imageB64,
+                                promptHints,
+                                mode,
+                                format
+                        )
+                );
+            }
+
+            case "hand_sketch_to_printable_part" -> {
+                String sketch = arg(args, "sketchBase64", "");
+                String sizeMm = arg(args, "targetSizeMm", "60");
+                String material = arg(args, "material", "PLA");
+
+                yield textPrompt(
+                        "Hand sketch to printable " + material + " part (" + sizeMm + "mm)",
+                        String.format("""
+                                Turn this hand-drawn sketch into a verified 3D-printable part.
+
+                                SKETCH (data URL or raw base64):
+                                %s
+
+                                TARGET: largest dimension %smm, material %s.
+
+                                WORKFLOW:
+                                1. Call 'cad_analyze_image' with the sketch; note the recommended mode and
+                                   proportion estimate.
+                                2. Call 'cad_image_to_model' (format "stl") with the sketch and hints:
+                                   "target size %smm, material %s".
+                                3. Read resource 'kosh://guidelines/fdm-tolerances' (%s minimums) and
+                                   'kosh://specs/printers/build-volumes' to sanity-check wall thickness and fit.
+                                4. Run 'cad_check_manifold' — the mesh must be watertight before slicing.
+                                5. If dimensions are off, re-run 'cad_image_to_model' with corrected hints
+                                   rather than scaling blindly; then confirm with 'cad_measure_dimensions'.
+                                6. Export the final STL via 'export_cad_artifact' for the slicer.
+
+                                See 'kosh://guides/sketch-conventions' for how to draw the next iteration.
+                                """,
+                                sketch.isBlank() ? "(paste your base64 sketch here)" : sketch,
+                                sizeMm, material,
+                                sizeMm, material, material
+                        )
+                );
+            }
+
+            case "analyze_and_reconstruct_reference_image" -> {
+                String imageB64 = arg(args, "imageBase64", "");
+                String notes = arg(args, "notes", "keep the original proportions; functional part");
+
+                yield textPrompt(
+                        "Analyze reference image, then reconstruct (" + notes + ")",
+                        String.format("""
+                                Two-stage image-to-3D ingestion for this reference.
+
+                                IMAGE (data URL or raw base64):
+                                %s
+
+                                USER NOTES: %s
+
+                                STAGE A — ANALYZE:
+                                Call 'cad_analyze_image' with the image. Read OBJECT, GEOMETRY, PROPORTIONS,
+                                and MODE from the reply. Cross-check the MODE against the notes above.
+
+                                STAGE B — RECONSTRUCT:
+                                Call 'cad_image_to_model' with the same image, mode from Stage A, and a prompt
+                                merging the user notes with Stage A's proportion/feature findings.
+
+                                STAGE C — VALIDATE:
+                                1. 'cad_inspect_scene' for bounding box and object count.
+                                2. 'cad_measure_dimensions' against the requested real-world size.
+                                3. 'cad_check_manifold' when the model will be printed or booleaned further.
+                                4. 'cad_extract_contours' as a sanity check when silhouette fidelity matters.
+
+                                Resources: 'kosh://guides/image-to-3d' (modes), 'kosh://guides/sketch-conventions'
+                                (if Stage A reports ambiguity, ask the user to redraw per those rules).
+                                """,
+                                imageB64.isBlank() ? "(paste your base64 image here)" : imageB64,
+                                notes
                         )
                 );
             }

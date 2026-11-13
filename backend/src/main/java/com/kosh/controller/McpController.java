@@ -418,7 +418,9 @@ public class McpController {
                             "cad_generate_helical_spring",
                             "cad_generate_o_ring_groove",
                             "cad_split_into_components",
-                            "cad_explode_assembly_view"
+                            "cad_explode_assembly_view",
+                            "cad_image_to_model",
+                            "cad_extract_contours"
                     ).contains(toolName.toLowerCase());
 
                     boolean hasRawScript = arguments.containsKey("script") && arguments.get("script") != null && !arguments.get("script").toString().isBlank();

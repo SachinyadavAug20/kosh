@@ -232,6 +232,18 @@ public class McpResourceRegistry {
                 "Linear and angular tolerance classes (f, m, c, v) for machined and printed parts, plus derived geographic fits for holes and shafts",
                 toJson(buildIso2768TolerancesSpec())
         );
+        registerStatic(
+                "kosh://guides/image-to-3d",
+                "Image to 3D Reconstruction Guide",
+                "Photo and hand-drawn sketch ingestion: reconstruction modes (vision_ai, base_match, contour_extrusion), MCP/REST wiring, pipeline stages, and reliability tips",
+                toJson(buildImageTo3dGuide())
+        );
+        registerStatic(
+                "kosh://guides/sketch-conventions",
+                "Hand-Drawn Sketch Conventions",
+                "Drawing rules for reliable sketch-to-3D reconstruction: stroke contrast, closed contours, view selection, labeling, and per-mode expectations",
+                toJson(buildSketchConventionsGuide())
+        );
 
         log.info("McpResourceRegistry initialized: {} resources ({} static, {} dynamic)",
                 descriptors.size(), staticContentCache.size(), dynamicReaders.size());
@@ -840,5 +852,98 @@ public class McpResourceRegistry {
         r.put("upToMm", upTo);
         r.put("toleranceMm", tol);
         return r;
+    }
+
+    /** Image/sketch ingestion guide: modes, wiring, pipeline, and reliability tips. */
+    private Map<String, Object> buildImageTo3dGuide() {
+        Map<String, Object> guide = new LinkedHashMap<>();
+        guide.put("guide", "image-to-3d-reconstruction");
+        guide.put("mcpTool", "cad_image_to_model");
+        guide.put("analysisTool", "cad_analyze_image");
+        guide.put("contourTool", "cad_extract_contours");
+        guide.put("restEndpoint", "POST /api/assets/sketch-to-3d");
+        guide.put("input", Map.of(
+                "image", "data URL (data:image/png;base64,...) or raw base64 payload",
+                "prompt", "optional natural-language hints (color, size, features)",
+                "mode", "vision_ai (default) | base_match | contour_extrusion",
+                "format", "glb (default) | stl"
+        ));
+        guide.put("modes", List.of(
+                Map.of(
+                        "name", "vision_ai",
+                        "description", "Multimodal free vision models (OpenRouter) read the sketch and write a Blender 5.2 reconstruction script with sub-meshes, bevels, and PBR materials.",
+                        "requiresApiKey", true,
+                        "bestFor", List.of("hand-drawn sketches", "concepts with depth cues", "multi-part objects")
+                ),
+                Map.of(
+                        "name", "base_match",
+                        "description", "Searches the online 3D model catalog for a matching base mesh, downloads it, and applies an AI adaptation script from the prompt.",
+                        "requiresApiKey", true,
+                        "bestFor", List.of("real-world products", "objects with existing models", "fast blockouts")
+                ),
+                Map.of(
+                        "name", "contour_extrusion",
+                        "description", "Deterministic pixel contour tracing + closed-profile extrusion in Blender. Zero API key, zero failure fallback.",
+                        "requiresApiKey", false,
+                        "bestFor", List.of("silhouettes", "badges", "logos", "flat laser-cut shapes")
+                )
+        ));
+        guide.put("pipeline", List.of(
+                "image decoded (data URL stripped to raw base64)",
+                "vision_ai attempt (skips when no API key)",
+                "base_match attempt when a prompt hint is present",
+                "contour_extrusion deterministic fallback",
+                "Blender 5.2 LTS builds watertight geometry in the warm daemon",
+                "GLB/STL written to /api/assets/<fileName> and recorded in scene state"
+        ));
+        guide.put("tips", List.of(
+                "Run cad_analyze_image first to get a mode recommendation before reconstructing.",
+                "contour_extrusion needs a single closed silhouette with strong contrast — it traces 24 radial rays from the image center.",
+                "vision_ai quality scales with sketch clarity: bold strokes, white background, one object per image.",
+                "On hosts without Blender (e.g. free-tier cloud), only analysis and contour extraction are reliable; reconstruction requires the local Blender daemon.",
+                "Use cad_extract_contours when you want the raw polygon for your own extrusion or CAD sketch workflow."
+        ));
+        guide.put("relatedPrompts", List.of(
+                "image_to_3d_model", "hand_sketch_to_printable_part", "analyze_and_reconstruct_reference_image"
+        ));
+        guide.put("relatedResources", List.of(
+                "kosh://guides/sketch-conventions", "kosh://guidelines/fdm-tolerances", "kosh://specs/printers/build-volumes"
+        ));
+        return guide;
+    }
+
+    /** Drawing conventions that maximize sketch-to-3D reconstruction fidelity. */
+    private Map<String, Object> buildSketchConventionsGuide() {
+        Map<String, Object> guide = new LinkedHashMap<>();
+        guide.put("guide", "sketch-conventions");
+        guide.put("drawing", Map.of(
+                "background", "plain white or very light paper — no grid lines or shading washes",
+                "stroke", "bold dark ink (black/dark blue), uniform width >= 4px at 512px scan",
+                "subject", "exactly one object per image, centered, filling 60-80% of the frame",
+                "contours", "every outline must be closed — no gaps at corners or intersections",
+                "hiddenEdges", "omit or dash hidden lines; solid strokes are read as real edges"
+        ));
+        guide.put("views", List.of(
+                Map.of("view", "front", "note", "best for contour_extrusion silhouettes"),
+                Map.of("view", "three-quarter", "note", "best for vision_ai depth and primitive inference"),
+                Map.of("view", "isometric", "note", "best for assemblies with multiple parts")
+        ));
+        guide.put("annotations", List.of(
+                "Dimension arrows and labels are ignored by contour tracing but help vision_ai mode — keep them short.",
+                "Color hints in the prompt (e.g. 'safety orange bracket') propagate to the PBR material.",
+                "Do not photograph at an angle against a busy background; scan or draw flat."
+        ));
+        guide.put("avoid", List.of(
+                "multiple objects in one frame",
+                "erased/overdrawn outlines (double strokes read as separate edges)",
+                "soft pencil smudges or shadows (misdetected as strokes)",
+                "strong perspective distortion for contour_extrusion"
+        ));
+        guide.put("modeExpectations", Map.of(
+                "vision_ai", "Reconstructs primitives with bevels and PBR; may add plausible detail not in the sketch.",
+                "base_match", "Requires the object to exist in the online catalog; prompt wording drives the match.",
+                "contour_extrusion", "Only the traced silhouette is extruded (fixed depth ~0.65m scene units) with a light bevel."
+        ));
+        return guide;
     }
 }

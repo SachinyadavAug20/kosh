@@ -187,6 +187,67 @@ public class OpenRouterClient {
         throw new RuntimeException("All OpenRouter vision models failed to reconstruct sketch.");
     }
 
+    /**
+     * Multimodal vision analysis returning structured plain text (never a Blender
+     * script): object description, geometry breakdown, proportion estimates, and a
+     * recommended reconstruction mode for {@code cad_image_to_model}.
+     */
+    public String analyzeImageToText(String imageBase64, String userPrompt, String apiKey) {
+        String activeKey = resolveApiKey(apiKey);
+        if (activeKey == null) {
+            throw new IllegalArgumentException("OpenRouter API key is required for image analysis.");
+        }
+
+        String systemPrompt = """
+            You are a technical CAD vision analyst. You receive a photo or hand-drawn sketch of a 3D object.
+
+            Respond with concise structured plain text covering:
+            1. OBJECT: one-sentence identification of what is shown.
+            2. GEOMETRY: decompose into primitive solids (boxes, cylinders, spheres, cones, extrusions, fillets).
+            3. PROPORTIONS: relative dimensions (e.g. 2:1.4:0.6) and suggested real-world size if inferable.
+            4. FEATURES: holes, threads, bevels, seams, surface finishes, moving parts.
+            5. MODE: recommend one reconstruction mode — vision_ai (detailed sketch with depth cues),
+               base_match (looks like a real-world product that exists online), or
+               contour_extrusion (flat silhouette / badge / logo shape).
+            6. RISKS: ambiguity, occlusion, or missing views that will affect reconstruction.
+
+            Keep it under 200 words. No code, no markdown fences.
+            """;
+
+        String textPrompt = (userPrompt != null && !userPrompt.isBlank())
+                ? "Additional context from the user: " + userPrompt
+                : "Analyze this image for 3D reconstruction.";
+
+        String dataUrl = imageBase64.startsWith("data:")
+                ? imageBase64
+                : "data:image/png;base64," + imageBase64;
+
+        List<Map<String, Object>> contentParts = List.of(
+                Map.of("type", "text", "text", textPrompt),
+                Map.of("type", "image_url", "image_url", Map.of("url", dataUrl))
+        );
+
+        List<String> visionModelsToTry = List.of(
+                visionModel != null && !visionModel.isBlank() ? visionModel : "nvidia/nemotron-3.5-super-vl:free",
+                "google/gemma-4-31b-it:free",
+                "nvidia/nemotron-3.5-lightning:free"
+        );
+
+        for (String model : visionModelsToTry) {
+            try {
+                log.info("Querying OpenRouter vision model '{}' for image analysis...", model);
+                String analysis = callOpenRouterMultimodal(systemPrompt, contentParts, model, activeKey, 60);
+                if (analysis != null && !analysis.isBlank()) {
+                    return analysis;
+                }
+            } catch (Exception e) {
+                log.warn("OpenRouter vision model '{}' analysis failed: {}. Cascading...", model, e.getMessage());
+            }
+        }
+
+        throw new RuntimeException("All OpenRouter vision models failed to analyze the image.");
+    }
+
     private String callOpenRouterChat(String systemPrompt, String userPrompt, String model, String apiKey, int timeoutSec) {
         WebClient webClient = webClientBuilder
                 .baseUrl(openRouterBaseUrl)

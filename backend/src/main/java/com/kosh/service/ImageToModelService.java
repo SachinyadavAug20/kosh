@@ -80,8 +80,11 @@ public class ImageToModelService {
             }
         }
 
-        // 2. Base Model Match & Adapt Mode
-        if (generatedScript == null && ("base_match".equals(effectiveMode) || prompt != null && !prompt.isBlank())) {
+        // 2. Base Model Match & Adapt Mode (explicit request, or vision_ai
+        //    fallback when the user supplied a text hint). Explicit modes are
+        //    respected: contour_extrusion never jumps to base_match.
+        if (generatedScript == null && ("base_match".equals(effectiveMode)
+                || ("vision_ai".equals(effectiveMode) && prompt != null && !prompt.isBlank()))) {
             try {
                 String searchPrompt = (prompt != null && !prompt.isBlank()) ? prompt : "solid mechanical part";
                 pipelineSteps.add("Matching internet base 3D model for: " + searchPrompt);
@@ -139,6 +142,23 @@ public class ImageToModelService {
     }
 
     /**
+     * Public contour extraction for MCP tool {@code cad_extract_contours}:
+     * strips an optional data-URL header and returns the traced 2D perimeter
+     * polygon in meters (centered on the origin, roughly [-1.5, 1.5]).
+     */
+    public List<double[]> extractContourPoints(String rawImageBase64) {
+        if (rawImageBase64 == null || rawImageBase64.isBlank()) {
+            throw new IllegalArgumentException("Image payload is required for contour extraction.");
+        }
+        String cleanBase64 = rawImageBase64;
+        if (cleanBase64.contains(",")) {
+            cleanBase64 = cleanBase64.substring(cleanBase64.indexOf(",") + 1);
+        }
+        cleanBase64 = cleanBase64.replaceAll("\\s+", "");
+        return extractPerimeterFromBase64(cleanBase64);
+    }
+
+    /**
      * Algorithmic Computer Vision Extrusion:
      * Analyzes image pixels, extracts boundary perimeter coordinates, and generates
      * a Blender Python script that constructs a 2D BMesh polygon profile and extrudes
@@ -172,9 +192,21 @@ public class ImageToModelService {
             import mathutils
             from mathutils import Vector, Euler, Matrix
 
-            bpy.ops.wm.read_factory_settings(use_empty=True)
-            for col in list(bpy.data.collections):
-                bpy.data.collections.remove(col)
+            # Fresh scene for a standalone asset. The warm daemon blocks
+            # read_factory_settings (returns CANCELLED silently), so clear
+            # leftovers explicitly to avoid exporting stale scene objects.
+            try:
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+            except Exception:
+                pass
+            for _obj in list(bpy.data.objects):
+                bpy.data.objects.remove(_obj, do_unlink=True)
+            for _coll in list(bpy.data.collections):
+                try:
+                    bpy.data.collections.remove(_coll)
+                except Exception:
+                    pass
+            bpy.ops.object.select_all(action='DESELECT')
             scene = bpy.context.scene
 
             argv = sys.argv
@@ -225,6 +257,7 @@ public class ImageToModelService {
             obj = bpy.data.objects.new("HandDrawn_Extruded_Object", mesh)
             bpy.context.collection.objects.link(obj)
             bpy.context.view_layer.objects.active = obj
+            bpy.ops.object.select_all(action='DESELECT')
             obj.select_set(True)
 
             # Center and ground to Z=0

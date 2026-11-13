@@ -12,8 +12,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.awt.Color;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+
+import javax.imageio.ImageIO;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -261,7 +267,9 @@ class McpProtocolTest {
         assertTrue(uris.contains("kosh://materials/filaments"));
         assertTrue(uris.contains("kosh://specs/printers/build-volumes"));
         assertTrue(uris.contains("kosh://standards/iso-2768-tolerances"));
-        assertEquals(24, resources.size());
+        assertTrue(uris.contains("kosh://guides/image-to-3d"));
+        assertTrue(uris.contains("kosh://guides/sketch-conventions"));
+        assertEquals(26, resources.size());
     }
 
     @Test
@@ -400,7 +408,10 @@ class McpProtocolTest {
         assertTrue(promptNames.contains("optimize_model_for_3d_printing"));
         assertTrue(promptNames.contains("design_heat_set_insert_mount"));
         assertTrue(promptNames.contains("plan_linear_motion_stage"));
-        assertEquals(16, prompts.size());
+        assertTrue(promptNames.contains("image_to_3d_model"));
+        assertTrue(promptNames.contains("hand_sketch_to_printable_part"));
+        assertTrue(promptNames.contains("analyze_and_reconstruct_reference_image"));
+        assertEquals(19, prompts.size());
     }
 
     @Test
@@ -1290,6 +1301,144 @@ class McpProtocolTest {
         Map<String, Object> result = (Map<String, Object>) body.getResult();
         assertNotNull(result);
         assertEquals(false, result.get("isError"));
+    }
+
+    /** Renders a tiny filled-circle PNG sketch and returns it as raw base64. */
+    private String tinySketchBase64() throws Exception {
+        BufferedImage img = new BufferedImage(32, 32, BufferedImage.TYPE_INT_RGB);
+        java.awt.Graphics2D g = img.createGraphics();
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, 32, 32);
+        g.setColor(Color.BLACK);
+        g.fillOval(6, 6, 20, 20);
+        g.dispose();
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(img, "png", baos);
+        return Base64.getEncoder().encodeToString(baos.toByteArray());
+    }
+
+    @Test
+    @DisplayName("MCP tools/call cad_extract_contours should trace a sketch polygon offline")
+    void testExtractContoursTool() throws Exception {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("contour-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "cad_extract_contours",
+                        "arguments", Map.of("image", tinySketchBase64())
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertNotNull(result);
+        assertEquals(false, result.get("isError"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
+        assertNotNull(content);
+        assertFalse(content.isEmpty());
+        String text = content.get(0).get("text").toString();
+        assertTrue(text.contains("\"pointCount\""));
+        assertTrue(text.contains("\"image_contour\""));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> parsed = objectMapper.readValue(text, Map.class);
+        assertTrue(((Number) parsed.get("pointCount")).intValue() >= 3);
+    }
+
+    @Test
+    @DisplayName("MCP tools/call cad_image_to_model should reject a missing image argument")
+    void testImageToModelRequiresImage() {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("image-missing-1")
+                .method("tools/call")
+                .params(Map.of(
+                        "name", "cad_image_to_model",
+                        "arguments", Map.of("prompt", "no image attached")
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNotNull(body.getError());
+        assertTrue(body.getError().getMessage().contains("image"));
+    }
+
+    @Test
+    @DisplayName("MCP resources/read should return the image-to-3d guide")
+    void testReadImageTo3dGuideResource() throws Exception {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("read-image-guide")
+                .method("resources/read")
+                .params(Map.of("uri", "kosh://guides/image-to-3d"))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response.getBody());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) response.getBody().getResult();
+        assertNotNull(result);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> contents = (List<Map<String, Object>>) result.get("contents");
+        assertNotNull(contents);
+        assertFalse(contents.isEmpty());
+        String payload = contents.get(0).get("text").toString();
+        assertTrue(payload.contains("cad_image_to_model"));
+        assertTrue(payload.contains("vision_ai"));
+        assertTrue(payload.contains("contour_extrusion"));
+        Map<?, ?> parsed = objectMapper.readValue(payload, Map.class);
+        assertNotNull(parsed.get("modes"));
+        assertNotNull(parsed.get("pipeline"));
+    }
+
+    @Test
+    @DisplayName("MCP prompts/get should materialize the image_to_3d_model blueprint")
+    void testGetImageTo3dPrompt() {
+        McpRpcRequest req = McpRpcRequest.builder()
+                .jsonrpc("2.0")
+                .id("prompt-image-1")
+                .method("prompts/get")
+                .params(Map.of(
+                        "name", "image_to_3d_model",
+                        "arguments", Map.of(
+                                "imageBase64", "data:image/png;base64,iVBORw0KGgo=",
+                                "mode", "vision_ai",
+                                "format", "stl"
+                        )
+                ))
+                .build();
+
+        ResponseEntity<McpRpcResponse> response = mcpController.handleRpcRequest(null, req, null, null, null, null, null);
+        assertNotNull(response);
+        McpRpcResponse body = response.getBody();
+        assertNotNull(body);
+        assertNull(body.getError());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) body.getResult();
+        assertNotNull(result);
+        assertTrue(result.containsKey("messages"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> messages = (List<Map<String, Object>>) result.get("messages");
+        assertFalse(messages.isEmpty());
+        String text = ((Map<String, Object>) messages.get(0).get("content")).get("text").toString();
+        assertTrue(text.contains("cad_image_to_model"));
+        assertTrue(text.contains("vision_ai"));
+        assertTrue(text.contains("stl"));
     }
 
 }

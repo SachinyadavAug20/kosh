@@ -111,7 +111,11 @@ public class McpToolRegistry {
             "cad_generate_helical_spring",
             "cad_generate_o_ring_groove",
             "cad_split_into_components",
-            "cad_explode_assembly_view"
+            "cad_explode_assembly_view",
+            // Image-to-3D Reconstruction (photo / hand-drawn sketch ingestion)
+            "cad_image_to_model",
+            "cad_analyze_image",
+            "cad_extract_contours"
     );
 
     private final GoogleGeminiClient googleGeminiClient;
@@ -120,6 +124,8 @@ public class McpToolRegistry {
     private final McpSceneStateService mcpSceneStateService;
     private final SceneComposerService sceneComposerService;
     private final OnlineModelService onlineModelService;
+    private final OpenRouterClient openRouterClient;
+    private final ImageToModelService imageToModelService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public McpToolRegistry(GoogleGeminiClient googleGeminiClient,
@@ -127,13 +133,17 @@ public class McpToolRegistry {
                            ScriptSanitizer scriptSanitizer,
                            McpSceneStateService mcpSceneStateService,
                            SceneComposerService sceneComposerService,
-                           @org.springframework.context.annotation.Lazy OnlineModelService onlineModelService) {
+                           @org.springframework.context.annotation.Lazy OnlineModelService onlineModelService,
+                           OpenRouterClient openRouterClient,
+                           @org.springframework.context.annotation.Lazy ImageToModelService imageToModelService) {
         this.googleGeminiClient = googleGeminiClient;
         this.blenderExecutionService = blenderExecutionService;
         this.scriptSanitizer = scriptSanitizer;
         this.mcpSceneStateService = mcpSceneStateService;
         this.sceneComposerService = sceneComposerService;
         this.onlineModelService = onlineModelService;
+        this.openRouterClient = openRouterClient;
+        this.imageToModelService = imageToModelService;
     }
 
     private void attachHints(Map<String, Object> tool, boolean readOnly, boolean destructive, boolean idempotent, boolean openWorld) {
@@ -1305,6 +1315,37 @@ public class McpToolRegistry {
                 true
         ));
 
+        tools.add(createToolSchema(
+                "cad_image_to_model",
+                "Converts an uploaded photo or hand-drawn sketch (base64 data URL) into a watertight 3D solid via multimodal vision AI reconstruction, online base-model matching, or deterministic contour extrusion with automatic fallbacks.",
+                Map.of(
+                        "image", Map.of("type", "string", "description", "Required image payload: data URL (data:image/png;base64,...) or raw base64 of a PNG/JPEG sketch or photo"),
+                        "mode", Map.of("type", "string", "enum", List.of("vision_ai", "base_match", "contour_extrusion"), "description", "Reconstruction pipeline (default vision_ai; falls back to base_match then contour_extrusion on failure)")
+                ),
+                false,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_analyze_image",
+                "Multimodal vision analysis of a photo or sketch: object identification, primitive decomposition, proportion estimates, feature list, and recommended reconstruction mode. Read-only, returns text.",
+                Map.of(
+                        "image", Map.of("type", "string", "description", "Required image payload: data URL (data:image/png;base64,...) or raw base64 of a PNG/JPEG")
+                ),
+                true,
+                true
+        ));
+
+        tools.add(createToolSchema(
+                "cad_extract_contours",
+                "Deterministic computer-vision contour tracing: extracts the traced 2D perimeter polygon from a sketch image as centered meter-space points. Zero API key, fully offline.",
+                Map.of(
+                        "image", Map.of("type", "string", "description", "Required image payload: data URL (data:image/png;base64,...) or raw base64 of a PNG/JPEG sketch")
+                ),
+                true,
+                true
+        ));
+
         return tools;
     }
 
@@ -1516,6 +1557,147 @@ public class McpToolRegistry {
                     .telemetry(telemetry)
                     .executionTimeMs(35)
                     .build();
+        }
+
+        // Special handling for cad_image_to_model: photo / hand-drawn sketch -> watertight solid
+        if ("cad_image_to_model".equals(normalizedName)) {
+            String imagePayload = arguments != null && arguments.get("image") != null
+                    ? arguments.get("image").toString() : null;
+            if (imagePayload == null || imagePayload.isBlank()) {
+                return ToolExecutionDto.Result.builder()
+                        .success(false)
+                        .toolName("cad_image_to_model")
+                        .errorMessage("Missing required argument 'image' (data URL or raw base64 payload)")
+                        .build();
+            }
+            String imagePrompt = arguments != null && arguments.get("prompt") != null
+                    ? arguments.get("prompt").toString() : null;
+            String imageMode = arguments != null && arguments.get("mode") != null
+                    ? arguments.get("mode").toString() : "vision_ai";
+            String imageFormat = arguments != null && arguments.get("format") != null
+                    ? arguments.get("format").toString() : "glb";
+
+            if (progressListener != null && progressToken != null) {
+                progressListener.onProgress(progressToken, 0.2, 1.0, "Reconstructing 3D model from image (" + imageMode + ")");
+            }
+            try {
+                Map<String, Object> conversion = imageToModelService.convertImageToModel(
+                        imagePayload, imagePrompt, imageMode, imageFormat, token);
+                if (progressListener != null && progressToken != null) {
+                    progressListener.onProgress(progressToken, 1.0, 1.0, "Image-to-model reconstruction complete");
+                }
+                Object generatedScript = conversion.remove("script");
+                long convTimeMs = conversion.get("durationMs") instanceof Number n ? n.longValue() : 0L;
+                long convSize = conversion.get("fileSizeBytes") instanceof Number n ? n.longValue() : 0L;
+                return ToolExecutionDto.Result.builder()
+                        .success(true)
+                        .toolName("cad_image_to_model")
+                        .assetName(conversion.get("assetName") != null ? conversion.get("assetName").toString() : null)
+                        .assetUrl(conversion.get("assetUrl") != null ? conversion.get("assetUrl").toString() : null)
+                        .format(conversion.get("format") != null ? conversion.get("format").toString() : imageFormat)
+                        .sizeBytes(convSize)
+                        .script(generatedScript != null ? generatedScript.toString() : null)
+                        .stdout(toJson(conversion))
+                        .telemetry(conversion)
+                        .executionTimeMs(convTimeMs)
+                        .build();
+            } catch (Exception e) {
+                log.warn("cad_image_to_model failed: {}", e.getMessage());
+                return ToolExecutionDto.Result.builder()
+                        .success(false)
+                        .toolName("cad_image_to_model")
+                        .errorMessage("Image-to-model reconstruction failed: " + e.getMessage())
+                        .build();
+            }
+        }
+
+        // Special handling for cad_analyze_image: read-only multimodal vision analysis
+        if ("cad_analyze_image".equals(normalizedName)) {
+            String imagePayload = arguments != null && arguments.get("image") != null
+                    ? arguments.get("image").toString() : null;
+            if (imagePayload == null || imagePayload.isBlank()) {
+                return ToolExecutionDto.Result.builder()
+                        .success(false)
+                        .toolName("cad_analyze_image")
+                        .errorMessage("Missing required argument 'image' (data URL or raw base64 payload)")
+                        .build();
+            }
+            String analyzePrompt = arguments != null && arguments.get("prompt") != null
+                    ? arguments.get("prompt").toString() : null;
+
+            if (progressListener != null && progressToken != null) {
+                progressListener.onProgress(progressToken, 0.4, 1.0, "Running multimodal vision analysis");
+            }
+            try {
+                String analysis = openRouterClient.analyzeImageToText(imagePayload, analyzePrompt, token);
+                if (progressListener != null && progressToken != null) {
+                    progressListener.onProgress(progressToken, 1.0, 1.0, "Image analysis complete");
+                }
+                Map<String, Object> telemetry = new LinkedHashMap<>();
+                telemetry.put("analysis", analysis);
+                telemetry.put("modeRecommendation", extractModeRecommendation(analysis));
+                return ToolExecutionDto.Result.builder()
+                        .success(true)
+                        .toolName("cad_analyze_image")
+                        .assetName("image_analysis.txt")
+                        .format("text")
+                        .stdout(analysis)
+                        .telemetry(telemetry)
+                        .executionTimeMs(1200)
+                        .build();
+            } catch (Exception e) {
+                log.warn("cad_analyze_image failed: {}", e.getMessage());
+                return ToolExecutionDto.Result.builder()
+                        .success(false)
+                        .toolName("cad_analyze_image")
+                        .errorMessage("Image analysis failed: " + e.getMessage())
+                        .build();
+            }
+        }
+
+        // Special handling for cad_extract_contours: deterministic offline contour tracing
+        if ("cad_extract_contours".equals(normalizedName)) {
+            String imagePayload = arguments != null && arguments.get("image") != null
+                    ? arguments.get("image").toString() : null;
+            if (imagePayload == null || imagePayload.isBlank()) {
+                return ToolExecutionDto.Result.builder()
+                        .success(false)
+                        .toolName("cad_extract_contours")
+                        .errorMessage("Missing required argument 'image' (data URL or raw base64 payload)")
+                        .build();
+            }
+            try {
+                List<double[]> contour = imageToModelService.extractContourPoints(imagePayload);
+                List<List<Double>> points = contour.stream()
+                        .map(p -> List.of(p[0], p[1]))
+                        .toList();
+                Map<String, Object> outputData = new LinkedHashMap<>();
+                outputData.put("source", "image_contour");
+                outputData.put("pointCount", points.size());
+                outputData.put("units", "meters_centered");
+                outputData.put("points", points);
+                String jsonOutput = toJson(outputData);
+
+                if (progressListener != null && progressToken != null) {
+                    progressListener.onProgress(progressToken, 1.0, 1.0, "Contour tracing complete");
+                }
+                return ToolExecutionDto.Result.builder()
+                        .success(true)
+                        .toolName("cad_extract_contours")
+                        .assetName("contour_profile.json")
+                        .format("json")
+                        .stdout(jsonOutput)
+                        .telemetry(outputData)
+                        .executionTimeMs(25)
+                        .build();
+            } catch (Exception e) {
+                log.warn("cad_extract_contours failed: {}", e.getMessage());
+                return ToolExecutionDto.Result.builder()
+                        .success(false)
+                        .toolName("cad_extract_contours")
+                        .errorMessage("Contour extraction failed: " + e.getMessage())
+                        .build();
+            }
         }
 
         // Special handling for cad_measure_dimensions: precision digital caliper inspection
@@ -4446,5 +4628,14 @@ public class McpToolRegistry {
         } catch (JsonProcessingException e) {
             return "{}";
         }
+    }
+
+    /** Pulls the recommended cad_image_to_model mode out of a vision analysis blob. */
+    private String extractModeRecommendation(String analysis) {
+        if (analysis == null) return "vision_ai";
+        String lower = analysis.toLowerCase(Locale.ROOT);
+        if (lower.contains("contour_extrusion")) return "contour_extrusion";
+        if (lower.contains("base_match")) return "base_match";
+        return "vision_ai";
     }
 }

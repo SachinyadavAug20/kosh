@@ -496,9 +496,20 @@ public class OnlineModelService {
             import mathutils
             from mathutils import Vector, Euler, Matrix
 
-            bpy.ops.wm.read_factory_settings(use_empty=True)
-            for col in list(bpy.data.collections):
-                bpy.data.collections.remove(col)
+            # Fresh scene for a standalone asset. The warm daemon blocks
+            # read_factory_settings (CANCELLED silently), so clear explicitly.
+            try:
+                bpy.ops.wm.read_factory_settings(use_empty=True)
+            except Exception:
+                pass
+            for _obj in list(bpy.data.objects):
+                bpy.data.objects.remove(_obj, do_unlink=True)
+            for _coll in list(bpy.data.collections):
+                try:
+                    bpy.data.collections.remove(_coll)
+                except Exception:
+                    pass
+            bpy.ops.object.select_all(action='DESELECT')
 
             argv = sys.argv
             output_path = argv[argv.index("--") + 1] if "--" in argv else "output.%s"
@@ -522,8 +533,15 @@ public class OnlineModelService {
                 # Flush to ground
                 for o in all_objs:
                     o.location.z -= min_z * (scale_factor if max_dim > 0 else 1.0)
+                    bpy.ops.object.select_all(action='DESELECT')
+                    o.select_set(True)
                     bpy.context.view_layer.objects.active = o
-                    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+                    # GLB imports often share meshes across instanced objects;
+                    # transform_apply refuses multi-user meshes, so degrade gracefully.
+                    try:
+                        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+                    except Exception:
+                        pass
 
             # 3. Apply studio environment & PBR accents
             key_light = bpy.data.lights.new("StudioKey", type='AREA')
