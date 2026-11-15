@@ -102,7 +102,7 @@ export function BlenderRenderModal({
     : "0.24s";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md animate-fade-in font-mono select-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 animate-fade-in font-mono select-none">
       <div className="relative flex flex-col w-[94vw] max-w-5xl h-[88vh] bg-[#141416] border border-[#27272a] rounded-lg shadow-2xl overflow-hidden">
         {/* Top Header - Blender Render DCC Style */}
         <div className="flex items-center justify-between px-3 py-2 bg-[#18181b] border-b border-[#27272a] text-xs">
@@ -253,7 +253,7 @@ export function BlenderRenderModal({
               type="button"
               onClick={handleDownload}
               disabled={!imageUrl || isRendering}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-gradient-to-r from-[#ea580c] to-[#f59e0b] hover:from-[#c2410c] hover:to-[#d97706] text-white text-[11px] font-bold shadow-md shadow-[#ea580c]/20 transition-all disabled:opacity-50 cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-[#ea580c] hover:bg-[#c2410c] text-white text-[11px] font-bold transition-colors disabled:opacity-50 cursor-pointer"
               title="Save Image (F3)"
             >
               <Download className="w-3.5 h-3.5" />

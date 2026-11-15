@@ -124,7 +124,7 @@ export const McpTrustModal: React.FC<McpTrustModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
       <div className="bg-[#141416] border border-[#27272a] rounded-xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#27272a] bg-[#18181b]">

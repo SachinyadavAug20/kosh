@@ -80,6 +80,23 @@ code, pre, .font-mono, .mono-metric {
   color: #f4f4f5;
 }
 
+/* Keyboard focus affordance: crisp 1px silver outline, no glow, no offset ring */
+:focus-visible {
+  outline: 1px solid var(--accent-selection);
+  outline-offset: 1px;
+}
+
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 1px solid var(--accent-selection);
+  outline-offset: 1px;
+}
+
 /* Flat Tool Buttons (0px or 2px radius, zero shadow, zero glow) */
 .tool-btn {
   display: inline-flex;

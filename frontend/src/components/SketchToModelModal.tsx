@@ -231,7 +231,7 @@ export function SketchToModelModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 select-none font-mono">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 select-none font-mono">
       <div className="bg-[#141416] border border-[#27272a] shadow-2xl rounded-sm w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#27272a] bg-[#18181b]">

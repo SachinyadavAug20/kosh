@@ -164,7 +164,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
                       onClick={() => setAspectRatio(ar)}
                       className={`flex flex-col items-center justify-center p-2.5 rounded-lg border text-xs font-mono transition-all ${
                         aspectRatio === ar
-                          ? "border-orange-500 bg-orange-500/10 text-orange-300 font-semibold shadow-[0_0_12px_rgba(234,88,12,0.15)]"
+                          ? "border-orange-500 bg-orange-500/10 text-orange-300 font-semibold"
                           : "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
                       }`}
                     >
@@ -275,7 +275,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = ({
               {/* Progress bar */}
               <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden relative">
                 <div
-                  className="h-full bg-gradient-to-r from-orange-600 to-amber-500 transition-all duration-150"
+                  className="h-full bg-orange-600 transition-all duration-150"
                   style={{ width: `${progress.percent}%` }}
                 />
               </div>

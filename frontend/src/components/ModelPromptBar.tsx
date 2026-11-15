@@ -102,7 +102,7 @@ export function ModelPromptBar({
               onClick={() => onToggleGenerationMode?.("ai")}
               className={`flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
                 generationMode === "ai"
-                  ? "bg-emerald-950/70 border border-emerald-500/80 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+                  ? "bg-emerald-950/70 border border-emerald-500/80 text-emerald-300"
                   : "bg-[#202024] border border-[#27272a] text-[#71717a] hover:text-[#a1a1aa]"
               }`}
             >
@@ -115,7 +115,7 @@ export function ModelPromptBar({
               onClick={() => onToggleGenerationMode?.("procedural")}
               className={`flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
                 generationMode === "procedural"
-                  ? "bg-[#ea580c]/20 border border-[#ea580c] text-[#ea580c] shadow-[0_0_10px_rgba(234,88,12,0.2)]"
+                  ? "bg-[#ea580c]/20 border border-[#ea580c] text-[#ea580c]"
                   : "bg-[#202024] border border-[#27272a] text-[#71717a] hover:text-[#a1a1aa]"
               }`}
             >
@@ -208,10 +208,10 @@ export function ModelPromptBar({
           <button
             type="submit"
             disabled={!prompt.trim() || isLoading}
-            className={`flex items-center space-x-1 px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded font-bold text-[11px] transition-colors shrink-0 shadow-sm ${
+            className={`flex items-center space-x-1 px-3 py-1 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded font-bold text-[11px] transition-colors shrink-0 ${
               generationMode === "ai"
-                ? "bg-emerald-600 hover:bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.25)]"
-                : "bg-[#ea580c] hover:bg-[#c2410c] shadow-[0_0_12px_rgba(234,88,12,0.25)]"
+                ? "bg-emerald-600 hover:bg-emerald-500"
+                : "bg-[#ea580c] hover:bg-[#c2410c]"
             }`}
           >
             {isLoading ? (

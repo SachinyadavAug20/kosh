@@ -99,7 +99,7 @@ export const AspectRatioFramer: React.FC<AspectRatioFramerProps> = ({
 
       {/* Active Framing Box */}
       <div
-        className="absolute border border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.15)] transition-all duration-150"
+        className="absolute border border-amber-500/60 transition-all duration-150"
         style={{
           left: `${bounds.left}px`,
           top: `${bounds.top}px`,

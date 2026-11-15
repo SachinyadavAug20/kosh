@@ -5739,7 +5739,7 @@ export function Viewport3D({
 
                       {/* Active CAD Model Synthesis Progress HUD */}
                       {isLoadingModel && (
-                        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-xs select-none pointer-events-auto animate-fade-in">
+                        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 select-none pointer-events-auto animate-fade-in">
                           <div className="w-full max-w-md mx-4 p-5 rounded bg-[#141416] border border-[#ea580c] shadow-2xl font-mono text-xs text-[#f4f4f5] space-y-3.5">
                             {/* Header */}
                             <div className="flex items-center justify-between pb-2.5 border-b border-[#27272a]">
@@ -5780,7 +5780,7 @@ export function Viewport3D({
                               </div>
                               <div className="w-full h-2 bg-[#202024] rounded-full overflow-hidden border border-[#27272a]">
                                 <div
-                                  className="h-full bg-gradient-to-r from-[#ea580c] to-[#f59e0b] transition-all duration-200 ease-out"
+                                  className="h-full bg-[#ea580c] transition-all duration-200 ease-out"
                                   style={{ width: `${synthesisProgress}%` }}
                                 />
                               </div>

@@ -338,7 +338,7 @@ export function UniversalSearchModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/60 backdrop-blur-sm animate-in fade-in duration-100"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/60 animate-in fade-in duration-100"
       onClick={onClose}
     >
       <div

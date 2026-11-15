@@ -175,7 +175,7 @@ export function PhotoStudioPanel({
   ];
 
   return (
-    <div className="absolute top-12 right-3 z-40 w-80 md:w-96 rounded-lg bg-[#141416]/95 backdrop-blur-md border border-[#27272a] shadow-2xl font-mono text-xs text-[#f4f4f5] overflow-hidden flex flex-col select-none animate-fade-in">
+    <div className="absolute top-12 right-3 z-40 w-80 md:w-96 rounded-lg bg-[#141416] border border-[#27272a] shadow-2xl font-mono text-xs text-[#f4f4f5] overflow-hidden flex flex-col select-none animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between px-3.5 py-2.5 bg-[#18181b] border-b border-[#27272a]">
         <div className="flex items-center space-x-2">
@@ -775,7 +775,7 @@ export function PhotoStudioPanel({
               <button
                 type="button"
                 onClick={onCaptureSnapshot}
-                className="w-full py-3.5 rounded bg-gradient-to-r from-[#ea580c] to-[#f59e0b] hover:from-[#c2410c] hover:to-[#d97706] text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-xl shadow-[#ea580c]/20 active:scale-98 cursor-pointer transition-all"
+                className="w-full py-3.5 rounded bg-[#ea580c] hover:bg-[#c2410c] text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 active:scale-98 cursor-pointer transition-colors"
               >
                 <Camera className="w-4 h-4 fill-current" />
                 <span>Take Photo / Render Snapshot</span>

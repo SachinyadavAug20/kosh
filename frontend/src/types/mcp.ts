@@ -80,10 +80,33 @@ export interface BackendHealth {
     available: boolean;
     executable: string;
     version: string;
+    /** Warm daemon socket liveness (false on hosts without Blender, e.g. Render). */
+    daemonAlive: boolean;
   };
   storage: {
     path: string;
+    writable: boolean;
   };
+  mcp: {
+    toolsCount: number;
+    resourcesCount: number;
+    promptsCount: number;
+  };
+  runtime: {
+    uptimeSeconds: number;
+    usedHeapMb: number;
+    maxHeapMb: number;
+    availableProcessors: number;
+  };
+  /** Legacy top-level count kept in sync with mcp.toolsCount. */
   toolsCount: number;
+  trustScore?: {
+    overallScore: number;
+    cves: number;
+    license: string;
+    status: string;
+    codeQuality?: number;
+    url?: string;
+  };
   timestamp: number;
 }

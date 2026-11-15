@@ -106,7 +106,7 @@ export function FloatingInspector({
   if (!selectedMeshName) return null;
 
   return (
-    <div className="absolute top-14 right-4 z-20 w-64 bg-[#18181b]/95 border border-[#3f3f46] rounded-sm shadow-2xl p-2.5 font-sans text-xs text-[#f4f4f5] select-none backdrop-blur-none space-y-2.5 transition-all animate-in fade-in zoom-in-95 duration-100">
+    <div className="absolute top-14 right-4 z-20 w-64 bg-[#18181b] border border-[#3f3f46] rounded-sm shadow-2xl p-2.5 font-sans text-xs text-[#f4f4f5] select-none space-y-2.5 transition-all animate-in fade-in zoom-in-95 duration-100">
       {/* HUD Header */}
       <div className="flex items-center justify-between pb-1.5 border-b border-[#27272a]">
         <div className="flex items-center space-x-1.5 truncate">
