@@ -1145,10 +1145,10 @@ export function McpConsoleEditor({
   onExecuteTool,
   isLoading = false,
 }: McpConsoleEditorProps) {
-  const [selectedTool, setSelectedTool] = useState<string>("create_actor");
+  const [selectedTool, setSelectedTool] = useState<string>("cad_create_primitive");
   const [jsonParams, setJsonParams] = useState<string>(
     JSON.stringify(
-      DIRECTOR_MCP_TOOLS.find((t) => t.name === "create_actor")?.samplePayload || {},
+      DIRECTOR_MCP_TOOLS.find((t) => t.name === "cad_create_primitive")?.samplePayload || {},
       null,
       2
     )
