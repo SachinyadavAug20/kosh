@@ -42,6 +42,7 @@ import {
   Search,
   MessageSquareCode,
   Pencil,
+  MoreHorizontal,
 } from "lucide-react";
 
 export type InteractionMode = "object" | "edit" | "sculpt" | "paint" | "weight";
@@ -234,6 +235,7 @@ export function BlenderTopBar({
   const [isSnapOpen, setIsSnapOpen] = useState(false);
   const [isMatcapOpen, setIsMatcapOpen] = useState(false);
   const [isThemeOpen, setIsThemeOpen] = useState(false);
+  const [isUtilityOpen, setIsUtilityOpen] = useState(false);
   const [isKeyDrawerOpen, setIsKeyDrawerOpen] = useState(false);
   const [keyInput, setKeyInput] = useState(token);
 
@@ -245,6 +247,7 @@ export function BlenderTopBar({
   const snapRef = useRef<HTMLDivElement>(null);
   const matcapRef = useRef<HTMLDivElement>(null);
   const themeRef = useRef<HTMLDivElement>(null);
+  const utilityMenuRef = useRef<HTMLDivElement>(null);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -259,6 +262,7 @@ export function BlenderTopBar({
       if (matcapRef.current && !matcapRef.current.contains(target)) setIsMatcapOpen(false);
       if (themeRef.current && !themeRef.current.contains(target)) setIsThemeOpen(false);
       if (overlaysRef.current && !overlaysRef.current.contains(target)) setIsOverlaysOpen(false);
+      if (utilityMenuRef.current && !utilityMenuRef.current.contains(target)) setIsUtilityOpen(false);
     };
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
@@ -282,9 +286,9 @@ export function BlenderTopBar({
   const isBackendUp = health?.status === "UP";
 
   return (
-    <header className="h-[32px] bg-[#141416] border-b border-[#27272a] px-2 flex items-center justify-between select-none z-30 shrink-0 text-xs font-sans">
+    <header className="h-[32px] bg-[#141416] border-b border-[#27272a] px-2 flex items-center justify-between select-none z-30 shrink-0 overflow-hidden text-xs font-sans">
       {/* LEFT: Logo + T-Shelf Toggle + Mode Switcher + Add Primitives */}
-      <div className="flex items-center space-x-1.5">
+      <div className="flex items-center space-x-1.5 min-w-0 shrink">
         {/* Kosh Minimal Isometric Logo SVG Mark */}
         <div className="flex items-center space-x-1.5 pr-1">
           <svg className="w-4 h-4" viewBox="0 0 512 512" fill="none">
@@ -400,7 +404,7 @@ export function BlenderTopBar({
         </div>
 
         {/* Selected Mesh Name / Multi-Select Chip */}
-        <div className="hidden md:flex items-center space-x-1.5 px-2 py-0.5 bg-[#202024] border border-[#27272a] rounded text-[10px] text-[#f4f4f5] font-mono">
+        <div className="hidden md:flex items-center space-x-1.5 px-2 py-0.5 bg-[#202024] border border-[#27272a] rounded text-[10px] text-[#f4f4f5] font-mono shrink-0">
           <span className={`w-1.5 h-1.5 rounded-full ${selectedCount && selectedCount > 0 ? "bg-[#ea580c] animate-pulse" : "bg-[#71717a]"}`} />
           <span className="max-w-[140px] truncate">
             {selectedCount && selectedCount > 1
@@ -414,11 +418,11 @@ export function BlenderTopBar({
           type="button"
           onClick={onOpenSearch}
           title="Universal Search models, tools, objects, actions [Ctrl+K]"
-          className="hidden sm:flex items-center space-x-1.5 px-2.5 py-0.5 bg-[#18181b] hover:bg-[#202024] border border-[#27272a] hover:border-[#ea580c]/50 rounded text-[#a1a1aa] hover:text-[#f4f4f5] text-[10px] font-mono transition-colors"
+          className="hidden sm:flex items-center space-x-1.5 px-2.5 py-0.5 bg-[#18181b] hover:bg-[#202024] border border-[#27272a] hover:border-[#ea580c]/50 rounded text-[#a1a1aa] hover:text-[#f4f4f5] text-[10px] font-mono transition-colors shrink min-w-0 overflow-hidden"
         >
-          <Search className="w-3 h-3 text-[#ea580c]" />
-          <span>Search anything...</span>
-          <kbd className="bg-[#27272a] px-1 py-0.2 rounded text-[9px] text-[#71717a]">Ctrl+K</kbd>
+          <Search className="w-3 h-3 text-[#ea580c] shrink-0" />
+          <span className="truncate whitespace-nowrap">Search anything...</span>
+          <kbd className="bg-[#27272a] px-1 py-0.2 rounded text-[9px] text-[#71717a] shrink-0">Ctrl+K</kbd>
         </button>
 
         {/* Hand-Drawn Sketch to 3D Trigger */}
@@ -426,16 +430,16 @@ export function BlenderTopBar({
           type="button"
           onClick={onOpenSketchModal}
           title="Hand-Drawn Sketch to 3D Model [Alt+S]"
-          className="hidden md:flex items-center space-x-1.5 px-2 py-0.5 bg-[#ea580c]/15 hover:bg-[#ea580c]/25 border border-[#ea580c]/40 hover:border-[#ea580c] rounded text-[#ea580c] hover:text-white text-[10px] font-mono transition-colors"
+          className="hidden md:flex items-center space-x-1.5 px-2 py-0.5 bg-[#ea580c]/15 hover:bg-[#ea580c]/25 border border-[#ea580c]/40 hover:border-[#ea580c] rounded text-[#ea580c] hover:text-white text-[10px] font-mono transition-colors shrink-0 whitespace-nowrap"
         >
-          <Pencil className="w-3 h-3 text-[#ea580c]" />
-          <span>Sketch to 3D</span>
-          <kbd className="bg-[#27272a] px-1 py-0.2 rounded text-[9px] text-[#a1a1aa]">Alt+S</kbd>
+          <Pencil className="w-3 h-3 text-[#ea580c] shrink-0" />
+          <span className="whitespace-nowrap">Sketch to 3D</span>
+          <kbd className="bg-[#27272a] px-1 py-0.2 rounded text-[9px] text-[#a1a1aa] shrink-0">Alt+S</kbd>
         </button>
       </div>
 
       {/* CENTER: Transform Orientation & Pivot Point Selectors */}
-      <div className="flex items-center space-x-1">
+      <div className="flex items-center space-x-1 shrink-0">
         {/* Transform Orientation (Global / Local / Normal / View) */}
         <div ref={orientationRef} className="relative">
           <button
@@ -525,7 +529,7 @@ export function BlenderTopBar({
       </div>
 
       {/* RIGHT: Snapping, Proportional, Shading, Tools, N-Panel Toggle */}
-      <div className="flex items-center space-x-1">
+      <div className="flex items-center space-x-1 shrink-0">
         {/* Magnet Snapping Toggle (Shift + Tab) */}
         <div ref={snapRef} className="relative flex items-center">
           <button
@@ -1027,7 +1031,7 @@ export function BlenderTopBar({
             title="Professional Photo Studio & Staging [F12 / Numpad 0]"
             className={`flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-mono font-semibold transition-colors border ${
               isPhotoStudioOpen
-                ? "bg-[#ea580c] border-[#ea580c] text-white shadow-md shadow-[#ea580c]/20"
+                ? "bg-[#ea580c] border-[#ea580c] text-white"
                 : "bg-[#202024] border-[#27272a] text-[#f4f4f5] hover:border-[#ea580c] hover:text-[#ea580c]"
             }`}
           >
@@ -1042,7 +1046,7 @@ export function BlenderTopBar({
             type="button"
             onClick={onRenderImage}
             title="Blender Render Image [F12]"
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-mono font-bold transition-all border bg-gradient-to-r from-[#ea580c] to-[#f59e0b] hover:from-[#c2410c] hover:to-[#d97706] text-white border-transparent shadow-sm"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-mono font-bold transition-colors border bg-[#ea580c] hover:bg-[#c2410c] text-white border-transparent"
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span className="hidden lg:inline">Render</span>
@@ -1064,45 +1068,81 @@ export function BlenderTopBar({
           </button>
         )}
 
-        {/* Hotkeys Modal Trigger (F1) */}
-        <button
-          type="button"
-          onClick={onOpenShortcuts}
-          title="Keyboard Shortcuts Cheat Sheet [F1]"
-          className="p-1 rounded text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a] transition-colors"
-        >
-          <Keyboard className="w-3.5 h-3.5" />
-        </button>
+        {/* Utilities Overflow Menu (Shortcuts, Paste bpy, Showcase, Share) */}
+        <div ref={utilityMenuRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setIsUtilityOpen(!isUtilityOpen)}
+            title="Utilities: Shortcuts, Paste bpy, Showcase, Share"
+            className={`p-1 rounded transition-colors ${
+              isUtilityOpen
+                ? "bg-[#27272a] text-[#ea580c]"
+                : "text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a]"
+            }`}
+          >
+            <MoreHorizontal className="w-3.5 h-3.5" />
+          </button>
 
-        {/* Paste bpy Code Modal Trigger */}
-        <button
-          type="button"
-          onClick={onOpenPasteBpy}
-          title="Paste Blender Python Script [bpy]"
-          className="p-1 rounded text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a] transition-colors"
-        >
-          <Code2 className="w-3.5 h-3.5" />
-        </button>
+          {isUtilityOpen && (
+            <div className="absolute top-8 right-0 w-56 bg-[#18181b] border border-[#3f3f46] shadow-2xl rounded-sm p-1 z-50 text-[11px] font-mono space-y-0.5">
+              <div className="text-[9px] uppercase font-bold text-[#71717a] px-2 py-0.5 border-b border-[#27272a]">
+                Utilities
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsUtilityOpen(false);
+                  onOpenShortcuts();
+                }}
+                className="w-full flex items-center justify-between px-2 py-1 rounded-xs text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#f4f4f5] transition-colors"
+              >
+                <span className="flex items-center space-x-2">
+                  <Keyboard className="w-3.5 h-3.5" />
+                  <span>Keyboard Shortcuts</span>
+                </span>
+                <kbd className="text-[9px] text-[#71717a]">F1</kbd>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsUtilityOpen(false);
+                  onOpenPasteBpy();
+                }}
+                className="w-full flex items-center justify-between px-2 py-1 rounded-xs text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#f4f4f5] transition-colors"
+              >
+                <span className="flex items-center space-x-2">
+                  <Code2 className="w-3.5 h-3.5" />
+                  <span>Paste bpy Script</span>
+                </span>
+                <kbd className="text-[9px] text-[#71717a]">bpy</kbd>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsUtilityOpen(false);
+                  onOpenShowcase();
+                }}
+                className="w-full flex items-center space-x-2 px-2 py-1 rounded-xs text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#f4f4f5] transition-colors"
+              >
+                <Shapes className="w-3.5 h-3.5" />
+                <span>Community Showcase</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsUtilityOpen(false);
+                  onOpenShare();
+                }}
+                className="w-full flex items-center space-x-2 px-2 py-1 rounded-xs text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#f4f4f5] transition-colors"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>Share Creation</span>
+              </button>
+            </div>
+          )}
+        </div>
 
-        {/* Community Showcase Drawer Trigger */}
-        <button
-          type="button"
-          onClick={onOpenShowcase}
-          title="Community 3D Model Showcase"
-          className="p-1 rounded text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a] transition-colors"
-        >
-          <Shapes className="w-3.5 h-3.5" />
-        </button>
-
-        {/* Share 3D Model Modal Trigger */}
-        <button
-          type="button"
-          onClick={onOpenShare}
-          title="Share 3D Creation Link / Standalone HTML"
-          className="p-1 rounded text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#27272a] transition-colors"
-        >
-          <Share2 className="w-3.5 h-3.5" />
-        </button>
+        <div className="w-px h-4 bg-[#27272a]" />
 
         {/* M8ven MCP Trust Index Modal Trigger */}
         {onOpenTrustModal && (
@@ -1122,15 +1162,15 @@ export function BlenderTopBar({
           type="button"
           onClick={onToggleChat}
           title={`Kosh Assistant (${isChatOpen ? "Active" : "Open"}) [Ctrl+L]`}
-          className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-[10px] font-mono transition-all border ${
+          className={`flex items-center space-x-1.5 px-2.5 py-1 rounded text-[10px] font-mono transition-colors border whitespace-nowrap ${
             isChatOpen
-              ? "bg-[#ea580c]/15 text-[#ea580c] border-[#ea580c] font-bold shadow-sm shadow-[#ea580c]/20"
+              ? "bg-[#ea580c]/15 text-[#ea580c] border-[#ea580c] font-bold"
               : "bg-[#18181b] hover:bg-[#202024] text-[#f4f4f5] border-[#27272a] hover:border-[#ea580c]/50"
           }`}
         >
-          <Sparkles className="w-3.5 h-3.5 text-[#ea580c]" />
-          <span>Kosh Assistant</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <Sparkles className="w-3.5 h-3.5 text-[#ea580c] shrink-0" />
+          <span className="hidden 2xl:inline">Kosh Assistant</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
         </button>
 
         {/* N-Panel (Properties / Inspector) Toggle Button (N) */}
@@ -1138,13 +1178,13 @@ export function BlenderTopBar({
           type="button"
           onClick={onToggleNPanel}
           title="DCC Inspector Properties [N]"
-          className={`flex items-center space-x-1 px-2 py-1 rounded text-[10px] font-mono transition-colors border ${
+          className={`flex items-center space-x-1 px-2 py-1 rounded text-[10px] font-mono transition-colors border whitespace-nowrap ${
             isNOpen
               ? "bg-[#27272a] border-[#ea580c] text-[#ea580c]"
               : "bg-[#18181b] border-[#27272a] text-[#a1a1aa] hover:text-[#f4f4f5] hover:bg-[#202024]"
           }`}
         >
-          <Sliders className="w-3.5 h-3.5" />
+          <Sliders className="w-3.5 h-3.5 shrink-0" />
           <span className="hidden sm:inline">Inspector</span>
           <kbd className="text-[9px] text-[#71717a]">N</kbd>
         </button>
